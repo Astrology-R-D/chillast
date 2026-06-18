@@ -15,6 +15,7 @@ const AspectEngine = require('../src/core/astrology/AspectEngine');
 const Profile = require('../src/core/models/Profile');
 const AstrologyService = require('../src/core/astrology/AstrologyService');
 const FirdariaCalc = require('../src/core/astrology/FirdariaCalc');
+const ConfigManager = require('../src/core/config/ConfigManager');
 
 let passed = 0;
 let failed = 0;
@@ -100,6 +101,36 @@ test('sameSet avoids duplicate and self pairs', () => {
   const pts = [{ key: 'a', longitude: 0 }, { key: 'b', longitude: 120 }, { key: 'c', longitude: 240 }];
   const out = engine.compute(pts, pts, { sameSet: true });
   assert.strictEqual(out.length, 3); // a-b, a-c, b-c trines
+});
+
+console.log('\nConfigManager');
+test('loads default config from project root', () => {
+  const cfg = ConfigManager.load();
+  assert.ok(cfg.window, 'has window section');
+  assert.ok(cfg.theme, 'has theme section');
+  assert.ok(cfg.layout, 'has layout section');
+  assert.ok(cfg.chart, 'has chart section');
+  assert.strictEqual(cfg.window.width, 1440);
+  assert.strictEqual(cfg.chart.svgSize, 740);
+});
+test('deep-merges partial overrides', () => {
+  const cfg = ConfigManager.load({ theme: { accent: '#ff0000' }, chart: { svgSize: 800 } });
+  assert.strictEqual(cfg.theme.accent, '#ff0000');
+  assert.strictEqual(cfg.chart.svgSize, 800);
+  assert.strictEqual(cfg.theme.bgBase, '#1e1e1e');
+  assert.strictEqual(cfg.chart.radii.outerRim, 364);
+});
+test('camelToKebab converts correctly', () => {
+  assert.strictEqual(ConfigManager.camelToKebab('bgPanelSolid'), 'bg-panel-solid');
+  assert.strictEqual(ConfigManager.camelToKebab('accent'), 'accent');
+  assert.strictEqual(ConfigManager.camelToKebab('accentVioletSoft'), 'accent-violet-soft');
+});
+test('themeAsCssVars returns --prefixed map', () => {
+  const cfg = ConfigManager.load();
+  const vars = ConfigManager.themeAsCssVars(cfg.theme);
+  assert.strictEqual(vars['--bg-base'], '#1e1e1e');
+  assert.strictEqual(vars['--accent'], '#4fc1ff');
+  assert.strictEqual(vars['--radius-lg'], '12px');
 });
 
 console.log('\nFirdariaCalc');
