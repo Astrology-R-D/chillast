@@ -1,81 +1,83 @@
 # Skill: config-driven-gui
 
-Use when modifying or adding any GUI parameter — colors, dimensions, fonts, chart sizes, layout values, or window settings — in the CHILLAST project.
+Use when modifying or adding any GUI parameter — colors, dimensions, fonts, chart sizes, layout values, window settings, or UI text — in the CHILLAST project.
 
 ## The Rule
 
-**Every visual/layout parameter MUST live in `config.json` and be applied through the config pipeline.** Never hardcode new GUI values directly in CSS or JS. If you find yourself writing a magic number or color literal for a visual property, it belongs in config.
+**Every visual parameter lives in `config.json`. Every text string lives in `locale/zh.json`. No exceptions.**
 
 ## Architecture
 
 ```
-config.json (source of truth)
+config.json (primitives + colors + radii + shadows + chart + window)
     |
-ConfigManager.load() (main process, pure Node)
-    | IPC: config:get
-Preload -> ApiClient.getConfig()
+TokenEngine.resolve() → derived spacing/type scales
     |
-App.start() -> applyConfig()
-    |-- theme section -> CSS custom properties on :root
-    |-- layout section -> CSS custom properties (--sidebar-width, --chart-max-width, etc.)
-    +-- chart section -> ChartWheel constructor + ChartResult svgSize
+Main.js loads config + locale/zh.json
+    | IPC: config:get → resolved tokens
+    | IPC: locale:get → locale strings
+    |
+App.start()
+    |-- applyConfig() → CSS :root vars (--sp-*, --fs-*, --fw-*, --color-*, --radius-*, --shadow-*)
+    |-- loadLocale() → t() function ready
+    |-- ctx.config.chart → ChartWheel/ChartResult
+    |
+Components use:
+    |-- Utility classes from Tokens.css (.fs-sm, .gap-2, .p-4, .text-muted)
+    |-- var(--token) in CSS files
+    |-- t('key') for all text strings
+    |-- this.PC / this.ATC / this.EC for chart colors
 ```
 
-## How to Add a New GUI Parameter
+## Adding a New GUI Parameter
 
-### If it's a CSS value (color, size, spacing, font):
+### Color or visual CSS value
+1. Add to `config.json` → `colors` section (camelCase key)
+2. CSS: use `var(--kebab-case-name, fallback)`
+3. ConfigApplier auto-converts camelCase → `--kebab-case` CSS var
 
-1. Add the parameter to the appropriate section in `config.json` (theme or layout)
-2. Use camelCase key name — `ConfigApplier` auto-converts to `--kebab-case` CSS variable
-3. In the CSS file, use `var(--your-key, fallback)` syntax
-4. Example:
-   - config.json: `"theme": { "chartBackground": "#111" }`
-   - CSS: `background: var(--chart-background, #111);`
+### Spacing or dimension
+1. Use the 4px-based token scale: `--sp-1` (4px) through `--sp-16` (64px)
+2. In JS: use utility class (`.p-4`, `.gap-2`, `.mt-3`)
+3. In CSS: use `var(--sp-N)`
 
-### If it's a JS constant (chart radii, SVG sizes, planet colors):
+### Font size
+1. Use the type scale: `--fs-xs` (9px) through `--fs-display` (32px)
+2. In JS: use `.fs-sm`, `.fs-md`, `.fs-lg` utility classes
+3. In CSS: use `var(--fs-name)`
 
-1. Add to the `chart` section in `config.json`
-2. In `ChartWheel.js`, the constructor reads `chartConfig.yourKey || DEFAULT_VALUE`
-3. Use `this.yourKey` throughout the class methods
+### Chart parameter (SVG sizes, planet colors)
+1. Add to `config.json` → `chart` section
+2. ChartWheel reads via constructor: `this.X = cc.yourKey || DEFAULT`
 
-### If it's a window/Electron parameter:
+### Text string
+1. Add to `locale/zh.json` with dot-path key (e.g. `chart.newLabel`)
+2. In JS: `t('chart.newLabel')` or `t('chart.newLabel', { var: value })`
+3. Interpolation: `{{varName}}` pattern in JSON, `{ varName: value }` in t() call
 
-1. Add to the `window` section in `config.json`
-2. `Main.js` reads `this.config.window.yourKey` in `createWindow()`
-
-## Config Sections
-
-| Section | Applied by | Used for |
-|---------|-----------|----------|
-| `window` | `Main.js` directly | BrowserWindow dimensions, background |
-| `theme` | `ConfigApplier.applyConfig()` -> CSS `:root` | All CSS custom properties (colors, radii, shadows, fonts) |
-| `layout` | `ConfigApplier.applyConfig()` -> CSS `:root` | Structural dimensions (sidebar width, grid columns, breakpoints) |
-| `chart` | `ChartWheel` constructor + `ChartResult` | SVG size, radii, planet/aspect/element colors |
+### Window parameter
+1. Add to `config.json` → `window` section
+2. Main.js reads `this.config.window.yourKey`
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| `config.json` | Default values — the single source of truth |
-| `src/core/config/ConfigManager.js` | Load, validate, deep-merge (pure Node, testable) |
-| `src/renderer/app/ConfigApplier.js` | Apply theme/layout as CSS variables |
-| `src/renderer/app/components/ChartWheel.js` | Reads chart config in constructor |
-| `src/renderer/app/components/ChartResult.js` | Reads svgSize from chart config |
+| `config.json` | Visual token defaults |
+| `locale/zh.json` | All UI text strings (Chinese) |
+| `src/core/config/TokenEngine.js` | Derives spacing/type scales from primitives |
+| `src/core/config/ConfigManager.js` | Load + deep-merge + resolve |
+| `src/renderer/app/I18n.js` | `t(key, vars)` i18n function |
+| `src/renderer/app/ConfigApplier.js` | Injects tokens as CSS `:root` variables |
+| `src/renderer/styles/Tokens.css` | Utility classes (.fs-sm, .gap-2, .p-4, .text-muted) |
 
 ## Checklist Before Committing GUI Changes
 
-- [ ] No new hardcoded color literals in CSS or JS (use config + CSS var)
-- [ ] No new hardcoded dimension literals for layout (use config + CSS var)
-- [ ] No new hardcoded chart constants in ChartWheel/ChartResult (use config)
-- [ ] New parameter added to `config.json` with sensible default
-- [ ] CSS uses `var(--name, fallback)` pattern for new variables
-- [ ] `npm test` passes (ConfigManager tests verify config.json loads)
-
-## Anti-Patterns
-
-| Don't | Do |
-|-------|-----|
-| `background: #1e1e1e;` | `background: var(--bg-base, #1e1e1e);` |
-| `const SIZE = 740;` | `this.SIZE = cc.svgSize \|\| DEFAULT_SIZE;` |
-| `max-width: 480px;` | `max-width: var(--chart-max-width, 480px);` |
-| Add color to CSS `:root` block | Add to `config.json` theme section |
+- [ ] No hardcoded color literals in CSS or JS → use `var(--name)` or config
+- [ ] No hardcoded dimensions → use `var(--sp-*)` or utility classes
+- [ ] No hardcoded font sizes → use `var(--fs-*)` or utility classes
+- [ ] No hardcoded Chinese text in JS → use `t('key')`
+- [ ] New text added to `locale/zh.json`
+- [ ] New visual param added to `config.json` if needed
+- [ ] No inline `style: { ... }` with magic numbers → use utility classes
+- [ ] `npm test` passes
