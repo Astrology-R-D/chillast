@@ -3,7 +3,7 @@
 
 .app-shell {
   display: grid;
-  grid-template-columns: 228px 1fr;
+  grid-template-columns: var(--sidebar-width, 228px) 1fr;
   grid-template-rows: 100vh;
   height: 100vh;
 }
@@ -137,7 +137,7 @@
 
 .workbench-main {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: var(--workbench-grid, 1fr 1fr);
   gap: 0;
   flex: 1;
   min-height: 0;

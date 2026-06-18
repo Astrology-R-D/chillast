@@ -16,14 +16,16 @@ class IpcRouter {
    * @param {ProfileRepository} deps.profileRepository
    * @param {AstrologyService} deps.astrologyService
    */
-  constructor({ ipcMain, profileRepository, astrologyService }) {
+  constructor({ ipcMain, profileRepository, astrologyService, config }) {
     this.ipcMain = ipcMain;
     this.profiles = profileRepository;
     this.astrology = astrologyService;
+    this.config = config || {};
   }
 
   /** Register every channel handler. Call once during app startup. */
   register() {
+    this._handle('config:get', () => this.config);
     this._handle('reference:get', () => this.astrology.referenceData());
     this._handle('chartTypes:get', () => this.astrology.chartTypes());
 

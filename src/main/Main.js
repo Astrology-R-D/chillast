@@ -6,6 +6,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const ProfileRepository = require('./ProfileRepository');
 const IpcRouter = require('./IpcRouter');
 const AstrologyService = require('../core/astrology/AstrologyService');
+const ConfigManager = require('../core/config/ConfigManager');
 
 /**
  * Main — Electron main-process bootstrap. It composes the application root
@@ -23,6 +24,7 @@ class Main {
 
   /** Compose services that do not depend on Electron being ready. */
   bootstrapServices() {
+    this.config = ConfigManager.load();
     const baseDir = path.join(app.getPath('userData'), 'data');
     this.profileRepository = new ProfileRepository(baseDir).init();
     this.astrologyService = new AstrologyService();
@@ -30,16 +32,18 @@ class Main {
       ipcMain,
       profileRepository: this.profileRepository,
       astrologyService: this.astrologyService,
+      config: this.config,
     }).register();
   }
 
   createWindow() {
+    const win = this.config.window || {};
     this.mainWindow = new BrowserWindow({
-      width: 1440,
-      height: 920,
-      minWidth: 1100,
-      minHeight: 720,
-      backgroundColor: '#1e1e1e',
+      width: win.width || 1440,
+      height: win.height || 920,
+      minWidth: win.minWidth || 1100,
+      minHeight: win.minHeight || 720,
+      backgroundColor: win.backgroundColor || '#1e1e1e',
       title: 'CHILLAST',
       show: false,
       webPreferences: {

@@ -6,6 +6,7 @@
 import { h, mount } from './Dom.js';
 import { Store } from './Store.js';
 import { ApiClient } from './ApiClient.js';
+import { applyConfig } from './ConfigApplier.js';
 import { ProfilesView } from './views/ProfilesView.js';
 import { ChartView } from './views/ChartView.js';
 import { SynastryView } from './views/SynastryView.js';
@@ -25,6 +26,10 @@ export class App {
   }
 
   async start() {
+    const config = await ApiClient.getConfig();
+    applyConfig(config);
+    this.config = config;
+
     const reference = await ApiClient.getReferenceData();
     this.reference = reference;
     await this.refreshProfiles();
@@ -32,6 +37,7 @@ export class App {
     const ctx = {
       store: this.store,
       reference: this.reference,
+      config: this.config,
       refreshProfiles: () => this.refreshProfiles(),
       navigate: (route) => this.navigate(route),
     };
@@ -82,7 +88,7 @@ export class App {
         h('div', { class: 'brand-mark svg-glyph' }, '✶'),
         h('div', {}, [
           h('div', { class: 'brand-title' }, 'CHILLAST'),
-          h('div', { class: 'brand-sub' }, 'ASTROLOGY STUDIO'),
+          h('div', { class: 'brand-sub' }, 'PERSONAL ASTROLOGY ANALYSIS'),
         ]),
       ]),
       ...nav,

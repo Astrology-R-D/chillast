@@ -15,6 +15,7 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 contextBridge.exposeInMainWorld('mystApi', {
   /** Static reference data (signs, aspects, chart types, …). */
   getReferenceData: () => invoke('reference:get'),
+  getConfig: () => invoke('config:get'),
   getChartTypes: () => invoke('chartTypes:get'),
 
   /** Profile CRUD. */

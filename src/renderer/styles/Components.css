@@ -114,7 +114,7 @@
   border: 1px solid var(--border-soft); border-radius: var(--radius-lg);
   overflow: hidden; cursor: grab;
   box-shadow: var(--shadow-soft);
-  max-width: 480px;
+  max-width: var(--chart-max-width, 480px);
   margin: 0 auto;
 }
 .chart-canvas-wrap:active { cursor: grabbing; }

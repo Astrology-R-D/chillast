@@ -15,6 +15,7 @@ async function unwrap(promise) {
 
 export const ApiClient = {
   getReferenceData: () => unwrap(api.getReferenceData()),
+  getConfig: () => unwrap(api.getConfig()),
   getChartTypes: () => unwrap(api.getChartTypes()),
   searchCities: (query) => unwrap(api.searchCities(query)),
   computeChart: (request) => unwrap(api.computeChart(request)),
