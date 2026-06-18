@@ -24,7 +24,7 @@ export function renderChartResult(container, chart, reference) {
 
   const resetBtn = h('button', {
     class: 'btn btn-sm btn-ghost chart-overlay-btn',
-    onclick: resetView,
+    onclick: (e) => { e.stopPropagation(); resetView(); },
   }, '重置视图');
 
   const canvasWrap = h('div', { class: 'chart-canvas-wrap' }, [
@@ -33,12 +33,11 @@ export function renderChartResult(container, chart, reference) {
 
   // — viewBox-based zoom / pan (keeps SVG vector-crisp) ——————
   let vbX = 0, vbY = 0, vbW = SVG_SIZE, vbH = SVG_SIZE;
-
-  function getSvg() { return svgHost.querySelector('svg'); }
+  let svgEl = svgHost.querySelector('svg');
 
   function applyViewBox() {
-    const svg = getSvg();
-    if (svg) svg.setAttribute('viewBox', `${vbX.toFixed(2)} ${vbY.toFixed(2)} ${vbW.toFixed(2)} ${vbH.toFixed(2)}`);
+    if (!svgEl) svgEl = svgHost.querySelector('svg');
+    if (svgEl) svgEl.setAttribute('viewBox', `${vbX.toFixed(2)} ${vbY.toFixed(2)} ${vbW.toFixed(2)} ${vbH.toFixed(2)}`);
   }
 
   function resetView() {
@@ -67,7 +66,8 @@ export function renderChartResult(container, chart, reference) {
 
   canvasWrap.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    if (e.target.closest('.chart-overlay-btn')) return;
+    const t = e.target;
+    if ((t.closest && t.closest('.chart-overlay-btn')) || resetBtn.contains(t)) return;
     canvasWrap.setPointerCapture(e.pointerId);
     dragging = true;
     dragMoved = false;
