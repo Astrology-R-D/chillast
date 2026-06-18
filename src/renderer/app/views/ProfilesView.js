@@ -15,7 +15,7 @@ export class ProfilesView {
     this.editing = null;
   }
 
-  get title() { return { h1: '档案管理', sub: '创建并管理你的星盘档案 · 本地 JSON 存储' }; }
+  get title() { return { h1: '档案管理', sub: '创建并管理你的星盘档案' }; }
 
   render(container) {
     this.container = container;

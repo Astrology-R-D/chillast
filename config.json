@@ -49,13 +49,13 @@
 
   "layout": {
     "sidebarWidth":          228,
-    "chartCanvasMaxWidth":   480,
+    "chartCanvasMaxWidth":   420,
     "workbenchGridColumns":  "1fr 1fr",
     "responsiveBreakpoint":  1200
   },
 
   "chart": {
-    "svgSize": 740,
+    "svgSize": 770,
     "radii": {
       "outerRim":     364,
       "zodiacOuter":  356,
