@@ -40,7 +40,7 @@ class Main {
       minWidth: 1100,
       minHeight: 720,
       backgroundColor: '#1e1e1e',
-      title: 'Myst · 神秘学星盘工作室',
+      title: 'CHILLAST',
       show: false,
       webPreferences: {
         preload: path.join(__dirname, '..', 'preload', 'Preload.js'),

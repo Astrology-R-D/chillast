@@ -1,4 +1,4 @@
-# Myst · 神秘学星盘工作室
+# CHILLAST
 
 > A professional desktop astrology studio built with Electron. Create and manage
 > birth profiles, then generate and explore natal, transit, progressed, return,
@@ -61,7 +61,7 @@ npm run dist       # 通过 electron-builder 生成安装包（Windows: NSIS）
 <userData>/data/Profiles.json
 ```
 
-（Windows 通常为 `%APPDATA%/Myst/data/Profiles.json`）
+（Windows 通常为 `%APPDATA%/CHILLAST/data/Profiles.json`）
 
 ## 📁 目录结构 Project layout
 

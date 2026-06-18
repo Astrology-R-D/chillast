@@ -1,8 +1,8 @@
 {
-  "name": "myst",
-  "version": "1.0.0",
-  "description": "Myst — a professional desktop astrology studio for natal, transit, synastry and composite charts.",
-  "author": "Myst",
+  "name": "chillast",
+  "version": "0.0.2",
+  "description": "CHILLAST — a professional desktop astrology studio for natal, transit, synastry and composite charts.",
+  "author": "CHILLAST",
   "license": "MIT",
   "main": "src/main/Main.js",
   "type": "commonjs",
@@ -13,8 +13,8 @@
     "dist": "electron-builder"
   },
   "build": {
-    "appId": "com.myst.astrology",
-    "productName": "Myst",
+    "appId": "com.chillast.astrology",
+    "productName": "CHILLAST",
     "files": [
       "src/**/*",
       "assets/**/*",

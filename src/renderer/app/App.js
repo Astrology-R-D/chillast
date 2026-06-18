@@ -81,12 +81,12 @@ export class App {
       h('div', { class: 'brand' }, [
         h('div', { class: 'brand-mark svg-glyph' }, '✶'),
         h('div', {}, [
-          h('div', { class: 'brand-title' }, 'Myst'),
+          h('div', { class: 'brand-title' }, 'CHILLAST'),
           h('div', { class: 'brand-sub' }, 'ASTROLOGY STUDIO'),
         ]),
       ]),
       ...nav,
-      h('div', { class: 'sidebar-footer' }, 'v1.0 · 本地占星工作室'),
+      h('div', { class: 'sidebar-footer' }, 'v0.0.2 · CHILLAST'),
     ]);
 
     const main = h('div', { class: 'main' }, [
