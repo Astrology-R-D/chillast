@@ -1,0 +1,37 @@
+{
+  "name": "myst",
+  "version": "1.0.0",
+  "description": "Myst — a professional desktop astrology studio for natal, transit, synastry and composite charts.",
+  "author": "Myst",
+  "license": "MIT",
+  "main": "src/main/Main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node tests/RunAll.js",
+    "smoke": "node tests/SmokeRenderer.js",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.myst.astrology",
+    "productName": "Myst",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "circular-natal-horoscope-js": "^1.1.0",
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1"
+  }
+}

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self';" />
+  <title>Myst · 神秘学星盘工作室</title>
+  <link rel="stylesheet" href="styles/Theme.css" />
+  <link rel="stylesheet" href="styles/Layout.css" />
+  <link rel="stylesheet" href="styles/Components.css" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- App chrome and views are mounted here by the renderer. -->
+    <div class="boot-splash">
+      <div class="boot-glyph">✶</div>
+      <div class="boot-text">正在校准星图…</div>
+    </div>
+  </div>
+  <script type="module" src="app/Boot.js"></script>
+</body>
+</html>

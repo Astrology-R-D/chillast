@@ -1,0 +1,94 @@
+/* Layout.css — the application shell: sidebar navigation, header and the
+   scrollable content region. Pure structure; colours come from Theme.css. */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  grid-template-rows: 100vh;
+  height: 100vh;
+}
+
+/* —— Sidebar —————————————————————————————————————————————————— */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(22, 19, 43, 0.95), rgba(10, 9, 22, 0.95));
+  border-right: 1px solid var(--border-soft);
+  padding: 22px 16px;
+  gap: 8px;
+}
+.brand {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 8px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 14px;
+}
+.brand-mark {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: grid; place-items: center; font-size: 22px;
+  background: radial-gradient(circle at 30% 30%, var(--accent-strong), var(--accent));
+  color: #2a1f06; box-shadow: var(--shadow-glow);
+}
+.brand-title { font-size: 18px; font-weight: 700; letter-spacing: 0.06em; }
+.brand-sub { font-size: 11px; color: var(--text-muted); letter-spacing: 0.22em; }
+
+.nav-group-label {
+  font-size: 11px; letter-spacing: 0.2em; color: var(--text-muted);
+  padding: 14px 10px 6px; text-transform: uppercase;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: var(--radius-md);
+  color: var(--text-secondary); cursor: pointer;
+  border: 1px solid transparent; transition: var(--transition);
+  user-select: none;
+}
+.nav-item:hover { background: var(--accent-violet-soft); color: var(--text-primary); }
+.nav-item.is-active {
+  background: linear-gradient(90deg, var(--accent-violet-soft), transparent);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.nav-item .nav-glyph { font-size: 18px; width: 22px; text-align: center; }
+.sidebar-footer { margin-top: auto; font-size: 11px; color: var(--text-muted); padding: 10px; }
+
+/* —— Main column ————————————————————————————————————————————— */
+.main {
+  display: flex; flex-direction: column;
+  min-width: 0; height: 100vh;
+}
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 28px; border-bottom: 1px solid var(--border-soft);
+  background: rgba(10, 9, 22, 0.5); backdrop-filter: blur(8px);
+}
+.app-header h1 { font-size: 20px; }
+.app-header .subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.header-actions { display: flex; gap: 10px; align-items: center; }
+
+.content {
+  flex: 1; min-height: 0; overflow: auto; padding: 24px 28px 48px;
+}
+
+/* Two-column workspace: controls on the left, chart on the right. */
+.workspace {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+.workspace .panel-stack { display: flex; flex-direction: column; gap: 18px; }
+
+@media (max-width: 1200px) {
+  .workspace { grid-template-columns: 1fr; }
+}
+
+.chart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 1400px) {
+  .chart-layout { grid-template-columns: 1fr; }
+}
