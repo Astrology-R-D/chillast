@@ -1,7 +1,3 @@
-// ChartResult.js — composes a computed chart into its full interactive
-// presentation: zoomable/pannable SVG wheel (viewBox-based, stays vector at
-// any zoom), click-to-inspect planet detail, legend, and data sidebar.
-
 import { h, mount, clear } from '../Dom.js';
 import { ChartWheel, PLANET_COLOR, ASPECT_TYPE_COLOR } from './ChartWheel.js';
 import { positionsPanel, aspectsPanel, distributionsPanel } from './ChartTables.js';
@@ -15,7 +11,7 @@ const RING_LEGEND = {
   solarArc: '太阳弧', profection: '小限', relocation: '重置',
 };
 
-export function renderChartResult(container, chart, reference) {
+export function renderChartResult(chartContainer, dataContainer, chart, reference) {
   const wheel = new ChartWheel(reference);
 
   const svgHost = h('div', { class: 'chart-svg-host' });
@@ -32,7 +28,6 @@ export function renderChartResult(container, chart, reference) {
     svgHost, detailPopup, resetBtn,
   ]);
 
-  // — viewBox-based zoom / pan (keeps SVG vector-crisp) ——————
   let vbX = 0, vbY = 0, vbW = SVG_SIZE, vbH = SVG_SIZE;
   let svgEl = svgHost.querySelector('svg');
 
@@ -46,7 +41,6 @@ export function renderChartResult(container, chart, reference) {
     applyViewBox();
   }
 
-  // Wheel zoom: shrink/grow viewBox centered on cursor
   canvasWrap.addEventListener('wheel', (e) => {
     e.preventDefault();
     const factor = e.deltaY > 0 ? 1.08 : 0.92;
@@ -62,7 +56,6 @@ export function renderChartResult(container, chart, reference) {
     applyViewBox();
   }, { passive: false });
 
-  // Pan: drag to shift viewBox origin
   let dragging = false, dragMoved = false, lastX = 0, lastY = 0;
 
   canvasWrap.addEventListener('pointerdown', (e) => {
@@ -96,9 +89,8 @@ export function renderChartResult(container, chart, reference) {
     canvasWrap.style.cursor = '';
   });
 
-  // — planet click-to-inspect ————————————————————————————————
   canvasWrap.addEventListener('click', (e) => {
-    if (dragMoved) return;
+    if (dragMoved) { dragMoved = false; return; }
     const g = e.target.closest('[data-planet-key]');
     if (g) {
       showPlanetDetail(detailPopup, g.dataset.planetKey, chart, reference);
@@ -107,10 +99,29 @@ export function renderChartResult(container, chart, reference) {
     }
   });
 
-  // — static chrome ——————————————————————————————————————————
+  const legend = h('div', { class: 'row wrap mt-2', style: { gap: '10px', fontSize: '11px', justifyContent: 'center' } }, [
+    legendDot(ASPECT_TYPE_COLOR.conjunction, '合'),
+    legendDot(ASPECT_TYPE_COLOR.opposition, '冲'),
+    legendDot(ASPECT_TYPE_COLOR.trine, '拱'),
+    legendDot(ASPECT_TYPE_COLOR.square, '刑'),
+    legendDot(ASPECT_TYPE_COLOR.sextile, '六合'),
+    legendDot(ASPECT_TYPE_COLOR.quincunx, '梅花'),
+    ...(chart.rings.length > 1 ? [legendDot('#4fc1ff', '外环')] : []),
+  ]);
+
+  const exportBtn = h('button', { class: 'btn btn-sm btn-ghost', onclick: () => exportSvg(svgHost, chart) }, '导出 SVG');
+
+  const titleRow = h('div', { class: 'chart-title-row' }, [
+    h('div', {}, [
+      h('h2', {}, chart.meta.title),
+      h('div', { class: 'sub' }, chart.meta.subtitle),
+    ]),
+    h('div', { class: 'row', style: { gap: '8px' } }, [exportBtn]),
+  ]);
+
   const subjectsLine = (chart.subjects || []).map((s) => h('span', { class: 'chip' }, [
     h('span', { class: 'glyph' }, s.role === 'secondary' ? '☽' : '☉'),
-    `${s.nameZh || s.nameEn || '—'} · ${s.birthLabel} · ${s.location.label || ''}`,
+    `${s.nameZh || s.nameEn || '—'} · ${s.birthLabel}`,
   ]));
 
   const settingChips = h('div', { class: 'row wrap', style: { gap: '8px' } }, [
@@ -119,42 +130,22 @@ export function renderChartResult(container, chart, reference) {
     h('span', { class: 'chip' }, `黄道 ${chart.meta.settings.zodiac}`),
   ]);
 
-  const legend = h('div', { class: 'row wrap mt-2', style: { gap: '10px', fontSize: '11px', justifyContent: 'center' } }, [
-    legendDot(ASPECT_TYPE_COLOR.conjunction, '合'),
-    legendDot(ASPECT_TYPE_COLOR.opposition, '冲'),
-    legendDot(ASPECT_TYPE_COLOR.trine, '拱'),
-    legendDot(ASPECT_TYPE_COLOR.square, '刑'),
-    legendDot(ASPECT_TYPE_COLOR.sextile, '六合'),
-    legendDot(ASPECT_TYPE_COLOR.quincunx, '梅花'),
-    ...(chart.rings.length > 1 ? [legendDot('#4fc1ff', `外环`)] : []),
-  ]);
-
-  const exportBtn = h('button', { class: 'btn btn-sm btn-ghost', onclick: () => exportSvg(svgHost, chart) }, '导出 SVG');
-
-  const node = h('div', {}, [
-    h('div', { class: 'chart-title-row' }, [
-      h('div', {}, [
-        h('h2', {}, chart.meta.title),
-        h('div', { class: 'sub' }, chart.meta.subtitle),
-      ]),
-      h('div', { class: 'row', style: { gap: '8px' } }, [exportBtn]),
-    ]),
+  const chartNode = h('div', {}, [
+    titleRow,
     h('div', { class: 'row wrap mt-2', style: { gap: '8px' } }, subjectsLine),
     h('div', { class: 'mt-2' }, settingChips),
-    h('div', { class: 'chart-layout mt-3' }, [
-      h('div', {}, [canvasWrap, legend]),
-      h('div', { class: 'chart-data-sidebar' }, [
-        positionsPanel(chart, reference),
-        distributionsPanel(chart, reference),
-        aspectsPanel(chart, reference),
-      ]),
-    ]),
+    h('div', { class: 'mt-3' }, [canvasWrap, legend]),
   ]);
 
-  mount(container, node);
-}
+  mount(chartContainer, chartNode);
 
-// —— planet detail popup ——————————————————————————————————————
+  const dataNode = h('div', {}, [
+    positionsPanel(chart, reference),
+    distributionsPanel(chart, reference),
+    aspectsPanel(chart, reference),
+  ]);
+  mount(dataContainer, dataNode);
+}
 
 function showPlanetDetail(popup, key, chart, reference) {
   const meta = reference.points[key];
@@ -208,8 +199,6 @@ function showPlanetDetail(popup, key, chart, reference) {
   popup.appendChild(content);
   popup.classList.remove('hidden');
 }
-
-// —— helpers ——————————————————————————————————————————————————
 
 function legendDot(color, label) {
   return h('span', { class: 'row', style: { gap: '5px' } }, [

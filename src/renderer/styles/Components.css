@@ -195,3 +195,23 @@
 .row.wrap { flex-wrap: wrap; }
 .mt-2 { margin-top: 8px; } .mt-3 { margin-top: 14px; } .mt-4 { margin-top: 20px; }
 .spacer { flex: 1; }
+
+/* —— Firdaria period display ——————————————————————————————— */
+.firdaria-bar {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 8px 0;
+}
+.firdaria-period {
+  padding: 3px 8px; border-radius: var(--radius-sm);
+  font-size: 11px; background: var(--bg-elevated); color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+.firdaria-period.is-active {
+  border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+
+/* —— Location input row (relocation chart) ————————————————— */
+.location-row {
+  display: flex; gap: 8px; align-items: flex-end;
+}
+.location-row .field { flex: 1; }

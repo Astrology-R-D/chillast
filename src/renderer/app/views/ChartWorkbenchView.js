@@ -1,24 +1,14 @@
-// ChartWorkbenchView.js — the shared workbench that drives chart generation.
-// Configured by `category` ('personal' or 'relationship'), it renders the right
-// profile pickers, chart-type list, type-specific options and settings, then
-// computes and displays the result. Both the personal and relationship views are
-// thin specialisations of this class, keeping the control logic in one place.
-
-import { h, mount } from '../Dom.js';
+import { h, mount, clear } from '../Dom.js';
 import { ApiClient } from '../ApiClient.js';
 import { renderChartResult } from '../components/ChartResult.js';
 import { notify } from '../components/Toast.js';
 
 const ZODIACS = [
-  { value: 'tropical', label: '回归黄道 Tropical' },
-  { value: 'sidereal', label: '恒星黄道 Sidereal' },
+  { value: 'tropical', label: '回归黄道' },
+  { value: 'sidereal', label: '恒星黄道' },
 ];
 
 export class ChartWorkbenchView {
-  /**
-   * @param {object} context shared app context.
-   * @param {'personal'|'relationship'} category
-   */
   constructor(context, category) {
     this.ctx = context;
     this.category = category;
@@ -32,8 +22,8 @@ export class ChartWorkbenchView {
 
   get title() {
     return this.category === 'personal'
-      ? { h1: '个人星盘', sub: '本命 · 行运 · 二次推运 · 太阳/月亮返照' }
-      : { h1: '合盘分析', sub: '比较盘 · 组合中点盘 · 戴维森时空盘' };
+      ? { h1: '个人星盘', sub: '本命 · 行运 · 推运 · 返照 · 太阳弧 · 法达 · 小限 · 重置' }
+      : { h1: '合盘分析', sub: '比较 · 组合 · 马盘 · 时空 · 推运变体' };
   }
 
   get chartTypes() {
@@ -42,15 +32,11 @@ export class ChartWorkbenchView {
 
   render(container) {
     this.container = container;
-    this.resultHost = h('div', { class: 'panel', style: { minHeight: '300px' } }, [
-      h('div', { class: 'panel-body' }, [emptyResult()]),
-    ]);
-    this._drawControls();
+    this._draw();
   }
 
-  _drawControls() {
+  _draw() {
     const profiles = this.ctx.store.getState().profiles || [];
-    const needsSecondary = this._currentType().requiresSecondary;
 
     if (!profiles.length) {
       mount(this.container, h('div', { class: 'empty-state' }, [
@@ -65,53 +51,105 @@ export class ChartWorkbenchView {
     this.secondarySelect = profileSelect(profiles, profiles[1] ? profiles[1].id : profiles[0].id);
 
     this.typeSelect = h('select', {
-      class: 'select', onchange: (e) => { this.state.type = e.target.value; this._drawControls(); },
-    }, this.chartTypes.map((t) => h('option', { value: t.value || t.type, selected: (t.type === this.state.type) }, `${t.nameZh} · ${t.nameEn}`)));
+      class: 'select',
+      onchange: (e) => {
+        this.state.type = e.target.value;
+        this._updateOptions();
+      },
+    }, this.chartTypes.map((t) =>
+      h('option', { value: t.type, selected: t.type === this.state.type }, t.nameZh)
+    ));
 
     this.houseSelect = h('select', { class: 'select' },
-      this.ctx.reference.houseSystems.map((hs) => h('option', { value: hs.value, selected: hs.value === this.state.houseSystem }, `${hs.nameZh} ${hs.nameEn}`)));
+      this.ctx.reference.houseSystems.map((hs) =>
+        h('option', { value: hs.value, selected: hs.value === this.state.houseSystem }, hs.nameZh)
+      ));
     this.zodiacSelect = h('select', { class: 'select' },
-      ZODIACS.map((z) => h('option', { value: z.value, selected: z.value === this.state.zodiac }, z.label)));
+      ZODIACS.map((z) =>
+        h('option', { value: z.value, selected: z.value === this.state.zodiac }, z.label)
+      ));
 
-    const controls = h('div', { class: 'panel' }, [
-      h('div', { class: 'panel-header' }, [h('h3', {}, '星盘设置')]),
-      h('div', { class: 'panel-body' }, [
-        field(this.category === 'relationship' ? '主体（内环）' : '档案', this.primarySelect),
-        needsSecondary ? field('次体（外环）', this.secondarySelect) : null,
-        field('星盘类型', this.typeSelect),
-        this._optionsField(),
-        h('div', { class: 'form-grid mt-2' }, [
-          field('宫位系统', this.houseSelect),
-          field('黄道系统', this.zodiacSelect),
-        ]),
-        h('button', { class: 'btn btn-primary btn-block mt-3', onclick: () => this._compute() }, '✶ 生成星盘'),
+    const barChildren = [];
+    if (this.category === 'relationship') {
+      barChildren.push(labeled('内环', this.primarySelect));
+      barChildren.push(labeled('外环', this.secondarySelect));
+    } else {
+      barChildren.push(labeled('档案', this.primarySelect));
+    }
+    barChildren.push(labeled('类型', this.typeSelect));
+    barChildren.push(labeled('宫制', this.houseSelect));
+    barChildren.push(labeled('黄道', this.zodiacSelect));
+    barChildren.push(h('button', {
+      class: 'btn btn-primary',
+      style: { marginTop: '14px' },
+      onclick: () => this._compute(),
+    }, '✶ 生成'));
+
+    this.optionsHost = h('div', { class: 'workbench-options' });
+    this.chartCol = h('div', { class: 'chart-col' }, [emptyResult()]);
+    this.dataCol = h('div', { class: 'data-col' });
+
+    const wrap = h('div', { class: 'workbench-wrap' }, [
+      h('div', { class: 'workbench-bar' }, barChildren),
+      this.optionsHost,
+      h('div', { class: 'workbench-main' }, [
+        this.chartCol,
+        this.dataCol,
       ]),
     ]);
 
-    mount(this.container, h('div', { class: 'workspace' }, [
-      h('div', { class: 'panel-stack' }, [controls]),
-      h('div', { class: 'panel-stack' }, [this.resultHost]),
-    ]));
+    mount(this.container, wrap);
+    this._updateOptions();
   }
 
   _currentType() {
     return this.chartTypes.find((t) => t.type === this.state.type) || this.chartTypes[0];
   }
 
-  /** Render the type-specific option control (date / year), if any. */
-  _optionsField() {
+  _updateOptions() {
     const def = this._currentType();
+    const needsOptions = def.options.length > 0;
+    clear(this.optionsHost);
+
+    if (!needsOptions) {
+      this.optionsHost.classList.remove('is-open');
+      this.dateInput = null;
+      this.yearInput = null;
+      this.latInput = null;
+      this.lngInput = null;
+      this.locLabelInput = null;
+      return;
+    }
+
+    const row = h('div', { class: 'options-row' });
+
     if (def.options.includes('targetDate')) {
       this.dateInput = h('input', { class: 'input', type: 'datetime-local', value: defaultDateTimeLocal() });
-      return field('目标日期与时间', this.dateInput);
+      row.appendChild(field('目标日期', this.dateInput));
+      this.yearInput = null;
+      this.latInput = null;
+      this.lngInput = null;
+      this.locLabelInput = null;
+    } else if (def.options.includes('year')) {
+      this.yearInput = h('input', { class: 'input', type: 'number', min: 1, max: 3000, value: new Date().getFullYear(), style: { width: '100px' } });
+      row.appendChild(field('返照年份', this.yearInput));
+      this.dateInput = null;
+      this.latInput = null;
+      this.lngInput = null;
+      this.locLabelInput = null;
+    } else if (def.options.includes('location')) {
+      this.locLabelInput = h('input', { class: 'input', type: 'text', placeholder: '地名' });
+      this.latInput = h('input', { class: 'input', type: 'number', step: '0.0001', placeholder: '纬度' });
+      this.lngInput = h('input', { class: 'input', type: 'number', step: '0.0001', placeholder: '经度' });
+      row.appendChild(field('地名', this.locLabelInput));
+      row.appendChild(field('纬度', this.latInput));
+      row.appendChild(field('经度', this.lngInput));
+      this.dateInput = null;
+      this.yearInput = null;
     }
-    if (def.options.includes('year')) {
-      this.yearInput = h('input', { class: 'input', type: 'number', min: 1, max: 3000, value: new Date().getFullYear() });
-      return field('返照年份', this.yearInput);
-    }
-    this.dateInput = null;
-    this.yearInput = null;
-    return null;
+
+    this.optionsHost.appendChild(row);
+    this.optionsHost.classList.add('is-open');
   }
 
   _buildOptions() {
@@ -122,6 +160,11 @@ export class ChartWorkbenchView {
     }
     if (def.options.includes('year') && this.yearInput) {
       options.year = Number(this.yearInput.value);
+    }
+    if (def.options.includes('location')) {
+      if (this.latInput) options.latitude = parseFloat(this.latInput.value);
+      if (this.lngInput) options.longitude = parseFloat(this.lngInput.value);
+      if (this.locLabelInput) options.locationLabel = this.locLabelInput.value || undefined;
     }
     return options;
   }
@@ -142,7 +185,9 @@ export class ChartWorkbenchView {
     this.state.houseSystem = this.houseSelect.value;
     this.state.zodiac = this.zodiacSelect.value;
 
-    mount(this.resultHost.querySelector('.panel-body') || this.resultHost, loadingResult());
+    mount(this.chartCol, loadingResult());
+    clear(this.dataCol);
+
     try {
       const chart = await ApiClient.computeChart({
         type: this.state.type,
@@ -151,38 +196,48 @@ export class ChartWorkbenchView {
         settings: { houseSystem: this.state.houseSystem, zodiac: this.state.zodiac },
         options: this._buildOptions(),
       });
-      // Replace the whole result host with the rendered chart.
-      mount(this.resultHost, h('div', { class: 'panel-body' }, []));
-      renderChartResult(this.resultHost.querySelector('.panel-body'), chart, this.ctx.reference);
+      renderChartResult(this.chartCol, this.dataCol, chart, this.ctx.reference);
       notify.success(`${chart.meta.typeNameZh} 已生成`);
     } catch (err) {
-      mount(this.resultHost, h('div', { class: 'panel-body' }, [
-        h('div', { class: 'empty-state' }, [h('div', { class: 'big' }, '⚠'), h('p', {}, err.message)]),
+      mount(this.chartCol, h('div', { class: 'empty-state' }, [
+        h('div', { class: 'big' }, '⚠'),
+        h('p', {}, err.message),
       ]));
       notify.error(err.message);
     }
   }
 }
 
-// —— local helpers ————————————————————————————————————————————
+function labeled(text, control) {
+  return h('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } }, [
+    h('span', { style: { fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.05em' } }, text),
+    control,
+  ]);
+}
 
 function field(label, control) {
-  return control ? h('div', { class: 'field mt-2' }, [h('label', {}, label), control]) : null;
+  return control ? h('div', { class: 'field' }, [h('label', {}, label), control]) : null;
 }
 
 function profileSelect(profiles, selectedId) {
   return h('select', { class: 'select' },
-    profiles.map((p) => h('option', { value: p.id, selected: p.id === selectedId }, `${p.nameZh || p.nameEn} · ${p.birthData.year}-${pad(p.birthData.month)}-${pad(p.birthData.day)}`)));
+    profiles.map((p) =>
+      h('option', { value: p.id, selected: p.id === selectedId },
+        `${p.nameZh || p.nameEn} · ${p.birthData.year}-${pad(p.birthData.month)}-${pad(p.birthData.day)}`)
+    ));
 }
 
 function emptyResult() {
   return h('div', { class: 'empty-state' }, [
     h('div', { class: 'big' }, '✶'),
-    h('p', {}, '设置参数后点击「生成星盘」查看结果。'),
+    h('p', {}, '选择参数后点击「生成」查看星盘。'),
   ]);
 }
 function loadingResult() {
-  return h('div', { class: 'empty-state' }, [h('div', { class: 'big boot-glyph' }, '✶'), h('p', {}, '正在计算星盘…')]);
+  return h('div', { class: 'empty-state' }, [
+    h('div', { class: 'big boot-glyph' }, '✶'),
+    h('p', {}, '正在计算星盘…'),
+  ]);
 }
 
 function pad(n) { return String(n).padStart(2, '0'); }
