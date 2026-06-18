@@ -3,14 +3,10 @@
 // contained panel node so views can compose them freely.
 
 import { h } from '../Dom.js';
+import { t } from '../I18n.js';
+import { ASPECT_TYPE_COLOR } from './ChartWheel.js';
 
 const ELEMENT_COLOR = { fire: '#ce9178', earth: '#6a9955', air: '#9cdcfe', water: '#4ec9b0' };
-const ASPECT_COLOR = {
-  conjunction: '#dcdcaa', opposition: '#f44747', square: '#d97340',
-  trine: '#4ec9b0', sextile: '#56b6c2', quincunx: '#c586c0',
-  sesquiquadrate: '#d19a66', semisquare: '#e06c75',
-  semisextile: '#98c379', quintile: '#7c7ce0',
-};
 const minorColor = '#6e6e6e';
 
 function pointGlyph(key, reference) {
@@ -37,7 +33,7 @@ export function positionsPanel(chart, reference) {
       h('td', {}, p.nameZh),
       h('td', { class: 'svg-glyph' }, formatPos(p)),
       h('td', {}, p.signNameZh),
-      h('td', {}, p.house ? `${p.house} 宫` : '—'),
+      h('td', {}, p.house ? t('tables.houseNum', { num: p.house }) : '—'),
     ]));
     return h('div', { class: 'mt-2' }, [
       (chart.rings.length > 1)
@@ -45,8 +41,8 @@ export function positionsPanel(chart, reference) {
         : null,
       h('table', { class: 'data-table' }, [
         h('thead', {}, h('tr', {}, [
-          h('th', {}, '星'), h('th', {}, '名称'), h('th', {}, '位置'),
-          h('th', {}, '星座'), h('th', {}, '宫位'),
+          h('th', {}, t('tables.thStar')), h('th', {}, t('tables.thName')), h('th', {}, t('tables.thPos')),
+          h('th', {}, t('tables.thSign')), h('th', {}, t('tables.thHouse')),
         ])),
         h('tbody', {}, rows),
       ]),
@@ -67,10 +63,10 @@ export function positionsPanel(chart, reference) {
       ]);
     });
 
-  return panel('行星位置 · Positions', [
+  return panel(t('tables.positions'), [
     ...sections,
     angleRows.length ? h('div', { class: 'mt-3' }, [
-      h('div', { class: 'chip', style: { marginBottom: '8px' } }, '四轴 Angles'),
+      h('div', { class: 'chip', style: { marginBottom: '8px' } }, t('tables.angles')),
       h('table', { class: 'data-table' }, [h('tbody', {}, angleRows)]),
     ]) : null,
   ]);
@@ -80,10 +76,10 @@ export function positionsPanel(chart, reference) {
 export function aspectsPanel(chart, reference) {
   const aspects = chart.aspects || [];
   if (!aspects.length) {
-    return panel('相位 · Aspects', [h('p', { class: 'text-muted' }, '未检测到相位。')]);
+    return panel(t('tables.aspects'), [h('p', { class: 'text-muted' }, t('tables.noAspects'))]);
   }
   const rows = aspects.map((a) => {
-    const color = ASPECT_COLOR[a.aspectKey] || minorColor;
+    const color = ASPECT_TYPE_COLOR[a.aspectKey] || minorColor;
     return h('tr', {}, [
       h('td', { class: 'svg-glyph' }, `${pointGlyph(a.point1, reference)} ${pointGlyph(a.point2, reference)}`),
       h('td', {}, `${pointName(a.point1, reference)} – ${pointName(a.point2, reference)}`),
@@ -91,10 +87,10 @@ export function aspectsPanel(chart, reference) {
       h('td', {}, `${a.orb.toFixed(2)}°`),
     ]);
   });
-  return panel(`相位 · Aspects (${aspects.length})`, [
+  return panel(t('tables.aspectsCount', { count: aspects.length }), [
     h('table', { class: 'data-table' }, [
       h('thead', {}, h('tr', {}, [
-        h('th', {}, '符号'), h('th', {}, '组合'), h('th', {}, '相位'), h('th', {}, '容许度'),
+        h('th', {}, t('tables.thSymbol')), h('th', {}, t('tables.thCombo')), h('th', {}, t('tables.thAspect')), h('th', {}, t('tables.thOrb')),
       ])),
       h('tbody', {}, rows),
     ]),
@@ -116,10 +112,10 @@ export function distributionsPanel(chart, reference) {
     count, modalityTotal, '#569cd6',
   ));
 
-  return panel('元素与模式 · Distribution', [
-    h('div', { class: 'text-muted', style: { fontSize: '12px', marginBottom: '8px' } }, '元素 Elements'),
+  return panel(t('tables.distribution'), [
+    h('div', { class: 'text-muted', style: { fontSize: '12px', marginBottom: '8px' } }, t('tables.elements')),
     ...elementBars,
-    h('div', { class: 'text-muted', style: { fontSize: '12px', margin: '14px 0 8px' } }, '模式 Modalities'),
+    h('div', { class: 'text-muted', style: { fontSize: '12px', margin: '14px 0 8px' } }, t('tables.modalities')),
     ...modalityBars,
   ]);
 }

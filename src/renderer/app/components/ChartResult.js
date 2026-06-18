@@ -2,13 +2,14 @@ import { h, mount, clear } from '../Dom.js';
 import { ChartWheel, PLANET_COLOR, ASPECT_TYPE_COLOR } from './ChartWheel.js';
 import { positionsPanel, aspectsPanel, distributionsPanel } from './ChartTables.js';
 import { notify } from './Toast.js';
+import { t } from '../I18n.js';
 
 const SVG_SIZE = 740;
 
 const RING_LEGEND = {
-  primary: '本命 / 主体', secondary: '次体', transit: '行运',
-  progressed: '推运', composite: '组合', tertiary: '三限',
-  solarArc: '太阳弧', profection: '小限', relocation: '重置',
+  primary: 'legend.primary', secondary: 'legend.secondary', transit: 'legend.transit',
+  progressed: 'legend.progressed', composite: 'legend.composite', tertiary: 'legend.tertiary',
+  solarArc: 'legend.solarArc', profection: 'legend.profection', relocation: 'legend.relocation',
 };
 
 export function renderChartResult(chartContainer, dataContainer, chart, reference, chartConfig) {
@@ -23,7 +24,7 @@ export function renderChartResult(chartContainer, dataContainer, chart, referenc
   const resetBtn = h('button', {
     class: 'btn btn-sm btn-ghost chart-overlay-btn',
     onclick: (e) => { e.stopPropagation(); resetView(); },
-  }, '重置视图');
+  }, t('chart.resetView'));
 
   const canvasWrap = h('div', { class: 'chart-canvas-wrap' }, [
     svgHost, detailPopup, resetBtn,
@@ -101,16 +102,16 @@ export function renderChartResult(chartContainer, dataContainer, chart, referenc
   });
 
   const legend = h('div', { class: 'row wrap mt-2', style: { gap: '10px', fontSize: '11px', justifyContent: 'center' } }, [
-    legendDot(ASPECT_TYPE_COLOR.conjunction, '合'),
-    legendDot(ASPECT_TYPE_COLOR.opposition, '冲'),
-    legendDot(ASPECT_TYPE_COLOR.trine, '拱'),
-    legendDot(ASPECT_TYPE_COLOR.square, '刑'),
-    legendDot(ASPECT_TYPE_COLOR.sextile, '六合'),
-    legendDot(ASPECT_TYPE_COLOR.quincunx, '梅花'),
-    ...(chart.rings.length > 1 ? [legendDot('#4fc1ff', '外环')] : []),
+    legendDot(ASPECT_TYPE_COLOR.conjunction, t('legend.conjunction')),
+    legendDot(ASPECT_TYPE_COLOR.opposition, t('legend.opposition')),
+    legendDot(ASPECT_TYPE_COLOR.trine, t('legend.trine')),
+    legendDot(ASPECT_TYPE_COLOR.square, t('legend.square')),
+    legendDot(ASPECT_TYPE_COLOR.sextile, t('legend.sextile')),
+    legendDot(ASPECT_TYPE_COLOR.quincunx, t('legend.quincunx')),
+    ...(chart.rings.length > 1 ? [legendDot('#4fc1ff', t('legend.outerRing'))] : []),
   ]);
 
-  const exportBtn = h('button', { class: 'btn btn-sm btn-ghost', onclick: () => exportSvg(svgHost, chart) }, '导出 SVG');
+  const exportBtn = h('button', { class: 'btn btn-sm btn-ghost', onclick: () => exportSvg(svgHost, chart) }, t('chart.exportSvg'));
 
   const titleRow = h('div', { class: 'chart-title-row' }, [
     h('div', {}, [
@@ -127,8 +128,8 @@ export function renderChartResult(chartContainer, dataContainer, chart, referenc
 
   const settingChips = h('div', { class: 'row wrap', style: { gap: '8px' } }, [
     h('span', { class: 'chip' }, chart.meta.typeNameZh),
-    h('span', { class: 'chip' }, `宫制 ${chart.meta.settings.houseSystem}`),
-    h('span', { class: 'chip' }, `黄道 ${chart.meta.settings.zodiac}`),
+    h('span', { class: 'chip' }, `${t('chart.labelHouse')} ${chart.meta.settings.houseSystem}`),
+    h('span', { class: 'chip' }, `${t('chart.labelZodiac')} ${chart.meta.settings.zodiac}`),
   ]);
 
   const chartNode = h('div', {}, [
@@ -187,11 +188,11 @@ function showPlanetDetail(popup, key, chart, reference) {
     ]),
     h('div', { class: 'mt-2', style: { fontSize: '13px', lineHeight: '1.7' } }, [
       h('div', {}, `${pointData.signGlyph} ${pointData.signNameZh} ${pointData.dms.degrees}°${String(pointData.dms.minutes).padStart(2, '0')}′`),
-      pointData.house ? h('div', {}, `第 ${pointData.house} 宫`) : null,
-      pointData.retrograde ? h('div', { class: 'retro' }, '℞ 逆行中') : null,
+      pointData.house ? h('div', {}, t('chart.houseLabel', { num: pointData.house })) : null,
+      pointData.retrograde ? h('div', { class: 'retro' }, t('chart.retroLabel')) : null,
     ]),
     related.length ? h('div', { class: 'mt-2' }, [
-      h('div', { class: 'text-muted', style: { fontSize: '10px', marginBottom: '4px', letterSpacing: '0.08em' } }, `相位 (${related.length})`),
+      h('div', { class: 'text-muted', style: { fontSize: '10px', marginBottom: '4px', letterSpacing: '0.08em' } }, t('chart.aspectCount', { count: related.length })),
       ...aspectRows,
     ]) : null,
   ]);
@@ -219,5 +220,5 @@ function exportSvg(svgHost, chart) {
   a.download = `${(chart.meta.title || 'chart').replace(/[^\w一-龥-]+/g, '_')}.svg`;
   a.click();
   URL.revokeObjectURL(url);
-  notify.success('已导出 SVG');
+  notify.success(t('chart.exported'));
 }

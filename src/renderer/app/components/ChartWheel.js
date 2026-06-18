@@ -76,6 +76,7 @@ export { DEFAULT_PLANET_COLOR as PLANET_COLOR, DEFAULT_ASPECT_TYPE_COLOR as ASPE
 export class ChartWheel {
   constructor(reference, chartConfig) {
     this.signs = reference.signs;
+    this.locale = reference._wheelLocale || {};
     const cc = chartConfig || {};
     this.SIZE = cc.svgSize || DEFAULT_SIZE;
     this.CX = this.SIZE / 2;
@@ -187,8 +188,10 @@ export class ChartWheel {
   _angleMarkers(chart, ctx) {
     const angles = chart.angles || {};
     const labels = {
-      ascendant: '升', midheaven: '顶',
-      descendant: '降', imumcoeli: '底',
+      ascendant: this.locale.asc || '升',
+      midheaven: this.locale.mc || '顶',
+      descendant: this.locale.dsc || '降',
+      imumcoeli: this.locale.ic || '底',
     };
     let out = '';
     for (const [key, label] of Object.entries(labels)) {
@@ -267,7 +270,7 @@ export class ChartWheel {
     let out = '';
     plotted.forEach((p, i) => {
       const pColor = this.PC[p.key] || '#d4d4d4';
-      const pLabel = PLANET_LABEL[p.key] || p.glyph;
+      const pLabel = (this.locale[p.key]) || PLANET_LABEL[p.key] || p.glyph;
       const dispLong = display[i];
       const glyphPos = this._polar(radius, dispLong, ctx.rotation);
       const dotPos = this._polar(dotR, p.longitude, ctx.rotation);

@@ -7,15 +7,15 @@ import { h, mount } from './Dom.js';
 import { Store } from './Store.js';
 import { ApiClient } from './ApiClient.js';
 import { applyConfig } from './ConfigApplier.js';
-import { loadLocale } from './I18n.js';
+import { loadLocale, t } from './I18n.js';
 import { ProfilesView } from './views/ProfilesView.js';
 import { ChartView } from './views/ChartView.js';
 import { SynastryView } from './views/SynastryView.js';
 
 const ROUTES = [
-  { key: 'profiles', glyph: '☰', label: '档案管理', group: '档案' },
-  { key: 'personal', glyph: '☉', label: '个人星盘', group: '星盘' },
-  { key: 'relationship', glyph: '☍', label: '合盘分析', group: '星盘' },
+  { key: 'profiles', glyph: '☰', label: 'nav.profiles', group: 'nav.groupProfiles' },
+  { key: 'personal', glyph: '☉', label: 'nav.personal', group: 'nav.groupCharts' },
+  { key: 'relationship', glyph: '☍', label: 'nav.relationship', group: 'nav.groupCharts' },
 ];
 
 export class App {
@@ -36,6 +36,7 @@ export class App {
 
     const reference = await ApiClient.getReferenceData();
     this.reference = reference;
+    this.reference._wheelLocale = locale.wheel || {};
     await this.refreshProfiles();
 
     const ctx = {
@@ -77,11 +78,11 @@ export class App {
     this.navEls = {};
     const navGroups = groupBy(ROUTES, 'group');
     const nav = Object.entries(navGroups).flatMap(([group, items]) => [
-      h('div', { class: 'nav-group-label' }, group),
+      h('div', { class: 'nav-group-label' }, t(group)),
       ...items.map((r) => {
         const el = h('div', {
           class: 'nav-item', onclick: () => this.navigate(r.key),
-        }, [h('span', { class: 'nav-glyph svg-glyph' }, r.glyph), h('span', {}, r.label)]);
+        }, [h('span', { class: 'nav-glyph svg-glyph' }, r.glyph), h('span', {}, t(r.label))]);
         this.navEls[r.key] = el;
         return el;
       }),
@@ -91,20 +92,20 @@ export class App {
       h('div', { class: 'brand' }, [
         h('div', { class: 'brand-mark svg-glyph' }, '✶'),
         h('div', {}, [
-          h('div', { class: 'brand-title' }, 'CHILLAST'),
-          h('div', { class: 'brand-sub' }, 'PERSONAL ASTROLOGY ANALYSIS'),
+          h('div', { class: 'brand-title' }, t('app.title')),
+          h('div', { class: 'brand-sub' }, t('app.brandSub')),
         ]),
       ]),
       ...nav,
-      h('div', { class: 'sidebar-footer' }, 'v0.0.2 · CHILLAST'),
+      h('div', { class: 'sidebar-footer' }, t('app.version')),
     ]);
 
     const main = h('div', { class: 'main' }, [
       h('header', { class: 'app-header' }, [
         h('div', {}, [this.headerTitle, this.headerSub]),
         h('div', { class: 'header-actions' }, [
-          h('span', { class: 'chip' }, `${this.reference.signs.length} 星座`),
-          h('span', { class: 'chip' }, `${this.reference.chartTypes.length} 种星盘`),
+          h('span', { class: 'chip' }, t('app.chipSigns', { count: this.reference.signs.length })),
+          h('span', { class: 'chip' }, t('app.chipCharts', { count: this.reference.chartTypes.length })),
         ]),
       ]),
       this.contentEl,

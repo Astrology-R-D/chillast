@@ -4,6 +4,7 @@
 
 import { h, mount } from '../Dom.js';
 import { ApiClient } from '../ApiClient.js';
+import { t } from '../I18n.js';
 
 export class CityPicker {
   /**
@@ -30,7 +31,7 @@ export class CityPicker {
 
   _build() {
     this.labelInput = h('input', {
-      class: 'input', placeholder: '搜索城市，如 北京 / Tokyo', value: this.value.label || '',
+      class: 'input', placeholder: t('form.citySearch'), value: this.value.label || '',
       oninput: () => this._onSearch(),
       onfocus: () => this._onSearch(),
       onblur: () => setTimeout(() => this._closeList(), 150),
@@ -40,16 +41,16 @@ export class CityPicker {
     const combo = h('div', { class: 'combo' }, [this.labelInput, this.listEl]);
 
     this.latInput = h('input', {
-      class: 'input', type: 'number', step: '0.0001', placeholder: '纬度 lat',
+      class: 'input', type: 'number', step: '0.0001', placeholder: t('form.latPlaceholder'),
       value: this.value.latitude ?? '', oninput: () => this._emit(),
     });
     this.lngInput = h('input', {
-      class: 'input', type: 'number', step: '0.0001', placeholder: '经度 lng',
+      class: 'input', type: 'number', step: '0.0001', placeholder: t('form.lngPlaceholder'),
       value: this.value.longitude ?? '', oninput: () => this._emit(),
     });
 
     this.root = h('div', { class: 'field col-span' }, [
-      h('label', {}, '出生地'),
+      h('label', {}, t('form.birthPlace')),
       combo,
       h('div', { class: 'row mt-2', style: { gap: '8px' } }, [this.latInput, this.lngInput]),
     ]);
