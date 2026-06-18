@@ -240,6 +240,54 @@ test('davison chart is a single real chart', () => {
   basicChartChecks(c);
   assert.strictEqual(c.rings.length, 1);
 });
+test('marx chart uses A planets in B houses', () => {
+  const c = svc.computeChart({ type: 'marx', primary: subjectA, secondary: subjectB });
+  basicChartChecks(c);
+  assert.strictEqual(c.rings.length, 1);
+  assert.strictEqual(c.meta.type, 'marx');
+  const natalA = svc.computeChart({ type: 'natal', primary: subjectA });
+  const natalB = svc.computeChart({ type: 'natal', primary: subjectB });
+  const marxSun = c.rings[0].points.find((p) => p.key === 'sun');
+  const natalASun = natalA.rings[0].points.find((p) => p.key === 'sun');
+  assert.ok(Math.abs(marxSun.longitude - natalASun.longitude) < 0.01, 'uses A planet positions');
+  assert.strictEqual(c.houses[0].cuspLongitude, natalB.houses[0].cuspLongitude, 'uses B house cusps');
+});
+test('composite secondary progressed chart', () => {
+  const c = svc.computeChart({ type: 'compositeSecondary', primary: subjectA, secondary: subjectB, options: { targetDate: '2026-06-18T12:00:00Z' } });
+  basicChartChecks(c);
+  assert.strictEqual(c.rings.length, 1);
+  assert.strictEqual(c.meta.type, 'compositeSecondary');
+});
+test('composite tertiary progressed chart', () => {
+  const c = svc.computeChart({ type: 'compositeTertiary', primary: subjectA, secondary: subjectB, options: { targetDate: '2026-06-18T12:00:00Z' } });
+  basicChartChecks(c);
+  assert.strictEqual(c.rings.length, 1);
+  assert.strictEqual(c.meta.type, 'compositeTertiary');
+});
+test('marx secondary progressed chart', () => {
+  const c = svc.computeChart({ type: 'marxSecondary', primary: subjectA, secondary: subjectB, options: { targetDate: '2026-06-18T12:00:00Z' } });
+  basicChartChecks(c);
+  assert.strictEqual(c.rings.length, 1);
+  assert.strictEqual(c.meta.type, 'marxSecondary');
+});
+test('marx tertiary progressed chart', () => {
+  const c = svc.computeChart({ type: 'marxTertiary', primary: subjectA, secondary: subjectB, options: { targetDate: '2026-06-18T12:00:00Z' } });
+  basicChartChecks(c);
+  assert.strictEqual(c.rings.length, 1);
+  assert.strictEqual(c.meta.type, 'marxTertiary');
+});
+test('davison secondary progressed chart', () => {
+  const c = svc.computeChart({ type: 'davisonSecondary', primary: subjectA, secondary: subjectB, options: { targetDate: '2026-06-18T12:00:00Z' } });
+  basicChartChecks(c);
+  assert.strictEqual(c.rings.length, 2);
+  assert.strictEqual(c.meta.type, 'davisonSecondary');
+});
+test('davison tertiary progressed chart', () => {
+  const c = svc.computeChart({ type: 'davisonTertiary', primary: subjectA, secondary: subjectB, options: { targetDate: '2026-06-18T12:00:00Z' } });
+  basicChartChecks(c);
+  assert.strictEqual(c.rings.length, 2);
+  assert.strictEqual(c.meta.type, 'davisonTertiary');
+});
 test('relationship chart without secondary throws', () => {
   assert.throws(() => svc.computeChart({ type: 'synastry', primary: subjectA }));
 });
@@ -249,7 +297,7 @@ test('unknown chart type throws', () => {
 test('referenceData and chartTypes are complete', () => {
   const ref = svc.referenceData();
   assert.strictEqual(ref.signs.length, 12);
-  assert.strictEqual(ref.chartTypes.length, 13);
+  assert.strictEqual(ref.chartTypes.length, 20);
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

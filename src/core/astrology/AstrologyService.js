@@ -25,6 +25,13 @@ const CHART_TYPES = [
   { type: 'synastry', nameZh: '比较盘', nameEn: 'Synastry', category: 'relationship', requiresSecondary: true, options: [] },
   { type: 'composite', nameZh: '组合中点盘', nameEn: 'Composite', category: 'relationship', requiresSecondary: true, options: [] },
   { type: 'davison', nameZh: '戴维森盘', nameEn: 'Davison', category: 'relationship', requiresSecondary: true, options: [] },
+  { type: 'marx', nameZh: '马盘', nameEn: 'Marx', category: 'relationship', requiresSecondary: true, options: [] },
+  { type: 'compositeSecondary', nameZh: '组合次限', nameEn: 'Composite Secondary', category: 'relationship', requiresSecondary: true, options: ['targetDate'] },
+  { type: 'compositeTertiary', nameZh: '组合三限', nameEn: 'Composite Tertiary', category: 'relationship', requiresSecondary: true, options: ['targetDate'] },
+  { type: 'marxSecondary', nameZh: '马盘次限', nameEn: 'Marx Secondary', category: 'relationship', requiresSecondary: true, options: ['targetDate'] },
+  { type: 'marxTertiary', nameZh: '马盘三限', nameEn: 'Marx Tertiary', category: 'relationship', requiresSecondary: true, options: ['targetDate'] },
+  { type: 'davisonSecondary', nameZh: '时空次限', nameEn: 'Davison Secondary', category: 'relationship', requiresSecondary: true, options: ['targetDate'] },
+  { type: 'davisonTertiary', nameZh: '时空三限', nameEn: 'Davison Tertiary', category: 'relationship', requiresSecondary: true, options: ['targetDate'] },
 ];
 
 /**
