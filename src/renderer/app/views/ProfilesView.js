@@ -1,7 +1,4 @@
-// ProfilesView.js — manage the local profile library: list, create, edit and
-// delete. Profiles are the input to every chart, so this is the app's home base.
-
-import { h, mount } from '../Dom.js';
+import { h, mount, clear } from '../Dom.js';
 import { ApiClient } from '../ApiClient.js';
 import { ProfileForm } from '../components/ProfileForm.js';
 import { notify } from '../components/Toast.js';
@@ -9,10 +6,12 @@ import { t } from '../I18n.js';
 
 const GENDER_LABEL = { male: 'profiles.genderMale', female: 'profiles.genderFemale', other: 'profiles.genderOther' };
 
+let _helpShown = false;
+
 export class ProfilesView {
   constructor(context) {
-    this.ctx = context;       // { store, reference, refreshProfiles, navigate }
-    this.mode = 'idle';        // idle | create | edit
+    this.ctx = context;
+    this.mode = 'idle';
     this.editing = null;
   }
 
@@ -21,6 +20,7 @@ export class ProfilesView {
   render(container) {
     this.container = container;
     this._draw();
+    if (!_helpShown) { _helpShown = true; this._showHelpPopup(); }
   }
 
   _draw() {
@@ -41,14 +41,15 @@ export class ProfilesView {
       ]),
     ]);
 
-    const rightPanel = this.mode === 'idle'
-      ? this._helpPanel()
-      : this._formPanel();
-
-    mount(this.container, h('div', { class: 'workspace' }, [
-      h('div', { class: 'panel-stack' }, [listPanel]),
-      h('div', { class: 'panel-stack' }, [rightPanel]),
-    ]));
+    if (this.mode === 'idle') {
+      mount(this.container, listPanel);
+    } else {
+      const formPanel = this._formPanel();
+      mount(this.container, h('div', { class: 'workspace' }, [
+        h('div', { class: 'panel-stack' }, [listPanel]),
+        h('div', { class: 'panel-stack' }, [formPanel]),
+      ]));
+    }
   }
 
   _profileCard(p) {
@@ -61,7 +62,12 @@ export class ProfilesView {
     }, [
       h('div', { class: `avatar ${p.gender}` }, initial),
       h('div', { class: 'who' }, [
-        h('div', { class: 'name' }, [p.nameZh || p.nameEn, h('span', { class: 'text-muted', style: { fontWeight: '400', marginLeft: '6px', fontSize: '12px' } }, p.nameEn && p.nameZh ? p.nameEn : '')]),
+        h('div', { class: 'name' }, [
+          p.nameZh || p.nameEn,
+          p.nameEn && p.nameZh
+            ? h('span', { class: 'text-muted fw-normal ml-2 fs-sm' }, p.nameEn)
+            : null,
+        ]),
         h('div', { class: 'sub' }, `${t(GENDER_LABEL[p.gender])} · ${bd.year}-${pad(bd.month)}-${pad(bd.day)} ${pad(bd.hour)}:${pad(bd.minute)} · ${bd.location.label || ''}`),
       ]),
       h('div', { class: 'row-actions' }, [
@@ -71,18 +77,28 @@ export class ProfilesView {
     ]);
   }
 
-  _helpPanel() {
-    return h('div', { class: 'panel' }, [
-      h('div', { class: 'panel-header' }, [h('h3', {}, t('profiles.helpTitle'))]),
-      h('div', { class: 'panel-body' }, [
-        h('p', { class: 'text-secondary' }, t('profiles.helpBody')),
-        h('ul', { class: 'text-secondary', style: { lineHeight: '1.9', marginTop: '12px', paddingLeft: '18px' } }, [
-          h('li', {}, t('profiles.helpBirth')),
-          h('li', {}, t('profiles.helpCity')),
-          h('li', {}, t('profiles.helpStorage')),
-        ]),
+  _showHelpPopup() {
+    const popup = h('div', { class: 'help-popup' }, [
+      h('div', { class: 'help-popup-header' }, [
+        h('span', { class: 'fw-semibold fs-sm' }, t('profiles.helpTitle')),
+        h('button', {
+          class: 'btn btn-sm btn-ghost',
+          style: { padding: '2px 6px', border: 'none', fontSize: '14px' },
+          onclick: () => dismiss(),
+        }, '×'),
       ]),
+      h('p', { class: 'text-secondary fs-sm' }, t('profiles.helpBody')),
     ]);
+
+    document.body.appendChild(popup);
+    requestAnimationFrame(() => popup.classList.add('is-visible'));
+
+    const dismiss = () => {
+      popup.classList.remove('is-visible');
+      setTimeout(() => popup.remove(), 300);
+    };
+
+    setTimeout(dismiss, 8000);
   }
 
   _formPanel() {

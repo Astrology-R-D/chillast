@@ -77,17 +77,17 @@
 .combo-option .meta { color: var(--text-muted); font-size: var(--fs-sm); }
 
 /* —— Profile list ——————————————————————————————————————————— */
-.profile-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.profile-list { display: flex; flex-direction: column; gap: 0; }
 .profile-card {
-  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--border-soft); border-radius: var(--radius-md);
-  background: var(--bg-elevated); cursor: pointer; transition: var(--transition);
+  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3);
+  border: none; border-bottom: 1px solid var(--border-soft); border-radius: 0;
+  background: transparent; cursor: pointer; transition: var(--transition);
 }
-.profile-card:hover { border-color: var(--accent); transform: translateX(2px); }
-.profile-card.is-selected { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.profile-card:hover { background: rgba(79, 193, 255, 0.04); }
+.profile-card.is-selected { background: rgba(86, 156, 214, 0.10); border-left: 2px solid var(--accent); }
 .avatar {
-  width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center;
-  font-size: var(--fs-xl); font-weight: var(--fw-bold); flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: var(--radius-md); display: grid; place-items: center;
+  font-size: var(--fs-md); font-weight: var(--fw-bold); flex-shrink: 0;
 }
 .avatar.male { background: rgba(111, 182, 232, 0.2); color: var(--element-air); }
 .avatar.female { background: rgba(224, 106, 120, 0.2); color: var(--danger); }
@@ -217,6 +217,25 @@
   display: flex; gap: var(--sp-2); align-items: flex-end;
 }
 .location-row .field { flex: 1; }
+
+/* —— Help popup (bottom-right dismissable) ————————————————— */
+.help-popup {
+  position: fixed; bottom: var(--sp-6); right: var(--sp-6); z-index: 90;
+  width: 340px; max-width: calc(100vw - 260px);
+  background: var(--bg-panel-solid); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg); padding: var(--sp-3) var(--sp-4);
+  box-shadow: var(--shadow-soft);
+  opacity: 0; transform: translateY(12px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+.help-popup.is-visible {
+  opacity: 1; transform: translateY(0); pointer-events: auto;
+}
+.help-popup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
 
 /* —— Flat data panels inside workbench data-col ———————————— */
 .data-col .panel {
