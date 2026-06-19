@@ -82,7 +82,6 @@ export class ChartWorkbenchView {
     barChildren.push(labeled(t('chart.labelZodiac'), this.zodiacSelect));
     barChildren.push(h('button', {
       class: 'btn btn-primary',
-      style: { marginTop: '14px' },
       onclick: () => this._compute(),
     }, t('chart.generate')));
 

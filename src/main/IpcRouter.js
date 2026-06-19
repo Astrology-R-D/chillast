@@ -16,10 +16,11 @@ class IpcRouter {
    * @param {ProfileRepository} deps.profileRepository
    * @param {AstrologyService} deps.astrologyService
    */
-  constructor({ ipcMain, profileRepository, astrologyService, config, locale }) {
+  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale }) {
     this.ipcMain = ipcMain;
     this.profiles = profileRepository;
     this.astrology = astrologyService;
+    this.chinese = chineseAstrologyService;
     this.config = config || {};
     this.locale = locale || {};
   }
@@ -37,6 +38,9 @@ class IpcRouter {
     this._handle('profiles:remove', (_e, id) => this.profiles.remove(id));
 
     this._handle('chart:compute', (_e, request) => this.astrology.computeChart(request));
+
+    this._handle('chinese:reference', () => this.chinese.referenceData());
+    this._handle('chinese:computeBazi', (_e, profileData) => this.chinese.computeBaZi(profileData));
 
     this._handle('cities:search', (_e, query) => this._searchCities(query));
     return this;

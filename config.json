@@ -30,14 +30,19 @@
     "aspectMajorHarmonic": "#4ec9b0",
     "aspectMajorTension":  "#f44747",
     "aspectConjunction":   "#dcdcaa",
-    "aspectMinor":         "#6e6e6e"
+    "aspectMinor":         "#6e6e6e",
+    "cWood":  "#6a9955",
+    "cFire":  "#ce9178",
+    "cEarth": "#dcdcaa",
+    "cMetal": "#9cdcfe",
+    "cWater": "#4ec9b0"
   },
 
   "radii": {
-    "sm": "5px",
-    "md": "8px",
-    "lg": "12px",
-    "full": "999px"
+    "sm": "0",
+    "md": "0",
+    "lg": "0",
+    "full": "0"
   },
 
   "shadows": {

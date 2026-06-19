@@ -11,11 +11,13 @@ import { loadLocale, t } from './I18n.js';
 import { ProfilesView } from './views/ProfilesView.js';
 import { ChartView } from './views/ChartView.js';
 import { SynastryView } from './views/SynastryView.js';
+import { ChineseAstrologyView } from './views/ChineseAstrologyView.js';
 
 const ROUTES = [
   { key: 'profiles', glyph: '☰', label: 'nav.profiles', group: 'nav.groupProfiles' },
   { key: 'personal', glyph: '☉', label: 'nav.personal', group: 'nav.groupCharts' },
   { key: 'relationship', glyph: '☍', label: 'nav.relationship', group: 'nav.groupCharts' },
+  { key: 'chinese', glyph: '☯', label: 'nav.chinese', group: 'nav.groupChinese' },
 ];
 
 export class App {
@@ -49,6 +51,7 @@ export class App {
     this.views.profiles = new ProfilesView(ctx);
     this.views.personal = new ChartView(ctx);
     this.views.relationship = new SynastryView(ctx);
+    this.views.chinese = new ChineseAstrologyView(ctx);
 
     this._buildShell();
     this.navigate('profiles');

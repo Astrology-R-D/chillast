@@ -27,4 +27,9 @@ export const ApiClient = {
     save: (profile) => unwrap(api.profiles.save(profile)),
     remove: (id) => unwrap(api.profiles.remove(id)),
   },
+
+  chinese: {
+    getReferenceData: () => unwrap(api.chinese.getReferenceData()),
+    computeBazi: (profileData) => unwrap(api.chinese.computeBazi(profileData)),
+  },
 };

@@ -6,6 +6,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const ProfileRepository = require('./ProfileRepository');
 const IpcRouter = require('./IpcRouter');
 const AstrologyService = require('../core/astrology/AstrologyService');
+const ChineseAstrologyService = require('../core/chinese/ChineseAstrologyService');
 const ConfigManager = require('../core/config/ConfigManager');
 
 const fs = require('fs');
@@ -33,10 +34,12 @@ class Main {
     const baseDir = path.join(app.getPath('userData'), 'data');
     this.profileRepository = new ProfileRepository(baseDir).init();
     this.astrologyService = new AstrologyService();
+    this.chineseAstrologyService = new ChineseAstrologyService();
     new IpcRouter({
       ipcMain,
       profileRepository: this.profileRepository,
       astrologyService: this.astrologyService,
+      chineseAstrologyService: this.chineseAstrologyService,
       config: this.config,
       locale: this.locale,
     }).register();

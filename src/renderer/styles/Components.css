@@ -20,11 +20,12 @@
 
 /* —— Buttons ————————————————————————————————————————————————— */
 .btn {
-  display: inline-flex; align-items: center; gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-4); border-radius: var(--radius-md);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); border-radius: 0;
   border: 1px solid var(--border-strong);
   background: var(--bg-elevated); color: var(--text-primary);
   cursor: pointer; transition: var(--transition); font-size: var(--fs-md);
+  height: 32px; white-space: nowrap;
 }
 .btn:hover { border-color: var(--accent); transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
@@ -37,7 +38,7 @@
 .btn-ghost { background: transparent; border-color: var(--border-soft); }
 .btn-danger { border-color: rgba(224, 106, 120, 0.5); color: var(--danger); background: transparent; }
 .btn-danger:hover { background: rgba(224, 106, 120, 0.12); border-color: var(--danger); }
-.btn-sm { padding: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); }
+.btn-sm { padding: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); height: 26px; }
 .btn-block { width: 100%; justify-content: center; }
 
 /* —— Forms ——————————————————————————————————————————————————— */
@@ -60,7 +61,7 @@
 .segmented { display: inline-flex; background: var(--bg-input); border-radius: var(--radius-md); padding: var(--sp-half); border: 1px solid var(--border-soft); }
 .segmented button {
   border: none; background: transparent; color: var(--text-secondary);
-  padding: var(--sp-2) var(--sp-3); border-radius: 10px; cursor: pointer; transition: var(--transition);
+  padding: var(--sp-2) var(--sp-3); border-radius: 0; cursor: pointer; transition: var(--transition);
 }
 .segmented button.is-active { background: var(--accent); color: var(--bg-base); font-weight: var(--fw-semibold); }
 
@@ -100,12 +101,12 @@
 /* —— Chips & badges ————————————————————————————————————————— */
 .chip {
   display: inline-flex; align-items: center; gap: var(--sp-1);
-  padding: var(--sp-1) var(--sp-2); border-radius: 999px; font-size: var(--fs-sm);
+  padding: var(--sp-1) var(--sp-2); border-radius: 0; font-size: var(--fs-sm);
   background: var(--accent-violet-soft); color: var(--text-secondary);
   border: 1px solid var(--border-soft);
 }
 .chip .glyph { font-family: var(--font-glyph); }
-.badge { font-size: var(--fs-sm); padding: var(--sp-half) var(--sp-2); border-radius: 6px; background: rgba(255,255,255,0.06); }
+.badge { font-size: var(--fs-sm); padding: var(--sp-half) var(--sp-2); border-radius: 0; background: rgba(255,255,255,0.06); }
 
 /* —— Chart canvas (interactive: zoom / pan) ———————————————— */
 .chart-canvas-wrap {
@@ -163,12 +164,12 @@
 .data-table td { padding: var(--sp-2); border-bottom: 1px solid rgba(255,255,255,0.04); }
 .data-table tr:hover td { background: rgba(79, 193, 255, 0.05); }
 .data-table .glyph { font-family: var(--font-glyph); font-size: var(--fs-lg); }
-.aspect-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: var(--sp-2); vertical-align: middle; }
+.aspect-dot { display: inline-block; width: 9px; height: 9px; border-radius: 0; margin-right: var(--sp-2); vertical-align: middle; }
 
 /* Distribution bars */
 .dist-row { display: grid; grid-template-columns: 60px 1fr 30px; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
-.dist-bar { height: 10px; border-radius: 6px; background: rgba(255,255,255,0.07); overflow: hidden; }
-.dist-bar > span { display: block; height: 100%; border-radius: 6px; }
+.dist-bar { height: 10px; border-radius: 0; background: rgba(255,255,255,0.07); overflow: hidden; }
+.dist-bar > span { display: block; height: 100%; border-radius: 0; }
 
 /* Tabs */
 .tabs { display: flex; gap: var(--sp-1); border-bottom: 1px solid var(--border-soft); margin-bottom: var(--sp-3); }
@@ -274,3 +275,35 @@
 .data-col .dist-bar { height: 7px; }
 .data-col .aspect-dot { width: 7px; height: 7px; margin-right: var(--sp-1); }
 .data-col .chip { font-size: var(--fs-xs); padding: var(--sp-half) var(--sp-1); }
+
+/* —— BaZi Four Pillars ———————————————————————————————————————— */
+.bazi-chart {
+  display: flex; gap: var(--sp-3); justify-content: center;
+  direction: rtl;
+}
+.bazi-pillar {
+  direction: ltr;
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-1); min-width: 80px;
+  background: var(--bg-elevated); border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4); border: 2px solid var(--border-soft);
+  transition: var(--transition);
+}
+.bazi-pillar.is-day-master {
+  border-color: var(--accent); box-shadow: var(--shadow-glow);
+}
+.bazi-pillar-label {
+  font-size: var(--fs-xs); color: var(--text-muted); letter-spacing: 0.15em;
+  text-transform: uppercase; margin-bottom: var(--sp-1);
+}
+.bazi-stem, .bazi-branch {
+  font-size: 32px; font-weight: var(--fw-bold); line-height: 1.2;
+}
+.bazi-element-tag {
+  font-size: var(--fs-xs); padding: var(--sp-half) var(--sp-2);
+  border-radius: var(--radius-full); background: var(--bg-input);
+  color: var(--text-secondary); margin-top: var(--sp-1);
+}
+.bazi-yinyang {
+  font-size: 10px; color: var(--text-muted); letter-spacing: 0.05em;
+}

@@ -17,6 +17,7 @@ const AstrologyService = require('../src/core/astrology/AstrologyService');
 const FirdariaCalc = require('../src/core/astrology/FirdariaCalc');
 const ConfigManager = require('../src/core/config/ConfigManager');
 const TokenEngine = require('../src/core/config/TokenEngine');
+const ChineseAstrologyService = require('../src/core/chinese/ChineseAstrologyService');
 
 let passed = 0;
 let failed = 0;
@@ -349,6 +350,86 @@ test('referenceData and chartTypes are complete', () => {
   const ref = svc.referenceData();
   assert.strictEqual(ref.signs.length, 12);
   assert.strictEqual(ref.chartTypes.length, 20);
+});
+
+console.log('\nSxwnlLoader');
+test('sandbox exposes core sxwnl objects', () => {
+  const sxwnl = require('../src/core/chinese/SxwnlLoader');
+  assert.ok(sxwnl.obb, 'has obb');
+  assert.ok(sxwnl.Lunar, 'has Lunar');
+  assert.ok(sxwnl.JD, 'has JD');
+  assert.ok(sxwnl.XL, 'has XL');
+  assert.ok(sxwnl.SSQ, 'has SSQ');
+  assert.strictEqual(sxwnl.J2000, 2451545);
+});
+test('obb has Gan, Zhi, ShX arrays', () => {
+  const sxwnl = require('../src/core/chinese/SxwnlLoader');
+  assert.strictEqual(sxwnl.obb.Gan.length, 10);
+  assert.strictEqual(sxwnl.obb.Zhi.length, 12);
+  assert.strictEqual(sxwnl.obb.ShX.length, 12);
+});
+
+console.log('\nChineseAstrologyService');
+const chineseSvc = new ChineseAstrologyService();
+test('referenceData has 10 stems, 12 branches, 5 elements, 12 animals', () => {
+  const ref = chineseSvc.referenceData();
+  assert.strictEqual(ref.stems.length, 10);
+  assert.strictEqual(ref.branches.length, 12);
+  assert.strictEqual(ref.elements.length, 5);
+  assert.strictEqual(ref.animals.length, 12);
+});
+test('BaZi returns four 2-char pillars', () => {
+  const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
+  const { pillars } = result.bazi;
+  for (const key of ['year', 'month', 'day', 'hour']) {
+    assert.strictEqual(pillars[key].full.length, 2, `${key} pillar is 2 chars`);
+    assert.ok(pillars[key].stem.char, `${key} has stem`);
+    assert.ok(pillars[key].branch.char, `${key} has branch`);
+  }
+});
+test('day master element is valid', () => {
+  const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
+  const valid = ['wood', 'fire', 'earth', 'metal', 'water'];
+  assert.ok(valid.includes(result.bazi.dayMaster.element), 'valid element');
+});
+test('each pillar stem and branch have element + yinYang', () => {
+  const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
+  const valid = ['wood', 'fire', 'earth', 'metal', 'water'];
+  const validYY = ['yin', 'yang'];
+  for (const key of ['year', 'month', 'day', 'hour']) {
+    assert.ok(valid.includes(result.bazi.pillars[key].stem.element), `${key} stem element`);
+    assert.ok(validYY.includes(result.bazi.pillars[key].stem.yinYang), `${key} stem yinYang`);
+    assert.ok(valid.includes(result.bazi.pillars[key].branch.element), `${key} branch element`);
+    assert.ok(validYY.includes(result.bazi.pillars[key].branch.yinYang), `${key} branch yinYang`);
+  }
+});
+test('lunar date returns valid info', () => {
+  const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
+  assert.ok(result.lunar.lunarYear, 'has lunar year');
+  assert.ok(result.lunar.lunarDay, 'has lunar day');
+  assert.ok(result.lunar.zodiacAnimal, 'has zodiac animal');
+  assert.ok(result.lunar.huangdiYear > 4000, 'huangdi year is reasonable');
+});
+test('known BaZi: 1990-01-15 14:30 Beijing = 己巳 丁丑 庚辰 丁亥', () => {
+  const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
+  assert.strictEqual(result.bazi.pillars.year.full, '己巳');
+  assert.strictEqual(result.bazi.pillars.month.full, '丁丑');
+  assert.strictEqual(result.bazi.pillars.day.full, '庚辰');
+  assert.strictEqual(result.bazi.pillars.hour.full, '丁亥');
+  assert.strictEqual(result.bazi.dayMaster.char, '庚');
+  assert.strictEqual(result.bazi.dayMaster.element, 'metal');
+});
+test('allHourPillars has 13 entries', () => {
+  const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
+  assert.strictEqual(result.bazi.allHourPillars.length, 13);
+});
+test('missing birthData throws', () => {
+  assert.throws(() => chineseSvc.computeBaZi({}), /缺少出生数据/);
+});
+test('missing longitude throws', () => {
+  assert.throws(() => chineseSvc.computeBaZi({
+    birthData: { year: 1990, month: 1, day: 15, hour: 14, minute: 30, location: {} },
+  }), /缺少出生地经度/);
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

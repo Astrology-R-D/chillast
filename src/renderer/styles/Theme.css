@@ -103,7 +103,7 @@ h1, h2, h3, h4 { font-weight: 600; margin: 0; letter-spacing: 0.01em; }
 p { margin: 0; }
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: rgba(79, 193, 255, 0.20); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(79, 193, 255, 0.20); border-radius: 0; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 .boot-splash {

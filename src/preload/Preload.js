@@ -32,4 +32,10 @@ contextBridge.exposeInMainWorld('mystApi', {
 
   /** Chart computation. */
   computeChart: (request) => invoke('chart:compute', request),
+
+  /** Chinese astrology (命理). */
+  chinese: {
+    getReferenceData: () => invoke('chinese:reference'),
+    computeBazi: (profileData) => invoke('chinese:computeBazi', profileData),
+  },
 });

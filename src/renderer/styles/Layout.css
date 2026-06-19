@@ -24,7 +24,7 @@
   margin-bottom: var(--sp-2);
 }
 .brand-mark {
-  width: 36px; height: 36px; border-radius: 8px;
+  width: 36px; height: 36px; border-radius: 0;
   display: grid; place-items: center; font-size: var(--fs-xl);
   background: var(--accent-violet);
   color: #fff;
@@ -101,17 +101,20 @@
 }
 
 .workbench-bar {
-  display: flex; align-items: flex-end; gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-4);
+  display: flex; align-items: flex-end; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
   background: var(--bg-panel); border-bottom: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   flex-wrap: wrap;
+}
+.workbench-bar .btn {
+  height: 34px; padding: 0 var(--sp-4);
+  align-self: flex-end;
 }
 
 .workbench-bar .select,
 .workbench-bar .btn { font-size: var(--fs-sm); }
 
-.workbench-bar .select { max-width: 220px; }
+.workbench-bar .select { max-width: 220px; height: 34px; }
 
 .workbench-options {
   overflow: hidden;
@@ -143,7 +146,7 @@
   min-height: 0;
   overflow: hidden;
   background: var(--bg-panel);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: 0;
 }
 
 .workbench-main .chart-col {
