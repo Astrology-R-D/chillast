@@ -292,6 +292,8 @@
 .bazi-pillar.is-day-master {
   border-color: var(--accent); box-shadow: var(--shadow-glow);
 }
+.bazi-pillar:hover { background: rgba(79, 193, 255, 0.06); cursor: pointer; }
+.bazi-pillar.is-selected { border-color: var(--accent); background: rgba(79, 193, 255, 0.08); }
 .bazi-pillar-label {
   font-size: var(--fs-xs); color: var(--text-muted); letter-spacing: 0.15em;
   text-transform: uppercase; margin-bottom: var(--sp-1);

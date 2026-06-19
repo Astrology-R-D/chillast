@@ -49,23 +49,26 @@ export class ChartWorkbenchView {
 
     const primaryDefault = this.ctx.store.getState().selectedPrimaryId || profiles[0].id;
     this.primarySelect = profileSelect(profiles, primaryDefault);
+    this.primarySelect.addEventListener('change', () => this._autoRefresh());
     this.secondarySelect = profileSelect(profiles, profiles[1] ? profiles[1].id : profiles[0].id);
+    this.secondarySelect.addEventListener('change', () => this._autoRefresh());
 
     this.typeSelect = h('select', {
       class: 'select',
       onchange: (e) => {
         this.state.type = e.target.value;
         this._updateOptions();
+        this._autoRefresh();
       },
     }, this.chartTypes.map((t) =>
       h('option', { value: t.type, selected: t.type === this.state.type }, t.nameZh)
     ));
 
-    this.houseSelect = h('select', { class: 'select' },
+    this.houseSelect = h('select', { class: 'select', onchange: () => this._autoRefresh() },
       this.ctx.reference.houseSystems.map((hs) =>
         h('option', { value: hs.value, selected: hs.value === this.state.houseSystem }, hs.nameZh)
       ));
-    this.zodiacSelect = h('select', { class: 'select' },
+    this.zodiacSelect = h('select', { class: 'select', onchange: () => this._autoRefresh() },
       ZODIACS.map((z) =>
         h('option', { value: z.value, selected: z.value === this.state.zodiac }, t(z.label))
       ));
@@ -80,10 +83,11 @@ export class ChartWorkbenchView {
     barChildren.push(labeled(t('chart.labelType'), this.typeSelect));
     barChildren.push(labeled(t('chart.labelHouse'), this.houseSelect));
     barChildren.push(labeled(t('chart.labelZodiac'), this.zodiacSelect));
-    barChildren.push(h('button', {
+    this.generateBtn = h('button', {
       class: 'btn btn-primary',
       onclick: () => this._compute(),
-    }, t('chart.generate')));
+    }, this._hasGenerated ? t('chart.regenerate') : t('chart.generate'));
+    barChildren.push(this.generateBtn);
 
     this.optionsHost = h('div', { class: 'workbench-options' });
     this.chartCol = h('div', { class: 'chart-col' }, [emptyResult()]);
@@ -124,14 +128,14 @@ export class ChartWorkbenchView {
     const row = h('div', { class: 'options-row' });
 
     if (def.options.includes('targetDate')) {
-      this.dateInput = h('input', { class: 'input', type: 'datetime-local', value: defaultDateTimeLocal() });
+      this.dateInput = h('input', { class: 'input', type: 'datetime-local', value: defaultDateTimeLocal(), onchange: () => this._autoRefresh() });
       row.appendChild(field(t('chart.targetDate'), this.dateInput));
       this.yearInput = null;
       this.latInput = null;
       this.lngInput = null;
       this.locLabelInput = null;
     } else if (def.options.includes('year')) {
-      this.yearInput = h('input', { class: 'input', type: 'number', min: 1, max: 3000, value: new Date().getFullYear(), style: { width: '100px' } });
+      this.yearInput = h('input', { class: 'input', type: 'number', min: 1, max: 3000, value: new Date().getFullYear(), style: { width: '100px' }, onchange: () => this._autoRefresh() });
       row.appendChild(field(t('chart.returnYear'), this.yearInput));
       this.dateInput = null;
       this.latInput = null;
@@ -169,6 +173,10 @@ export class ChartWorkbenchView {
     return options;
   }
 
+  _autoRefresh() {
+    if (this._hasGenerated) this._compute();
+  }
+
   async _compute() {
     const profiles = this.ctx.store.getState().profiles || [];
     const byId = (id) => profiles.find((p) => p.id === id);
@@ -198,6 +206,8 @@ export class ChartWorkbenchView {
       });
       renderChartResult(this.chartCol, this.dataCol, chart, this.ctx.reference,
         this.ctx.config ? this.ctx.config.chart : undefined);
+      this._hasGenerated = true;
+      if (this.generateBtn) this.generateBtn.textContent = t('chart.regenerate');
       notify.success(t('chart.generated', { type: chart.meta.typeNameZh }));
     } catch (err) {
       mount(this.chartCol, h('div', { class: 'empty-state' }, [

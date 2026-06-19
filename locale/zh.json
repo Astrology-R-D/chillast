@@ -68,6 +68,7 @@
     "relationshipTitle": "合盘分析",
     "relationshipSub": "比较 · 组合 · 马盘 · 时空 · 推运变体",
     "generate": "✶ 生成",
+    "regenerate": "✶ 重新生成",
     "resetView": "重置视图",
     "exportSvg": "导出 SVG",
     "exported": "已导出 SVG",

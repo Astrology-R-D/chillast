@@ -117,3 +117,29 @@ export function pillarDetailPanel(baziData) {
     ]),
   ]);
 }
+
+export function singlePillarPanel(baziData, pillarKey) {
+  const labelMap = { year: 'chinese.pillarYear', month: 'chinese.pillarMonth', day: 'chinese.pillarDay', hour: 'chinese.pillarHour' };
+  const p = baziData.pillars[pillarKey];
+  const stemColor = ELEMENT_COLOR[p.stem.element] || '';
+  const branchColor = ELEMENT_COLOR[p.branch.element] || '';
+
+  const rows = [
+    h('tr', {}, [h('td', { class: 'text-muted' }, t('chinese.heavenlyStem')), h('td', {}, `${p.stem.char} — ${t(ELEMENT_KEY_TO_ZH[p.stem.element])} ${t(p.stem.yinYang === 'yang' ? 'chinese.yang' : 'chinese.yin')}`)]),
+    h('tr', {}, [h('td', { class: 'text-muted' }, t('chinese.earthlyBranch')), h('td', {}, `${p.branch.char} — ${t(ELEMENT_KEY_TO_ZH[p.branch.element])} ${t(p.branch.yinYang === 'yang' ? 'chinese.yang' : 'chinese.yin')}`)]),
+  ];
+  if (p.branch.animal) {
+    rows.push(h('tr', {}, [h('td', { class: 'text-muted' }, t('chinese.zodiacAnimal')), h('td', {}, p.branch.animal)]));
+  }
+  if (pillarKey === 'day') {
+    rows.push(h('tr', {}, [h('td', { class: 'text-muted' }, t('chinese.dayMaster')), h('td', { class: 'fw-semibold' }, `${p.stem.char} (${t(ELEMENT_KEY_TO_ZH[p.stem.element])})`)]));
+  }
+
+  return panel(t(labelMap[pillarKey]) + ' ' + p.full, [
+    h('div', { style: { display: 'flex', gap: 'var(--sp-6)', alignItems: 'center', marginBottom: 'var(--sp-3)' } }, [
+      h('div', { style: { fontSize: '48px', fontWeight: '700', color: stemColor } }, p.stem.char),
+      h('div', { style: { fontSize: '48px', fontWeight: '700', color: branchColor } }, p.branch.char),
+    ]),
+    h('table', { class: 'data-table' }, [h('tbody', {}, rows)]),
+  ]);
+}

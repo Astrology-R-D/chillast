@@ -1,7 +1,7 @@
 import { h, mount, clear } from '../Dom.js';
 import { ApiClient } from '../ApiClient.js';
 import { renderBaZiChart } from '../components/BaZiChart.js';
-import { fiveElementsPanel, dayMasterPanel, lunarInfoPanel, pillarDetailPanel } from '../components/BaZiTables.js';
+import { fiveElementsPanel, dayMasterPanel, lunarInfoPanel, pillarDetailPanel, singlePillarPanel } from '../components/BaZiTables.js';
 import { notify } from '../components/Toast.js';
 import { t } from '../I18n.js';
 
@@ -63,17 +63,9 @@ export class ChineseAstrologyView {
 
     try {
       const result = await ApiClient.chinese.computeBazi(profile);
-
-      mount(this.chartCol, h('div', { style: { padding: 'var(--sp-4)' } }, [
-        renderBaZiChart(result.bazi),
-      ]));
-
-      mount(this.dataCol, [
-        dayMasterPanel(result.bazi),
-        fiveElementsPanel(result.bazi),
-        lunarInfoPanel(result.lunar),
-        pillarDetailPanel(result.bazi),
-      ]);
+      this._lastResult = result;
+      this._selectedPillar = null;
+      this._renderResult(result);
 
       notify.success(t('chinese.generated'));
     } catch (err) {
@@ -82,6 +74,32 @@ export class ChineseAstrologyView {
         h('p', {}, err.message),
       ]));
       notify.error(err.message);
+    }
+  }
+
+  _renderResult(result) {
+    const selectPillar = (key) => {
+      this._selectedPillar = key;
+      this._renderResult(result);
+    };
+
+    mount(this.chartCol, h('div', { style: { padding: 'var(--sp-4)' } }, [
+      renderBaZiChart(result.bazi, selectPillar, this._selectedPillar),
+    ]));
+
+    if (this._selectedPillar) {
+      mount(this.dataCol, [
+        singlePillarPanel(result.bazi, this._selectedPillar),
+        fiveElementsPanel(result.bazi),
+        lunarInfoPanel(result.lunar),
+      ]);
+    } else {
+      mount(this.dataCol, [
+        dayMasterPanel(result.bazi),
+        fiveElementsPanel(result.bazi),
+        lunarInfoPanel(result.lunar),
+        pillarDetailPanel(result.bazi),
+      ]);
     }
   }
 }

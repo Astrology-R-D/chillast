@@ -16,14 +16,22 @@ const YINYANG_LOCALE = { yang: 'chinese.yang', yin: 'chinese.yin' };
 const PILLAR_LABELS = ['chinese.pillarHour', 'chinese.pillarDay', 'chinese.pillarMonth', 'chinese.pillarYear'];
 const PILLAR_ORDER = ['hour', 'day', 'month', 'year'];
 
-export function renderBaZiChart(baziData) {
+export function renderBaZiChart(baziData, onSelect, selectedKey) {
   const pillars = PILLAR_ORDER.map((key, i) => {
     const p = baziData.pillars[key];
     const isDayMaster = key === 'day';
+    const isSelected = key === selectedKey;
     const stemColor = ELEMENT_CSS_VAR[p.stem.element] || 'var(--text-primary)';
     const branchColor = ELEMENT_CSS_VAR[p.branch.element] || 'var(--text-primary)';
 
-    return h('div', { class: `bazi-pillar${isDayMaster ? ' is-day-master' : ''}` }, [
+    let cls = 'bazi-pillar';
+    if (isDayMaster) cls += ' is-day-master';
+    if (isSelected) cls += ' is-selected';
+
+    return h('div', {
+      class: cls,
+      onclick: () => onSelect && onSelect(key),
+    }, [
       h('div', { class: 'bazi-pillar-label' }, t(PILLAR_LABELS[i])),
       h('div', { class: 'bazi-stem', style: { color: stemColor } }, p.stem.char),
       h('div', { class: 'bazi-yinyang' }, `${t(ELEMENT_KEY_TO_LOCALE[p.stem.element])} ${t(YINYANG_LOCALE[p.stem.yinYang])}`),
