@@ -72,8 +72,16 @@ export function lunarInfoPanel(lunarData) {
     [t('chinese.zodiacAnimal'), lunarData.zodiacAnimal],
     [t('chinese.huangdiYear'), String(lunarData.huangdiYear)],
   ];
-  if (lunarData.solarTerm) {
-    rows.push([t('chinese.solarTerm'), lunarData.solarTerm]);
+  if (lunarData.eraName) rows.push([t('chinese.eraName'), lunarData.eraName]);
+  if (lunarData.solarTerm) rows.push([t('chinese.solarTerm'), lunarData.solarTerm]);
+  if (lunarData.moonPhase && lunarData.moonPhase.name) {
+    rows.push([t('chinese.moonPhase'), `${lunarData.moonPhase.name} ${lunarData.moonPhase.time}`]);
+  }
+  if (lunarData.festivals && lunarData.festivals.major) {
+    rows.push([t('chinese.festival'), lunarData.festivals.major]);
+  }
+  if (lunarData.festivals && lunarData.festivals.important) {
+    rows.push([t('chinese.festivalImportant'), lunarData.festivals.important]);
   }
 
   const tableRows = rows.map(([label, value]) =>

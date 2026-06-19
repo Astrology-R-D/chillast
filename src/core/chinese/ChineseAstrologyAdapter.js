@@ -2,6 +2,9 @@
 
 const { STEM_MAP, BRANCH_MAP } = require('./ChineseAstrologyConstants');
 
+const SHICHEN = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+const SHICHEN_HOURS = ['23-01','01-03','03-05','05-07','07-09','09-11','11-13','13-15','15-17','17-19','19-21','21-23'];
+
 class ChineseAstrologyAdapter {
   constructor(sxwnl) {
     this.sxwnl = sxwnl;
@@ -23,6 +26,8 @@ class ChineseAstrologyAdapter {
     const ob = {};
     obb.mingLiBaZi(jd, J, ob);
 
+    const hourStem = ob.bz_js ? ob.bz_js[0] : '';
+
     return {
       pillars: {
         year:  this._parsePillar(ob.bz_jn),
@@ -32,7 +37,7 @@ class ChineseAstrologyAdapter {
       },
       dayMaster: this._parseStem(ob.bz_jr[0]),
       localTrueSolarTime: ob.bz_zty || '',
-      allHourPillars: this._parseHourPillars(ob.bz_JS || ''),
+      allHourPillars: this._parseHourPillars(ob.bz_JS || '', hourStem),
     };
   }
 
@@ -55,6 +60,18 @@ class ChineseAstrologyAdapter {
       solarTerm: ob.Ljq || null,
       constellation: ob.XiZ,
       huangdiYear: ob.Lyear4,
+      eraName: lun.nianhao || '',
+      monthSize: ob.Ldn || 0,
+      festivals: {
+        major: ob.A || '',
+        important: ob.B || '',
+        minor: ob.C || '',
+        isHoliday: Boolean(ob.Fjia),
+      },
+      moonPhase: {
+        name: ob.yxmc || '',
+        time: ob.yxsj || '',
+      },
     };
   }
 
@@ -82,8 +99,17 @@ class ChineseAstrologyAdapter {
       : { char, element: 'unknown', yinYang: 'unknown', animal: '' };
   }
 
-  _parseHourPillars(raw) {
-    return raw.replace(/<[^>]+>/g, '').trim().split(/\s+/).filter(Boolean);
+  _parseHourPillars(raw, currentHourStem) {
+    const clean = raw.replace(/<[^>]+>/g, '').trim();
+    const pairs = clean.match(/[\u4e00-\u9fff]{2}/g) || [];
+    return pairs.slice(0, 12).map((gz, i) => ({
+      shichen: SHICHEN[i] || '',
+      hours: SHICHEN_HOURS[i] || '',
+      stem: this._parseStem(gz[0]),
+      branch: this._parseBranch(gz[1]),
+      full: gz,
+      isCurrent: gz[0] === currentHourStem,
+    }));
   }
 }
 

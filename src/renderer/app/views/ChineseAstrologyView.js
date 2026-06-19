@@ -2,6 +2,7 @@ import { h, mount, clear } from '../Dom.js';
 import { ApiClient } from '../ApiClient.js';
 import { renderBaZiChart } from '../components/BaZiChart.js';
 import { fiveElementsPanel, dayMasterPanel, lunarInfoPanel, pillarDetailPanel, singlePillarPanel } from '../components/BaZiTables.js';
+import { hourPillarsPanel } from '../components/HourPillarsTable.js';
 import { notify } from '../components/Toast.js';
 import { t } from '../I18n.js';
 
@@ -99,6 +100,7 @@ export class ChineseAstrologyView {
         fiveElementsPanel(result.bazi),
         lunarInfoPanel(result.lunar),
         pillarDetailPanel(result.bazi),
+        hourPillarsPanel(result.bazi),
       ]);
     }
   }

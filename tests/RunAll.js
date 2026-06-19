@@ -419,9 +419,9 @@ test('known BaZi: 1990-01-15 14:30 Beijing = 己巳 丁丑 庚辰 丁亥', () =>
   assert.strictEqual(result.bazi.dayMaster.char, '庚');
   assert.strictEqual(result.bazi.dayMaster.element, 'metal');
 });
-test('allHourPillars has 13 entries', () => {
+test('allHourPillars has 12 entries', () => {
   const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
-  assert.strictEqual(result.bazi.allHourPillars.length, 13);
+  assert.strictEqual(result.bazi.allHourPillars.length, 12);
 });
 test('missing birthData throws', () => {
   assert.throws(() => chineseSvc.computeBaZi({}), /缺少出生数据/);

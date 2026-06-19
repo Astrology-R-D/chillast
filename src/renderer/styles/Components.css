@@ -309,3 +309,4 @@
 .bazi-yinyang {
   font-size: 10px; color: var(--text-muted); letter-spacing: 0.05em;
 }
+.is-current-hour td { background: rgba(79, 193, 255, 0.08); font-weight: var(--fw-semibold); }
