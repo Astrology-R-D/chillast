@@ -1,7 +1,6 @@
 import { h, mount, clear } from '../Dom.js';
 import { ApiClient } from '../ApiClient.js';
 import { renderChartResult } from '../components/ChartResult.js';
-import { ChatPanel } from '../components/ChatPanel.js';
 import { notify } from '../components/Toast.js';
 import { t } from '../I18n.js';
 
@@ -93,7 +92,6 @@ export class ChartWorkbenchView {
     this.optionsHost = h('div', { class: 'workbench-options' });
     this.chartCol = h('div', { class: 'chart-col' }, [emptyResult()]);
     this.dataCol = h('div', { class: 'data-col' });
-    this.chatCol = h('div', { class: 'chat-col', style: { display: 'none' } });
 
     const wrap = h('div', { class: 'workbench-wrap' }, [
       h('div', { class: 'workbench-bar' }, barChildren),
@@ -102,7 +100,6 @@ export class ChartWorkbenchView {
         this.chartCol,
         this.dataCol,
       ]),
-      this.chatCol,
     ]);
 
     mount(this.container, wrap);
@@ -180,42 +177,6 @@ export class ChartWorkbenchView {
     if (this._hasGenerated) this._compute();
   }
 
-  _showChatPanel() {
-    if (!this.chatPanel) {
-      this.chatPanel = new ChatPanel({
-        onInterpret: () => this._onAiInterpret(),
-        onSend: (text) => this._onAiChat(text),
-        onStop: () => window.mystApi.ai.stop(this._aiSessionId),
-      });
-    }
-    if (this.chatCol.style.display === 'none') {
-      this.chatCol.style.display = '';
-      mount(this.chatCol, this.chatPanel.element);
-    }
-  }
-
-  _onAiInterpret() {
-    if (!this._lastChartData) { notify.error('请先生成星盘'); return; }
-    this._aiSessionId = String(Date.now());
-    window.mystApi.ai.removeAllListeners();
-    window.mystApi.ai.onToken(({ type, data }) => {
-      if (type === 'token') this.chatPanel.appendToken(data);
-      else if (type === 'done') this.chatPanel.finishStreaming();
-    });
-    window.mystApi.ai.interpret(this._lastChartData, { chartType: this._lastChartData.meta.type });
-  }
-
-  _onAiChat(text) {
-    this._aiSessionId = String(Date.now());
-    window.mystApi.ai.removeAllListeners();
-    window.mystApi.ai.onToken(({ type, data }) => {
-      if (type === 'token') this.chatPanel.appendToken(data);
-      else if (type === 'tool-call') this.chatPanel.showToolCall(data.tool);
-      else if (type === 'done') this.chatPanel.finishStreaming();
-    });
-    window.mystApi.ai.chat([{ role: 'user', content: text }], {});
-  }
-
   async _compute() {
     const profiles = this.ctx.store.getState().profiles || [];
     const byId = (id) => profiles.find((p) => p.id === id);
@@ -248,7 +209,6 @@ export class ChartWorkbenchView {
       this._hasGenerated = true;
       this._lastChartData = chart;
       if (this.generateBtn) this.generateBtn.textContent = t('chart.regenerate');
-      this._showChatPanel();
       notify.success(t('chart.generated', { type: chart.meta.typeNameZh }));
     } catch (err) {
       mount(this.chartCol, h('div', { class: 'empty-state' }, [
