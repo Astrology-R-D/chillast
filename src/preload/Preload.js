@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('mystApi', {
     stop: (sessionId) => invoke('ai:stop', sessionId),
     configure: (settings) => invoke('ai:configure', settings),
     status: () => invoke('ai:status'),
+    setContext: (context) => invoke('ai:setContext', context),
     onToken: (callback) => ipcRenderer.on('ai:token', (_e, data) => callback(data)),
     onDone: (callback) => ipcRenderer.on('ai:done', (_e, data) => callback(data)),
     onError: (callback) => ipcRenderer.on('ai:error', (_e, data) => callback(data)),
@@ -57,6 +58,8 @@ contextBridge.exposeInMainWorld('mystApi', {
     },
     knowledge: {
       list: () => invoke('ai:knowledge:list'),
+      import: (filePaths) => invoke('ai:knowledge:import', filePaths),
+      remove: (docId) => invoke('ai:knowledge:remove', docId),
     },
   },
 });

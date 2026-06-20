@@ -69,20 +69,48 @@ class IpcRouter {
         return { ok: true };
       });
       this._handle('ai:interpret', async (_e, chartData, options) => {
-        for await (const ev of this.ai.interpret(chartData, options)) {
-          if (this.webContents) this.webContents.send('ai:token', { type: ev.type, data: ev.data });
+        try {
+          for await (const ev of this.ai.interpret(chartData, options)) {
+            if (this.webContents) this.webContents.send('ai:token', { type: ev.type, data: ev.data });
+          }
+          if (this.webContents) this.webContents.send('ai:done', { ok: true });
+          return { ok: true };
+        } catch (err) {
+          if (this.webContents) this.webContents.send('ai:error', { message: err.message });
+          return { ok: false, error: err.message };
         }
-        return { ok: true };
       });
       this._handle('ai:chat', async (_e, messages, context) => {
         const sessionId = String(Date.now());
-        for await (const ev of this.ai.chat(messages, { ...context, sessionId })) {
-          if (this.webContents) this.webContents.send('ai:token', { sessionId, type: ev.type, data: ev.data });
+        try {
+          for await (const ev of this.ai.chat(messages, { ...context, sessionId })) {
+            if (this.webContents) this.webContents.send('ai:token', { sessionId, type: ev.type, data: ev.data });
+          }
+          if (this.webContents) this.webContents.send('ai:done', { ok: true, sessionId });
+          return { ok: true };
+        } catch (err) {
+          if (this.webContents) this.webContents.send('ai:error', { message: err.message, sessionId });
+          return { ok: false, error: err.message };
         }
-        return { ok: true };
       });
       this._handle('ai:stop', (_e, sessionId) => { this.ai.stop(sessionId); return { ok: true }; });
       this._handle('ai:knowledge:list', () => this.ai.getKnowledgeBase()?.listDocuments() || []);
+      this._handle('ai:setContext', (_e, context) => {
+        this.ai.setContext(context);
+        return { ok: true };
+      });
+      this._handle('ai:knowledge:import', async (_e, filePaths) => {
+        const kb = this.ai.getKnowledgeBase();
+        if (!kb) throw new Error('知识库未初始化');
+        const count = await kb.importDocuments(filePaths);
+        return { count };
+      });
+      this._handle('ai:knowledge:remove', (_e, docId) => {
+        const kb = this.ai.getKnowledgeBase();
+        if (!kb) throw new Error('知识库未初始化');
+        const removed = kb.removeDocument(docId);
+        return { removed };
+      });
     }
 
     this._handle('cities:search', (_e, query) => this._searchCities(query));
