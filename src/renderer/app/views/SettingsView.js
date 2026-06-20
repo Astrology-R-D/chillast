@@ -210,17 +210,17 @@ export class SettingsView {
       if (this.apiKeyInput.value) {
         settings.apiKey = this.apiKeyInput.value;
       }
-          const result = await window.mystApi.ai.configure(settings);
-        if (result.ok) {
-          notify.success(t('settings.saved'));
-          this.apiKeyInput.value = '';
-          await this._refresh();
-        } else {
-          notify.error(t('settings.saveFailed', { message: result.error }));
-        }
-      } catch (err) {
-        notify.error(t('settings.saveFailed', { message: err.message }));
+      const result = await window.mystApi.ai.configure(settings);
+      if (result.ok) {
+        notify.success(t('settings.saved'));
+        this.apiKeyInput.value = '';
+        await this._refresh();
+      } else {
+        notify.error(t('settings.saveFailed', { message: result.error }));
       }
+    } catch (err) {
+      notify.error(t('settings.saveFailed', { message: err.message }));
+    }
     this.saveBtn.textContent = t('settings.save');
     this.saveBtn.disabled = false;
   }

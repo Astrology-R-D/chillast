@@ -1,6 +1,7 @@
 import { h, mount } from '../Dom.js';
 import { ChatPanel } from './ChatPanel.js';
 import { t } from '../I18n.js';
+import { notify } from './Toast.js';
 
 export class AiSidebar {
   constructor({ onNavigate }) {
@@ -56,12 +57,14 @@ export class AiSidebar {
   }
 
   _onInterpret() {
-    if (!this._context.lastChartData) return;
+    if (!this._context.lastChartData) { notify.error(t('ai.noChart')); return; }
     this._aiSessionId = String(Date.now());
     window.mystApi.ai.removeAllListeners();
     window.mystApi.ai.onToken(({ type, data }) => {
       if (type === 'token') this.chatPanel.appendToken(data);
-      else if (type === 'done') this.chatPanel.finishStreaming();
+    });
+    window.mystApi.ai.onDone(() => {
+      this.chatPanel.finishStreaming();
     });
     window.mystApi.ai.onError(({ message }) => {
       this.chatPanel.finishStreaming();
@@ -75,7 +78,9 @@ export class AiSidebar {
     window.mystApi.ai.onToken(({ type, data }) => {
       if (type === 'token') this.chatPanel.appendToken(data);
       else if (type === 'tool-call') this.chatPanel.showToolCall(data.tool);
-      else if (type === 'done') this.chatPanel.finishStreaming();
+    });
+    window.mystApi.ai.onDone(() => {
+      this.chatPanel.finishStreaming();
     });
     window.mystApi.ai.onError(({ message }) => {
       this.chatPanel.finishStreaming();

@@ -53,6 +53,10 @@ export class ChatPanel {
   }
 
   appendToken(token) {
+    if (!this._streaming) {
+      this._streaming = true;
+      this._build();
+    }
     this._currentAiMessage += token;
     this._render();
   }
