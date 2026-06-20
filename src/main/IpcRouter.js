@@ -65,27 +65,30 @@ class IpcRouter {
         return ModelProvider.listProviders();
       });
       this._handle('ai:configure', async (_e, settings) => {
-        const { app } = require('electron');
+        const { app, safeStorage } = require('electron');
         const fs = require('fs');
         const path = require('path');
-        const { safeStorage } = require('electron');
         const dataDir = path.join(app.getPath('userData'), 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
+        // Save API key — try safeStorage, fallback to plain JSON
         if (settings.apiKey) {
           const credPath = path.join(dataDir, 'ai-credentials.json');
-          if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+          const credJson = JSON.stringify({ apiKey: settings.apiKey });
           try {
-            const encrypted = safeStorage.encryptString(JSON.stringify({ apiKey: settings.apiKey }));
-            fs.writeFileSync(credPath, encrypted, 'utf-8');
+            if (safeStorage.isEncryptionAvailable()) {
+              const encrypted = safeStorage.encryptString(credJson);
+              fs.writeFileSync(credPath, encrypted);
+            } else {
+              throw new Error('safeStorage not available');
+            }
           } catch (_) {
-            // Fallback: save as plain JSON if safeStorage is unavailable
-            fs.writeFileSync(credPath, JSON.stringify({ apiKey: settings.apiKey }, null, 2), 'utf-8');
+            fs.writeFileSync(credPath, credJson, 'utf-8');
           }
         }
 
-        // Save non-secret settings as plain JSON alongside Profiles.json
+        // Save non-secret settings
         const settingsPath = path.join(dataDir, 'ai-settings.json');
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
         const persisted = {
           provider: settings.provider,
           model: settings.model,

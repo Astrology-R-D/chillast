@@ -76,17 +76,16 @@ class Main {
     if (fs.existsSync(credPath)) {
       try {
         const { safeStorage } = require('electron');
-        const raw = fs.readFileSync(credPath, 'utf-8');
+        const buf = fs.readFileSync(credPath);
         let cred;
-        // Try encrypted first, fall back to plain JSON
         try {
           if (safeStorage.isEncryptionAvailable()) {
-            cred = JSON.parse(safeStorage.decryptString(raw));
+            cred = JSON.parse(safeStorage.decryptString(buf));
           } else {
             throw new Error('safeStorage not available');
           }
         } catch (_) {
-          cred = JSON.parse(raw);
+          cred = JSON.parse(fs.readFileSync(credPath, 'utf-8'));
         }
         aiSettings.apiKey = cred.apiKey || '';
       } catch (_) {}

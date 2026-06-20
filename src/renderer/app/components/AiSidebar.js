@@ -250,12 +250,8 @@ export class AiSidebar {
 
     this._startAiStream();
 
-    // Build full message list for LLM context
-    const allMessages = this._messages
-      .filter((m) => m.role === 'user' || m.role === 'ai')
-      .map((m) => ({ role: m.role, content: m.content }));
-
-    window.mystApi.ai.chat(allMessages, { sessionId: this._sessionId });
+    // Only send current message — IPC handler loads full history from session store
+    window.mystApi.ai.chat([{ role: 'user', content: text }], { sessionId: this._sessionId });
   }
 
   _triggerInterpret() {
