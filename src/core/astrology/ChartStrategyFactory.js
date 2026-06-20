@@ -1,6 +1,7 @@
 'use strict';
 
 const HoroscopeAdapter = require('./HoroscopeAdapter');
+const SwissephAdapter = require('./ephemeris/SwissephAdapter');
 const AspectEngine = require('./AspectEngine');
 
 const NatalChartStrategy = require('./strategies/NatalChartStrategy');
@@ -29,8 +30,16 @@ const DavisonProgressedChartStrategy = require('./strategies/DavisonProgressedCh
  * memoised and reused.
  */
 class ChartStrategyFactory {
-  constructor(deps = { HoroscopeAdapter, AspectEngine }) {
-    this.deps = deps;
+  constructor(deps = {}) {
+    const explicitAdapter = deps && deps.EphemerisAdapter;
+    const backend = (deps && deps.backend) || 'swisseph';
+    const AdapterClass = explicitAdapter
+      || (backend === 'swisseph' ? SwissephAdapter : HoroscopeAdapter);
+    this.deps = {
+      ...deps,
+      EphemerisAdapter: AdapterClass,
+      AspectEngine,
+    };
     this.registry = {
       natal: NatalChartStrategy,
       transit: TransitChartStrategy,

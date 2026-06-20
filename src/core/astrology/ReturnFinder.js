@@ -16,7 +16,7 @@ const MS_PER_DAY = 86400000;
 const ReturnFinder = {
   /**
    * @param {object} params
-   * @param {HoroscopeAdapter} params.adapter
+   * @param {EphemerisAdapter} params.adapter
    * @param {{latitude:number, longitude:number}} params.place
    * @param {string} params.bodyKey Celestial key to track (e.g. 'sun', 'moon').
    * @param {number} params.targetLongitude Natal longitude to return to.

@@ -4,6 +4,7 @@ const { Origin, Horoscope } = require('circular-natal-horoscope-js');
 const { DateTime } = require('luxon');
 const AngleMath = require('../util/AngleMath');
 const { DEFAULT_BODY_KEYS, DEFAULT_POINT_KEYS } = require('./Constants');
+const EphemerisAdapter = require('./ephemeris/EphemerisAdapter');
 
 /**
  * HoroscopeAdapter — Adapter pattern around circular-natal-horoscope-js.
@@ -14,15 +15,14 @@ const { DEFAULT_BODY_KEYS, DEFAULT_POINT_KEYS } = require('./Constants');
  * file. The library's own aspect calculation is disabled; aspects are produced
  * by {@link AspectEngine} for uniform handling of single- and dual-chart cases.
  */
-class HoroscopeAdapter {
+class HoroscopeAdapter extends EphemerisAdapter {
   /**
    * @param {object} [settings]
    * @param {string} [settings.houseSystem='placidus']
    * @param {string} [settings.zodiac='tropical']
    */
   constructor(settings = {}) {
-    this.houseSystem = settings.houseSystem || 'placidus';
-    this.zodiac = settings.zodiac || 'tropical';
+    super(settings);
   }
 
   /**
