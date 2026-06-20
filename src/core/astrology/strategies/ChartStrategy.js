@@ -16,7 +16,7 @@ const AngleMath = require('../../util/AngleMath');
 class ChartStrategy {
   /**
    * @param {object} deps
-   * @param {Function} deps.HoroscopeAdapter Adapter class.
+   * @param {Function} deps.EphemerisAdapter Adapter class implementing the ephemeris contract.
    * @param {Function} deps.AspectEngine     Aspect engine class.
    */
   constructor(deps) {
@@ -36,7 +36,7 @@ class ChartStrategy {
 
   /** Construct an adapter for the request's settings. */
   _adapter(settings) {
-    return new this.deps.HoroscopeAdapter(this._chartSettings(settings));
+    return new this.deps.EphemerisAdapter(this._chartSettings(settings));
   }
 
   /** Construct an aspect engine for the request's settings. */

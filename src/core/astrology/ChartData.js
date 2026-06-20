@@ -11,7 +11,7 @@ const {
  * knowledge of its own. Every function is stateless.
  */
 const ChartData = {
-  /** Enrich a raw point (from HoroscopeAdapter) with display metadata. */
+  /** Enrich a raw point (from an EphemerisAdapter) with display metadata. */
   enrichPoint(point) {
     const meta = CELESTIAL_POINTS[point.key] || { nameEn: point.key, nameZh: point.key, glyph: '?' };
     const sign = ZODIAC_SIGNS[point.signIndex];

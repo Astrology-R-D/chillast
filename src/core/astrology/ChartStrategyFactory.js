@@ -29,8 +29,13 @@ const DavisonProgressedChartStrategy = require('./strategies/DavisonProgressedCh
  * memoised and reused.
  */
 class ChartStrategyFactory {
-  constructor(deps = { HoroscopeAdapter, AspectEngine }) {
-    this.deps = deps;
+  constructor(deps = {}) {
+    const explicit = deps && deps.EphemerisAdapter;
+    this.deps = {
+      ...deps,
+      EphemerisAdapter: explicit || HoroscopeAdapter,
+      AspectEngine,
+    };
     this.registry = {
       natal: NatalChartStrategy,
       transit: TransitChartStrategy,
