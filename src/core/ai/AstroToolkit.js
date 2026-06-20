@@ -49,9 +49,10 @@ function _serializeChart(chart) {
  *
  * @param {import('../astrology/AstrologyService')} astrologyService
  * @param {import('../chinese/ChineseAstrologyService')} chineseAstrologyService
+ * @param {import('./AiService')} aiService
  * @returns {Promise<import('@langchain/core/tools').DynamicStructuredTool[]>}
  */
-async function createTools(astrologyService, chineseAstrologyService) {
+async function createTools(astrologyService, chineseAstrologyService, aiService) {
   const { DynamicStructuredTool } = await esm.load('@langchain/core/tools');
   const z = require('zod');
 
@@ -208,7 +209,119 @@ async function createTools(astrologyService, chineseAstrologyService) {
     },
   });
 
-  return [computeNatalChart, computeTransit, computeSynastry, computeBazi];
+  // ── Tool 5: Solar Return chart ──────────────────────────────────────────
+  const computeSolarReturn = new DynamicStructuredTool({
+    name: 'compute_solar_return',
+    description:
+      '计算某人的太阳返照盘（Solar Return），分析指定年份的年运主题。需要出生数据和目标年份。',
+    schema: z.object({
+      ...birthSchema,
+      targetYear: z.number().int().describe('返照年份'),
+    }),
+    func: async (input) => {
+      try {
+        const profile = _makeProfile('查询对象', input);
+        const chart = astrologyService.computeChart({
+          type: 'solarReturn',
+          primary: profile,
+          options: { year: input.targetYear },
+        });
+        return _serializeChart(chart);
+      } catch (e) {
+        return `计算失败: ${e.message}`;
+      }
+    },
+  });
+
+  // ── Tool 6: Secondary Progressions chart ───────────────────────────────
+  const computeProgressed = new DynamicStructuredTool({
+    name: 'compute_progressed',
+    description:
+      '计算某人的次限推运盘（Secondary Progressions），分析生命历程的内在发展。需要出生数据和目标日期。',
+    schema: z.object({
+      ...birthSchema,
+      targetYear: z.number().int().describe('目标年份'),
+      targetMonth: z.number().int().min(1).max(12).describe('目标月份'),
+      targetDay: z.number().int().min(1).max(31).describe('目标日期'),
+    }),
+    func: async (input) => {
+      try {
+        const profile = _makeProfile('查询对象', input);
+        const targetDate = new Date(
+          Date.UTC(input.targetYear, input.targetMonth - 1, input.targetDay, 12),
+        ).toISOString();
+        const chart = astrologyService.computeChart({
+          type: 'progressed',
+          primary: profile,
+          options: { targetDate },
+        });
+        return _serializeChart(chart);
+      } catch (e) {
+        return `计算失败: ${e.message}`;
+      }
+    },
+  });
+
+  // ── Tool 7: Get current context (no params) ─────────────────────────────
+  const getCurrentContext = new DynamicStructuredTool({
+    name: 'get_current_context',
+    description:
+      '查询用户当前正在查看的页面和选中的档案信息。无需输入参数。返回当前路由、选中档案摘要、最后计算的星盘类型。',
+    schema: z.object({}),
+    func: async () => {
+      const ctx = (aiService && aiService.getContext()) || {};
+      const route = ctx.route || '未知';
+      const profile = ctx.activeProfile;
+      const chartType = ctx.chartType || '无';
+      const lines = [`当前页面: ${route}`];
+      if (profile) {
+        lines.push(`选中档案: ${profile.nameZh || profile.nameEn || '未命名'}`);
+      }
+      lines.push(`最后计算: ${chartType}`);
+      return lines.join('\n');
+    },
+  });
+
+  // ── Tool 8: Get current chart data (no params) ─────────────────────────
+  const getCurrentChart = new DynamicStructuredTool({
+    name: 'get_current_chart',
+    description:
+      '获取用户当前打开的星盘完整数据（行星位置、宫位、相位等）。无需输入参数。如果用户尚未计算任何星盘，返回提示。',
+    schema: z.object({}),
+    func: async () => {
+      const ctx = (aiService && aiService.getContext()) || {};
+      if (!ctx.lastChartData) return '用户尚未计算任何星盘。';
+      return _serializeChart(ctx.lastChartData);
+    },
+  });
+
+  // ── Tool 9: Get active profile (no params) ─────────────────────────────
+  const getActiveProfile = new DynamicStructuredTool({
+    name: 'get_active_profile',
+    description:
+      '获取当前选中档案的出生信息（姓名、出生日期时间、出生地经纬度）。无需输入参数。',
+    schema: z.object({}),
+    func: async () => {
+      const ctx = (aiService && aiService.getContext()) || {};
+      const p = ctx.activeProfile;
+      if (!p) return '当前没有选中的档案。';
+      const b = p.birthData || {};
+      const loc = b.location || {};
+      return `${p.nameZh || p.nameEn || '未命名'}，${b.year}年${b.month}月${b.day}日 ${b.hour}:${String(b.minute).padStart(2,'0')}，${loc.label || ''}（${loc.latitude}°N, ${loc.longitude}°E）`;
+    },
+  });
+
+  return [
+    computeNatalChart,
+    computeTransit,
+    computeSynastry,
+    computeBazi,
+    computeSolarReturn,
+    computeProgressed,
+    getCurrentContext,
+    getCurrentChart,
+    getActiveProfile,
+  ];
 }
 
 module.exports = { createTools };
