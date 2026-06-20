@@ -14,6 +14,7 @@ try {
 } catch (_) { /* swisseph-v2 native binding not rebuilt for Electron yet */ }
 const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
+const AiSessionStore = require('./AiSessionStore');
 
 const fs = require('fs');
 
@@ -45,6 +46,7 @@ class Main {
 
     const baseDir = path.join(app.getPath('userData'), 'data');
     this.profileRepository = new ProfileRepository(baseDir).init();
+    this.aiSessionStore = new AiSessionStore(baseDir).init();
     this.astrologyService = new AstrologyService(
       new ChartStrategyFactory({ backend: this.config.ephemeris.backend }),
     );
@@ -90,6 +92,7 @@ class Main {
       config: this.config,
       locale: this.locale,
       aiService: this.aiService,
+      aiSessionStore: this.aiSessionStore,
     }).register();
   }
 
