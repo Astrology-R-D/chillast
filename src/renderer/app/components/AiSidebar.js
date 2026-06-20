@@ -9,7 +9,7 @@ export class AiSidebar {
     this._onNavigate = onNavigate;
     this._configured = false;
     this._context = {};
-    this._aiSessionId = null;
+    this._interpretMode = false;
     this._build();
   }
 
@@ -24,18 +24,27 @@ export class AiSidebar {
     // Create deep-chat element
     this._chatEl = document.createElement('deep-chat');
     this._chatEl.className = 'ai-deep-chat';
-    this._chatEl.setAttribute('style', 'flex:1;min-height:0;border-radius:0;');
-    this._chatEl.setAttribute('textInput', JSON.stringify({
-      placeholder: { text: t('ai.inputPlaceholder') },
-    }));
-    this._chatEl.setAttribute('style', JSON.stringify({
+
+    // Style
+    this._chatEl.style = {
       borderRadius: '0',
       border: 'none',
       backgroundColor: 'var(--bg-panel-solid)',
-      colorScheme: 'dark',
-    }));
-    this._chatEl.setAttribute('avatars', JSON.stringify({ default: { styles: { avatar: { size: '28px' } } } }));
-    this._chatEl.setAttribute('messageStyles', JSON.stringify({
+      color: 'var(--text-primary)',
+      flex: '1',
+      minHeight: '0',
+      fontFamily: 'inherit',
+    };
+
+    this._chatEl.textInput = {
+      placeholder: { text: t('ai.inputPlaceholder') },
+      styles: {
+        text: { color: 'var(--text-primary)', fontSize: '13px' },
+        container: { background: 'var(--bg-input)', border: '1px solid var(--border-soft)' },
+      },
+    };
+
+    this._chatEl.messageStyles = {
       default: {
         shared: {
           inner: {
@@ -52,46 +61,37 @@ export class AiSidebar {
         user: { bubble: { styles: { background: 'var(--accent-violet-soft)' } } },
         ai: { bubble: { styles: { background: 'var(--bg-elevated)' } } },
       },
-    }));
-    this._chatEl.setAttribute('submitButtonStyles', JSON.stringify({
+    };
+
+    this._chatEl.submitButtonStyles = {
       submit: {
         container: {
           default: { backgroundColor: 'var(--accent)', color: '#fff' },
           hover: { backgroundColor: 'var(--accent-strong)' },
         },
       },
-    }));
-    this._chatEl.setAttribute('historyDisabled', 'true');
-
-    // Set up the handler — intercepts messages and routes through IPC
-    this._chatEl.handler = {
-      stream: async (body, signals) => {
-        this._aiSessionId = String(Date.now());
-        const messages = (body.messages || []).map((m) => ({
-          role: m.role === 'ai' ? 'assistant' : m.role,
-          content: m.text || '',
-        }));
-
-        window.mystApi.ai.removeAllListeners();
-        window.mystApi.ai.onToken(({ type, data }) => {
-          if (type === 'token') signals.onStreamSignal({ text: data });
-          else if (type === 'tool-call') signals.onStreamSignal({ text: `\n_⚙ ${data.tool}..._\n` });
-        });
-
-        try {
-          await window.mystApi.ai.chat(messages, {});
-          signals.onStreamEnd();
-        } catch (err) {
-          signals.onStreamSignal({ text: `\n\n❌ ${err.message}` });
-          signals.onStreamEnd();
-        }
+      stop: {
+        container: {
+          default: { backgroundColor: 'var(--danger)', color: '#fff' },
+        },
       },
+    };
+
+    this._chatEl.historyDisabled = true;
+
+    this._chatEl.introMessage = {
+      text: '✶ AI 占星顾问\n\n直接提问，或点击下方「AI 解读」分析当前星盘',
+    };
+
+    // Unified connect handler — routes to chat or interpret based on flag
+    this._chatEl.connect = {
+      handler: (body, signals) => this._handleMessage(body, signals),
     };
 
     // AI Interpret button
     this._interpretBtn = h('button', {
       class: 'btn btn-sm btn-ghost ai-interpret-btn',
-      onclick: () => this._onInterpret(),
+      onclick: () => this._triggerInterpret(),
     }, t('ai.interpret'));
 
     this._root = h('aside', { class: 'ai-sidebar' }, [
@@ -113,6 +113,86 @@ export class AiSidebar {
     window.mystApi.ai.onStatusChanged((status) => {
       this._applyStatus(status);
     });
+  }
+
+  _handleMessage(body, signals) {
+    // Check if this is an interpret trigger (user message = "AI 解读")
+    const lastMsg = body.messages && body.messages[body.messages.length - 1];
+    const isInterpret = this._interpretMode || (lastMsg && lastMsg.text === t('ai.interpret'));
+
+    if (isInterpret) {
+      this._interpretMode = false;
+      this._runInterpret(signals);
+      return;
+    }
+
+    this._runChat(body, signals);
+  }
+
+  _runChat(body, signals) {
+    const messages = (body.messages || []).map((m) => ({
+      role: m.role === 'ai' ? 'assistant' : m.role,
+      content: m.text || '',
+    }));
+
+    window.mystApi.ai.removeAllListeners();
+
+    let fullText = '';
+
+    window.mystApi.ai.onToken(({ type, data }) => {
+      if (type === 'token') {
+        fullText += data;
+        signals.onResponse({ text: fullText, overwrite: true });
+      } else if (type === 'tool-call') {
+        fullText += `\n\n_⚙ ${data.tool}..._\n`;
+        signals.onResponse({ text: fullText, overwrite: true });
+      }
+    });
+
+    window.mystApi.ai.onDone(() => {
+      if (!fullText) signals.onResponse({ text: '(无响应)', overwrite: true });
+    });
+    window.mystApi.ai.onError(({ message }) => {
+      if (!fullText) signals.onResponse({ text: `❌ ${message}`, overwrite: true });
+    });
+
+    window.mystApi.ai.chat(messages, {});
+  }
+
+  _runInterpret(signals) {
+    if (!this._context.lastChartData) {
+      signals.onResponse({ text: t('ai.noChart'), overwrite: true });
+      return;
+    }
+
+    window.mystApi.ai.removeAllListeners();
+
+    let fullText = '';
+
+    window.mystApi.ai.onToken(({ type, data }) => {
+      if (type === 'token') {
+        fullText += data;
+        signals.onResponse({ text: fullText, overwrite: true });
+      }
+    });
+
+    window.mystApi.ai.onDone(() => {
+      if (!fullText) signals.onResponse({ text: '(无响应)', overwrite: true });
+    });
+    window.mystApi.ai.onError(({ message }) => {
+      if (!fullText) signals.onResponse({ text: `❌ ${message}`, overwrite: true });
+    });
+
+    window.mystApi.ai.interpret(this._context.lastChartData, {
+      chartType: this._context.chartType,
+    });
+  }
+
+  _triggerInterpret() {
+    if (!this._context.lastChartData) { notify.error(t('ai.noChart')); return; }
+    // Set interpret flag then trigger deep-chat to send a user message
+    this._interpretMode = true;
+    this._chatEl.submitUserMessage({ text: t('ai.interpret') });
   }
 
   async updateStatus() {
@@ -145,29 +225,5 @@ export class AiSidebar {
 
   setContext(context) {
     this._context = context;
-  }
-
-  _onInterpret() {
-    if (!this._context.lastChartData) { notify.error(t('ai.noChart')); return; }
-    this._aiSessionId = String(Date.now());
-
-    window.mystApi.ai.removeAllListeners();
-    window.mystApi.ai.onToken(({ type, data }) => {
-      if (type === 'token') {
-        // Push token into deep-chat as a streaming AI response
-        this._chatEl.populateStreamResponse({ text: data });
-      }
-    });
-    window.mystApi.ai.onDone(() => {
-      this._chatEl.finalizeStreamResponse();
-    });
-    window.mystApi.ai.onError(({ message }) => {
-      this._chatEl.finalizeStreamResponse();
-    });
-
-    // Add a user message to show what's being interpreted
-    this._chatEl.submitUserMessage({ text: t('ai.interpret') }, false);
-
-    window.mystApi.ai.interpret(this._context.lastChartData, { chartType: this._context.chartType });
   }
 }
