@@ -444,3 +444,32 @@
   color: var(--danger);
   font-size: var(--fs-sm);
 }
+
+/* —— Test connection button + result ————————————————— */
+.test-result {
+  font-size: var(--fs-sm);
+  margin-left: var(--sp-2);
+}
+.test-result.testing { color: var(--text-muted); }
+.test-result.success { color: var(--success); }
+.test-result.failed { color: var(--danger); }
+
+/* —— LLM status indicator (AiSidebar header) ————————————— */
+.llm-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.llm-status-dot {
+  font-size: var(--fs-xs);
+  line-height: 1;
+}
+.llm-status-dot.connected {
+  color: var(--success);
+}
+.llm-status-dot.disconnected {
+  color: var(--text-muted);
+}
+.llm-status-text {
+  letter-spacing: 0.04em;
+}

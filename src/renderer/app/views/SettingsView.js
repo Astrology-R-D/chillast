@@ -3,10 +3,10 @@ import { t } from '../I18n.js';
 import { notify } from '../components/Toast.js';
 
 const PROVIDERS = [
-  { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini'] },
-  { value: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-4-6', 'claude-haiku-4-5'] },
-  { value: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
-  { value: 'ollama', label: 'Ollama', models: ['qwen2.5:7b', 'llama3.1:8b'] },
+  { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini'], needsKey: true },
+  { value: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-4-6', 'claude-haiku-4-5'], needsKey: true },
+  { value: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], needsKey: true },
+  { value: 'ollama', label: 'Ollama', models: ['qwen2.5:7b', 'llama3.1:8b'], needsKey: false },
 ];
 
 export class SettingsView {
@@ -49,19 +49,36 @@ export class SettingsView {
 
     this.apiKeyStatus = h('span', {}, '');
 
+    this.baseUrlInput = h('input', {
+      class: 'input',
+      type: 'text',
+      value: (status && status.baseUrl) || '',
+      placeholder: t('settings.baseUrlPlaceholder'),
+    });
+
+    const savedTemp = status && status.configured ? '0.7' : '0.7';
+    const savedMaxTokens = status && status.configured ? '4096' : '4096';
+
     this.tempInput = h('input', {
       class: 'input',
-      type: 'range', min: '0', max: '1', step: '0.1', value: '0.7',
+      type: 'range', min: '0', max: '1', step: '0.1', value: savedTemp,
       oninput: (e) => { this.tempValue.textContent = e.target.value; },
     });
-    this.tempValue = h('span', { class: 'range-value' }, '0.7');
+    this.tempValue = h('span', { class: 'range-value' }, savedTemp);
 
     this.maxTokensInput = h('input', {
       class: 'input',
-      type: 'range', min: '512', max: '8192', step: '512', value: '4096',
+      type: 'range', min: '512', max: '8192', step: '512', value: savedMaxTokens,
       oninput: (e) => { this.maxTokensValue.textContent = e.target.value; },
     });
-    this.maxTokensValue = h('span', { class: 'range-value' }, '4096');
+    this.maxTokensValue = h('span', { class: 'range-value' }, savedMaxTokens);
+
+    this.testBtn = h('button', {
+      class: 'btn btn-sm btn-ghost',
+      onclick: () => this._onTestConnection(),
+    }, t('settings.testConnection'));
+
+    this.testResult = h('span', { class: 'test-result' }, '');
 
     this.saveBtn = h('button', {
       class: 'btn btn-primary',
@@ -86,6 +103,10 @@ export class SettingsView {
         this.apiKeyStatus,
       ]),
       h('div', { class: 'settings-row' }, [
+        h('label', {}, t('settings.baseUrl')),
+        this.baseUrlInput,
+      ]),
+      h('div', { class: 'settings-row' }, [
         h('label', {}, t('settings.temperature')),
         this.tempInput,
         this.tempValue,
@@ -94,6 +115,11 @@ export class SettingsView {
         h('label', {}, t('settings.maxTokens')),
         this.maxTokensInput,
         this.maxTokensValue,
+      ]),
+      h('div', { class: 'settings-row' }, [
+        h('label', {}, ''),
+        this.testBtn,
+        this.testResult,
       ]),
       this.saveBtn,
     ]);
@@ -206,6 +232,7 @@ export class SettingsView {
         model: this.modelInput.value,
         temperature: parseFloat(this.tempInput.value),
         maxTokens: parseInt(this.maxTokensInput.value, 10),
+        baseUrl: this.baseUrlInput.value || undefined,
       };
       if (this.apiKeyInput.value) {
         settings.apiKey = this.apiKeyInput.value;
@@ -223,6 +250,27 @@ export class SettingsView {
     }
     this.saveBtn.textContent = t('settings.save');
     this.saveBtn.disabled = false;
+  }
+
+  async _onTestConnection() {
+    this.testBtn.textContent = t('settings.testing');
+    this.testBtn.disabled = true;
+    mount(this.testResult, h('span', { class: 'test-result testing' }, '…'));
+    try {
+      const result = await window.mystApi.ai.testConnection();
+      if (result.ok) {
+        notify.success(t('settings.testSuccess'));
+        mount(this.testResult, h('span', { class: 'test-result success' }, t('settings.testSuccess')));
+      } else {
+        notify.error(t('settings.testFailed', { message: result.error }));
+        mount(this.testResult, h('span', { class: 'test-result failed' }, result.error));
+      }
+    } catch (err) {
+      notify.error(t('settings.testFailed', { message: err.message }));
+      mount(this.testResult, h('span', { class: 'test-result failed' }, err.message));
+    }
+    this.testBtn.textContent = t('settings.testConnection');
+    this.testBtn.disabled = false;
   }
 
   async _onImport(fileList) {

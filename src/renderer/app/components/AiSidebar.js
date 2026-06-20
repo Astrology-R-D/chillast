@@ -17,6 +17,9 @@ export class AiSidebar {
   _build() {
     this._statusBanner = h('div', { class: 'ai-status-banner', style: { display: 'none' } });
 
+    this._llmStatusDot = h('span', { class: 'llm-status-dot disconnected' }, '●');
+    this._llmStatusText = h('span', { class: 'llm-status-text fs-xs text-muted' }, t('ai.llmDisconnected'));
+
     this.chatPanel = new ChatPanel({
       onInterpret: () => this._onInterpret(),
       onSend: (text) => this._onSend(text),
@@ -26,6 +29,10 @@ export class AiSidebar {
     this._root = h('aside', { class: 'ai-sidebar' }, [
       h('div', { class: 'ai-sidebar-header' }, [
         h('span', { class: 'fs-md fw-semibold' }, t('ai.title')),
+        h('div', { class: 'llm-status-indicator' }, [
+          this._llmStatusDot,
+          this._llmStatusText,
+        ]),
       ]),
       this._statusBanner,
       h('div', { class: 'ai-sidebar-body' }, [this.chatPanel.element]),
@@ -44,11 +51,17 @@ export class AiSidebar {
           h('a', { onclick: () => this._onNavigate('settings'), style: { cursor: 'pointer' } }, t('ai.goToSettings')),
           h('span', {}, ' ' + t('ai.toConfigure')),
         ]));
+        this._llmStatusDot.className = 'llm-status-dot disconnected';
+        this._llmStatusText.textContent = t('ai.llmDisconnected');
       } else {
         this._statusBanner.style.display = 'none';
+        this._llmStatusDot.className = 'llm-status-dot connected';
+        this._llmStatusText.textContent = `${status.provider || ''} · ${status.model || ''}`;
       }
     } catch (_) {
       this._configured = false;
+      this._llmStatusDot.className = 'llm-status-dot disconnected';
+      this._llmStatusText.textContent = t('ai.llmDisconnected');
     }
   }
 
