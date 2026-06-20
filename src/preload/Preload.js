@@ -57,7 +57,7 @@ contextBridge.exposeInMainWorld('mystApi', {
     onError: (callback) => ipcRenderer.on('ai:error', (_e, data) => callback(data)),
     onStatusChanged: (callback) => ipcRenderer.on('ai:statusChanged', (_e, data) => callback(data)),
     removeAllListeners: () => {
-      for (const ch of ['ai:token', 'ai:done', 'ai:error', 'ai:statusChanged'])
+      for (const ch of ['ai:token', 'ai:done', 'ai:error'])
         ipcRenderer.removeAllListeners(ch);
     },
     knowledge: {
