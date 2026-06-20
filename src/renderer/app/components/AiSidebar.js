@@ -2,7 +2,7 @@ import { h, mount } from '../Dom.js';
 import { t } from '../I18n.js';
 import { notify } from './Toast.js';
 
-import 'deep-chat';
+let _deepChatLoaded = false;
 
 export class AiSidebar {
   constructor({ onNavigate }) {
@@ -10,12 +10,17 @@ export class AiSidebar {
     this._configured = false;
     this._context = {};
     this._interpretMode = false;
-    this._build();
+    this._root = h('aside', { class: 'ai-sidebar' });
+    this._ready = this._build();
   }
 
   get element() { return this._root; }
 
-  _build() {
+  async _build() {
+    if (!_deepChatLoaded) {
+      await import('../../../../node_modules/deep-chat/dist/deepChat.js');      _deepChatLoaded = true;
+    }
+
     this._statusBanner = h('div', { class: 'ai-status-banner', style: { display: 'none' } });
 
     this._llmStatusDot = h('span', { class: 'llm-status-dot disconnected' }, '●');
@@ -94,7 +99,8 @@ export class AiSidebar {
       onclick: () => this._triggerInterpret(),
     }, t('ai.interpret'));
 
-    this._root = h('aside', { class: 'ai-sidebar' }, [
+    // Populate the _root created in constructor
+    mount(this._root, [
       h('div', { class: 'ai-sidebar-header' }, [
         h('span', { class: 'fs-md fw-semibold' }, t('ai.title')),
         h('div', { class: 'llm-status-indicator' }, [
@@ -196,6 +202,7 @@ export class AiSidebar {
   }
 
   async updateStatus() {
+    await this._ready;
     try {
       const result = await window.mystApi.ai.status();
       const status = result.ok ? result.data : null;

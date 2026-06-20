@@ -144,7 +144,7 @@ export class App {
     ]);
 
     mount(this.root, [sidebar, main, this.aiSidebar.element]);
-    this.aiSidebar.updateStatus();
+    this.aiSidebar.updateStatus().catch(() => {});
   }
 
   navigate(route) {
