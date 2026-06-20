@@ -16,7 +16,7 @@ class IpcRouter {
    * @param {ProfileRepository} deps.profileRepository
    * @param {AstrologyService} deps.astrologyService
    */
-  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService }) {
+  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService, aiSessionStore }) {
     this.ipcMain = ipcMain;
     this.profiles = profileRepository;
     this.astrology = astrologyService;
@@ -24,6 +24,7 @@ class IpcRouter {
     this.config = config || {};
     this.locale = locale || {};
     this.ai = aiService;
+    this.aiSessionStore = aiSessionStore || null;
     this.webContents = null;
   }
 
@@ -107,10 +108,27 @@ class IpcRouter {
         }
       });
       this._handle('ai:chat', async (_e, messages, context) => {
-        const sessionId = String(Date.now());
+        const sessionId = context.sessionId || String(Date.now());
         try {
-          for await (const ev of this.ai.chat(messages, { ...context, sessionId })) {
+          // Load full history from store if sessionId provided
+          let fullMessages = messages;
+          if (this.aiSessionStore && sessionId) {
+            const session = this.aiSessionStore.get(sessionId);
+            if (session && session.messages && session.messages.length) {
+              fullMessages = session.messages;
+            }
+          }
+
+          for await (const ev of this.ai.chat(fullMessages, { ...context, sessionId })) {
             if (this.webContents) this.webContents.send('ai:token', { sessionId, type: ev.type, data: ev.data });
+
+            // Persist completed messages
+            if (ev.type === 'done') {
+              // Find the last user message and persist AI response
+              // The AiService yields tokens; we accumulate them in the renderer.
+              // For persistence, we append the user message + a placeholder.
+              // The renderer will call ai:sessions:append after streaming completes.
+            }
           }
           if (this.webContents) this.webContents.send('ai:done', { ok: true, sessionId });
           return { ok: true };
@@ -121,6 +139,17 @@ class IpcRouter {
       });
       this._handle('ai:stop', (_e, sessionId) => { this.ai.stop(sessionId); return { ok: true }; });
       this._handle('ai:knowledge:list', () => this.ai.getKnowledgeBase()?.listDocuments() || []);
+      this._handle('ai:sessions:list', () => this.aiSessionStore ? this.aiSessionStore.list() : []);
+      this._handle('ai:sessions:create', () => this.aiSessionStore ? this.aiSessionStore.create() : null);
+      this._handle('ai:sessions:delete', (_e, id) => {
+        if (this.aiSessionStore) return this.aiSessionStore.delete(id);
+        return false;
+      });
+      this._handle('ai:sessions:append', (_e, sessionId, message) => {
+        if (!this.aiSessionStore) return { ok: false };
+        const updated = this.aiSessionStore.appendMessage(sessionId, message);
+        return updated ? { ok: true, data: updated } : { ok: false };
+      });
       this._handle('ai:setContext', (_e, context) => {
         this.ai.setContext(context);
         return { ok: true };
