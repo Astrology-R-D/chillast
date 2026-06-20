@@ -326,3 +326,121 @@
 @keyframes blink { 50% { opacity: 0; } }
 .chat-input-row { display: flex; gap: var(--sp-1); padding: var(--sp-2); border-top: 1px solid var(--border-soft); }
 .chat-input { flex: 1; }
+
+/* —— AI Sidebar ——————————————————————————————————————— */
+.ai-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  border-left: 1px solid var(--border-soft);
+  background: var(--bg-panel-solid);
+}
+.ai-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-soft);
+}
+.ai-sidebar-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ai-status-banner {
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--accent-violet-soft);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--border-soft);
+}
+.ai-status-banner a {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* —— Header AI toggle button —————————————————————————— */
+.ai-toggle-btn.is-active {
+  background: var(--accent-violet-soft);
+  color: var(--accent);
+}
+
+/* —— Settings page ——————————————————————————————————— */
+.settings-section {
+  margin-bottom: var(--sp-6);
+  padding: var(--sp-4);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+}
+.settings-section h3 {
+  font-size: var(--fs-md);
+  margin-bottom: var(--sp-3);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.settings-row label {
+  width: 100px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.settings-row .input,
+.settings-row .select {
+  flex: 1;
+}
+.settings-row input[type="range"] {
+  flex: 1;
+}
+.settings-row .range-value {
+  width: 40px;
+  text-align: right;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.knowledge-list {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: var(--fs-sm);
+}
+.knowledge-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-1) 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.knowledge-list-item .doc-name {
+  color: var(--text-secondary);
+}
+.knowledge-list-item .doc-source {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-left: var(--sp-2);
+}
+.settings-status-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--sp-1) 0;
+  font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--border-soft);
+}
+.settings-status-row .label {
+  color: var(--text-secondary);
+}
+.settings-status-row .value {
+  color: var(--text-primary);
+}
+.api-key-configured {
+  color: var(--success);
+  font-size: var(--fs-sm);
+}
+.api-key-not-set {
+  color: var(--danger);
+  font-size: var(--fs-sm);
+}
