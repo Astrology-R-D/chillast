@@ -18,7 +18,7 @@
     "groupChinese": "命理",
     "groupTools": "工具",
     "solarTerms": "节气年历",
-    "settings": "设置"
+    "settings": "AI 设置"
   },
   "profiles": {
     "title": "档案管理",
@@ -161,8 +161,8 @@
     "solarTermLoading": "正在查询节气…"
   },
   "settings": {
-    "title": "设置",
-    "sub": "AI 配置 · 知识库管理",
+    "title": "AI 设置",
+    "sub": "AI 配置 · 知识库 · 对话管理",
     "aiConfig": "AI 配置",
     "provider": "供应商",
     "model": "模型",
@@ -192,6 +192,17 @@
     "removed": "文档已删除",
     "imported": "已导入 {{count}} 篇文档",
     "importFailed": "导入失败：{{message}}",
+    "sessions": "对话管理",
+    "sessionsHint": "共 {{count}} 个对话。标题由 AI 自动总结，也可手动重命名。",
+    "sessionsEmpty": "暂无对话",
+    "sessionUntitled": "（未命名对话）",
+    "sessionMeta": "{{count}} 条消息 · {{date}}",
+    "sessionRegenTitle": "AI 命名",
+    "sessionRename": "重命名",
+    "sessionRenamePrompt": "输入新的对话标题",
+    "sessionRenamed": "标题已更新",
+    "sessionTitleGenerated": "已生成标题：{{title}}",
+    "sessionTitleFailed": "标题生成失败（请检查 AI 是否已配置）",
     "status": "状态",
     "serviceStatus": "服务状态",
     "configured": "已配置",

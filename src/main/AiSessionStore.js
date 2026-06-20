@@ -60,6 +60,17 @@ class AiSessionStore {
     return session;
   }
 
+  // Set a session's display title (AI-generated summary or manual rename).
+  // Does not touch updatedAt so the list ordering is preserved.
+  setTitle(id, title) {
+    const sessions = this._readAll();
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return null;
+    session.title = String(title || '').slice(0, 40);
+    this._writeAll(sessions);
+    return session;
+  }
+
   delete(id) {
     const sessions = this._readAll();
     const next = sessions.filter((s) => s.id !== id);

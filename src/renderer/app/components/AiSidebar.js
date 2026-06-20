@@ -1,27 +1,7 @@
 import { h, mount, clear } from '../Dom.js';
 import { t } from '../I18n.js';
 import { notify } from './Toast.js';
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function renderMarkdown(text) {
-  let html = escapeHtml(text);
-  html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
-  html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^# (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-  html = html.replace(/\n/g, '<br>');
-  return html;
-}
+import { renderMarkdown } from './MarkdownRenderer.js';
 
 export class AiSidebar {
   constructor({ onNavigate }) {
@@ -46,6 +26,15 @@ export class AiSidebar {
     this._llmStatusText = h('span', { class: 'llm-status-text fs-xs text-muted' }, t('ai.llmDisconnected'));
 
     this._msgList = h('div', { class: 'chat-messages' });
+    // Markdown links must open externally, never navigate the app window.
+    // window.open routes through Main's setWindowOpenHandler → shell.openExternal.
+    this._msgList.addEventListener('click', (e) => {
+      const a = e.target.closest && e.target.closest('a.chat-link');
+      if (a && a.getAttribute('href')) {
+        e.preventDefault();
+        window.open(a.getAttribute('href'), '_blank', 'noopener');
+      }
+    });
 
     // Session dropdown
     this._sessionSelect = h('select', {
@@ -119,6 +108,11 @@ export class AiSidebar {
   // ── Session management ──────────────────────────────────
 
   async _loadSessions() {
+    if (!this._sessionsListenerRegistered) {
+      this._sessionsListenerRegistered = true;
+      // Backend pushes this when an AI-generated title becomes available.
+      window.mystApi.ai.onSessionsChanged(() => this._reloadSessionList());
+    }
     try {
       const result = await window.mystApi.ai.sessions.list();
       this._sessions = (result.ok && result.data) || [];
@@ -140,6 +134,7 @@ export class AiSidebar {
   }
 
   _sessionLabel(s) {
+    if (s.title) return s.title;
     const firstUser = (s.messages || []).find((m) => m.role === 'user');
     if (firstUser && firstUser.content) {
       return firstUser.content.slice(0, 30);
@@ -222,11 +217,17 @@ export class AiSidebar {
     this._sendBtn.style.display = streaming ? 'none' : '';
     this._stopBtn.style.display = streaming ? '' : 'none';
     this._input.disabled = streaming;
+    this._interpretBtn.disabled = streaming;
+    // Lock session controls while a response streams so the dropdown can't
+    // drift out of sync with the conversation being rendered.
+    this._sessionSelect.disabled = streaming;
+    this._newSessionBtn.disabled = streaming;
+    this._deleteSessionBtn.disabled = streaming;
   }
 
   _addUserMessage(text) {
     this._messages.push({ role: 'user', content: text });
-    mount(this._msgList, h('div', { class: 'chat-msg chat-msg-user' }, [
+    this._msgList.appendChild(h('div', { class: 'chat-msg chat-msg-user' }, [
       h('div', { class: 'chat-msg-body' }, text),
     ]));
     this._scrollToBottom();
@@ -234,7 +235,7 @@ export class AiSidebar {
 
   _addAiMessage(text) {
     this._messages.push({ role: 'ai', content: text });
-    mount(this._msgList, h('div', { class: 'chat-msg chat-msg-ai' }, [
+    this._msgList.appendChild(h('div', { class: 'chat-msg chat-msg-ai' }, [
       h('div', { class: 'chat-msg-body', html: renderMarkdown(text) }),
     ]));
     this._scrollToBottom();
@@ -246,7 +247,7 @@ export class AiSidebar {
       h('div', { class: 'chat-msg-body', html: '' }),
       h('span', { class: 'chat-cursor' }, '▌'),
     ]);
-    mount(this._msgList, this._currentAiEl);
+    this._msgList.appendChild(this._currentAiEl);
     this._scrollToBottom();
     this._setStreaming(true);
   }
@@ -260,13 +261,28 @@ export class AiSidebar {
   }
 
   _finishStreaming() {
+    if (this._currentAiEl) {
+      const cursor = this._currentAiEl.querySelector('.chat-cursor');
+      if (cursor) cursor.remove();
+    }
     if (this._currentAiText) {
       this._messages.push({ role: 'ai', content: this._currentAiText });
     }
     this._currentAiText = '';
     this._currentAiEl = null;
     this._setStreaming(false);
-    this._refreshSessionDropdown();
+    // Backend has persisted new messages; reload list so session labels reflect them.
+    this._reloadSessionList();
+  }
+
+  async _reloadSessionList() {
+    try {
+      const result = await window.mystApi.ai.sessions.list();
+      this._sessions = (result.ok && result.data) || this._sessions;
+      this._refreshSessionDropdown();
+    } catch (_) {
+      this._refreshSessionDropdown();
+    }
   }
 
   _scrollToBottom() {

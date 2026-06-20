@@ -141,8 +141,10 @@ class AiService {
 
       const messages = [new SystemMessage(systemPrompt)];
       for (const m of userMessages) {
+        if (!m || !m.content) continue;
         if (m.role === 'user') messages.push(new HumanMessage(m.content));
-        else if (m.role === 'assistant') messages.push(new AIMessage(m.content));
+        // Session store persists AI turns as role 'ai'; LangChain providers use 'assistant'.
+        else if (m.role === 'assistant' || m.role === 'ai') messages.push(new AIMessage(m.content));
       }
 
       // Tool-calling loop (max 5 iterations to prevent infinite loops)
@@ -195,6 +197,42 @@ class AiService {
       this._abortControllers.delete(sessionId);
     }
     yield { type: 'done', data: { sessionId } };
+  }
+
+  /**
+   * Generate a short conversation title (≤12 Chinese chars) from messages.
+   * Uses a single non-streaming LLM call. Returns '' on any failure so the
+   * caller can fall back to the first user message.
+   * @param {Array} messages - [{ role, content }]
+   */
+  async summarizeTitle(messages) {
+    if (!this._configured) return '';
+    const model = this._mp.chatModel();
+    if (!model) return '';
+    const convo = (messages || [])
+      .filter((m) => m && m.content)
+      .map((m) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`)
+      .join('\n')
+      .slice(0, 2000);
+    if (!convo) return '';
+    try {
+      const { SystemMessage, HumanMessage } = await esm.load('@langchain/core/messages');
+      const res = await model.invoke([
+        new SystemMessage('你是对话标题生成器。根据对话内容用不超过12个汉字概括主题，只输出标题本身，不要任何标点、引号或解释。'),
+        new HumanMessage(convo),
+      ]);
+      let title = typeof res === 'string' ? res : (res && res.content) || '';
+      if (Array.isArray(title)) {
+        title = title.map((p) => (typeof p === 'string' ? p : p.text || '')).join('');
+      }
+      return String(title)
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/^["'「『《\s]+|["'」』》\s]+$/g, '')
+        .slice(0, 20)
+        .trim();
+    } catch (_) {
+      return '';
+    }
   }
 
   stop(sessionId) {

@@ -117,6 +117,7 @@ class IpcRouter {
             this.aiSessionStore.appendMessage(sessionId, { role: 'ai', content: aiText });
           }
           if (this.webContents) this.webContents.send('ai:done', { ok: true });
+          this._maybeAutoTitle(sessionId);
           return { ok: true };
         } catch (err) {
           if (this.webContents) this.webContents.send('ai:error', { message: err.message });
@@ -151,6 +152,7 @@ class IpcRouter {
           }
 
           if (this.webContents) this.webContents.send('ai:done', { ok: true, sessionId });
+          this._maybeAutoTitle(sessionId);
           return { ok: true };
         } catch (err) {
           if (this.webContents) this.webContents.send('ai:error', { message: err.message, sessionId });
@@ -165,6 +167,23 @@ class IpcRouter {
       this._handle('ai:sessions:delete', (_e, id) => {
         if (this.aiSessionStore) return this.aiSessionStore.delete(id);
         return false;
+      });
+      this._handle('ai:sessions:rename', (_e, id, title) => {
+        if (!this.aiSessionStore) return null;
+        const updated = this.aiSessionStore.setTitle(id, title);
+        if (updated && this.webContents) this.webContents.send('ai:sessionsChanged');
+        return updated;
+      });
+      this._handle('ai:sessions:generateTitle', async (_e, id) => {
+        if (!this.aiSessionStore) return { title: '' };
+        const session = this.aiSessionStore.get(id);
+        if (!session) return { title: '' };
+        const title = await this.ai.summarizeTitle(session.messages);
+        if (title) {
+          this.aiSessionStore.setTitle(id, title);
+          if (this.webContents) this.webContents.send('ai:sessionsChanged');
+        }
+        return { title };
       });
       this._handle('ai:sessions:append', (_e, sessionId, message) => {
         if (!this.aiSessionStore) return { ok: false };
@@ -191,6 +210,24 @@ class IpcRouter {
 
     this._handle('cities:search', (_e, query) => this._searchCities(query));
     return this;
+  }
+
+  /**
+   * Generate an AI title for a session the first time it has content, then
+   * notify the renderer to refresh its session list. Fire-and-forget: never
+   * blocks the chat response and swallows all errors.
+   */
+  async _maybeAutoTitle(sessionId) {
+    try {
+      if (!this.aiSessionStore || !this.ai || !sessionId) return;
+      const session = this.aiSessionStore.get(sessionId);
+      if (!session || session.title) return;
+      if (!session.messages.some((m) => m.role === 'user')) return;
+      const title = await this.ai.summarizeTitle(session.messages);
+      if (!title) return;
+      this.aiSessionStore.setTitle(sessionId, title);
+      if (this.webContents) this.webContents.send('ai:sessionsChanged');
+    } catch (_) { /* titling is best-effort */ }
   }
 
   /** Wrap a handler so thrown errors become a structured envelope. */

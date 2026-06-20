@@ -56,7 +56,10 @@ contextBridge.exposeInMainWorld('mystApi', {
     onDone: (callback) => ipcRenderer.on('ai:done', (_e, data) => callback(data)),
     onError: (callback) => ipcRenderer.on('ai:error', (_e, data) => callback(data)),
     onStatusChanged: (callback) => ipcRenderer.on('ai:statusChanged', (_e, data) => callback(data)),
+    onSessionsChanged: (callback) => ipcRenderer.on('ai:sessionsChanged', () => callback()),
     removeAllListeners: () => {
+      // Only the per-request streaming channels are cleared between turns;
+      // statusChanged / sessionsChanged are long-lived and registered once.
       for (const ch of ['ai:token', 'ai:done', 'ai:error'])
         ipcRenderer.removeAllListeners(ch);
     },
@@ -71,6 +74,8 @@ contextBridge.exposeInMainWorld('mystApi', {
       create: () => invoke('ai:sessions:create'),
       delete: (id) => invoke('ai:sessions:delete', id),
       append: (sessionId, message) => invoke('ai:sessions:append', sessionId, message),
+      rename: (id, title) => invoke('ai:sessions:rename', id, title),
+      generateTitle: (id) => invoke('ai:sessions:generateTitle', id),
     },
   },
 });

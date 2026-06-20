@@ -43,6 +43,7 @@ export class SettingsView {
   async _draw() {
     const status = await this._fetchStatus();
     const knowledgeDocs = await this._fetchKnowledge();
+    const sessions = await this._fetchSessions();
 
     this.providerSelect = h('select', {
       class: 'select',
@@ -143,13 +144,45 @@ export class SettingsView {
 
     const knowledgeSection = this._buildKnowledgeSection(knowledgeDocs);
 
+    const sessionsSection = this._buildSessionsSection(sessions);
+
     const statusSection = this._buildStatusSection(status, knowledgeDocs);
 
     mount(this.container, h('div', { class: 'settings-container' }, [
       aiConfigSection,
       knowledgeSection,
+      sessionsSection,
       statusSection,
     ]));
+  }
+
+  _buildSessionsSection(sessions) {
+    const rows = sessions.map((s) => {
+      const title = s.title || this._firstUserText(s) || t('settings.sessionUntitled');
+      const meta = t('settings.sessionMeta', {
+        count: (s.messages || []).length,
+        date: this._formatDate(s.updatedAt || s.createdAt),
+      });
+      return h('div', { class: 'knowledge-list-item' }, [
+        h('span', {}, [
+          h('span', { class: 'doc-name' }, title),
+          h('span', { class: 'doc-source' }, meta),
+        ]),
+        h('span', { class: 'session-actions' }, [
+          h('button', { class: 'btn btn-sm btn-ghost', onclick: () => this._onRegenTitle(s) }, t('settings.sessionRegenTitle')),
+          h('button', { class: 'btn btn-sm btn-ghost', onclick: () => this._onRenameSession(s) }, t('settings.sessionRename')),
+          h('button', { class: 'btn btn-sm btn-ghost', onclick: () => this._onDeleteSession(s) }, t('settings.removeDoc')),
+        ]),
+      ]);
+    });
+
+    return h('div', { class: 'settings-section' }, [
+      h('h3', {}, t('settings.sessions')),
+      h('div', { class: 'fs-sm text-muted mb-2' }, t('settings.sessionsHint', { count: sessions.length })),
+      h('div', { class: 'knowledge-list' }, rows.length
+        ? rows
+        : [h('div', { class: 'fs-sm text-muted' }, t('settings.sessionsEmpty'))]),
+    ]);
   }
 
   _buildKnowledgeSection(docs) {
@@ -329,6 +362,62 @@ export class SettingsView {
     } catch (err) {
       notify.error(err.message);
     }
+  }
+
+  _firstUserText(s) {
+    const u = (s.messages || []).find((m) => m.role === 'user');
+    return u && u.content ? u.content.slice(0, 24) : '';
+  }
+
+  _formatDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    } catch (_) { return ''; }
+  }
+
+  async _onRenameSession(s) {
+    const current = s.title || this._firstUserText(s) || '';
+    const next = prompt(t('settings.sessionRenamePrompt'), current);
+    if (next == null) return;
+    const title = next.trim();
+    if (!title) return;
+    try {
+      await window.mystApi.ai.sessions.rename(s.id, title);
+      notify.success(t('settings.sessionRenamed'));
+      await this._refresh();
+    } catch (err) { notify.error(err.message); }
+  }
+
+  async _onRegenTitle(s) {
+    try {
+      const result = await window.mystApi.ai.sessions.generateTitle(s.id);
+      const title = result.ok && result.data ? result.data.title : '';
+      if (title) {
+        notify.success(t('settings.sessionTitleGenerated', { title }));
+      } else {
+        notify.error(t('settings.sessionTitleFailed'));
+      }
+      await this._refresh();
+    } catch (err) { notify.error(err.message); }
+  }
+
+  async _onDeleteSession(s) {
+    if (!confirm(t('ai.deleteSessionConfirm'))) return;
+    try {
+      await window.mystApi.ai.sessions.delete(s.id);
+      notify.success(t('ai.sessionDeleted'));
+      await this._refresh();
+    } catch (err) { notify.error(err.message); }
+  }
+
+  async _fetchSessions() {
+    try {
+      const result = await window.mystApi.ai.sessions.list();
+      return result.ok ? (result.data || []) : [];
+    } catch (_) { return []; }
   }
 
   async _fetchStatus() {
