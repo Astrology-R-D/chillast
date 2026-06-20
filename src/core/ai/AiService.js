@@ -48,6 +48,16 @@ class AiService {
     return await this._mp.testConnection();
   }
 
+  /**
+   * Test connectivity with given settings WITHOUT persisting.
+   * Used by the settings page "test connection" button before saving.
+   * @param {object} settings — { provider, model, apiKey, baseUrl, temperature, maxTokens }
+   */
+  async testWithSettings(settings) {
+    const ModelProvider = require('./ModelProvider');
+    return await ModelProvider.testWithSettings(settings);
+  }
+
   getKnowledgeBase() { return this._kb; }
 
   setContext(context) {

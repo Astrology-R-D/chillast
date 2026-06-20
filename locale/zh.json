@@ -178,6 +178,7 @@
     "testing": "测试中…",
     "testSuccess": "连接成功",
     "testFailed": "连接失败：{{message}}",
+    "providerHint": "选择 AI 服务商（兼容 OpenAI 接口的第三方均可使用「OpenAI 兼容端点」）",
     "save": "保存配置",
     "saving": "保存中…",
     "saved": "AI 配置已保存",

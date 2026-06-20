@@ -2,12 +2,29 @@ import { h, mount, clear } from '../Dom.js';
 import { t } from '../I18n.js';
 import { notify } from '../components/Toast.js';
 
-const PROVIDERS = [
-  { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini'], needsKey: true },
-  { value: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-4-6', 'claude-haiku-4-5'], needsKey: true },
-  { value: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], needsKey: true },
-  { value: 'ollama', label: 'Ollama', models: ['qwen2.5:7b', 'llama3.1:8b'], needsKey: false },
-];
+const PROVIDER_LABELS = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic Claude',
+  deepseek: 'DeepSeek',
+  moonshot: 'Moonshot 月之暗面',
+  zhipuai: 'ZhipuAI 智谱',
+  tongyi: 'Tongyi 通义千问',
+  ollama: 'Ollama (本地)',
+  openai_compat: 'OpenAI 兼容端点',
+};
+
+const DEFAULT_MODELS = {
+  openai: 'gpt-4o',
+  anthropic: 'claude-sonnet-4-6',
+  deepseek: 'deepseek-chat',
+  moonshot: 'moonshot-v1-8k',
+  zhipuai: 'glm-4',
+  tongyi: 'qwen-max',
+  ollama: 'qwen2.5:7b',
+  openai_compat: '',
+};
+
+const NO_KEY_PROVIDERS = new Set(['ollama']);
 
 export class SettingsView {
   constructor(context) {
@@ -30,8 +47,8 @@ export class SettingsView {
     this.providerSelect = h('select', {
       class: 'select',
       onchange: (e) => this._onProviderChange(e.target.value),
-    }, PROVIDERS.map((p) =>
-      h('option', { value: p.value, selected: p.value === (status && status.provider) }, p.label)
+    }, Object.entries(PROVIDER_LABELS).map(([value, label]) =>
+      h('option', { value, selected: value === (status && status.provider) }, label)
     ));
 
     this.modelInput = h('input', {
@@ -217,10 +234,12 @@ export class SettingsView {
   }
 
   _onProviderChange(provider) {
-    const p = PROVIDERS.find((x) => x.value === provider);
-    if (p && p.models.length) {
-      this.modelInput.value = p.models[0];
+    if (DEFAULT_MODELS[provider]) {
+      this.modelInput.value = DEFAULT_MODELS[provider];
     }
+    // Show/hide API key field based on provider
+    const needsKey = !NO_KEY_PROVIDERS.has(provider);
+    this.apiKeyInput.parentElement.style.display = needsKey ? '' : 'none';
   }
 
   async _onSave() {
@@ -257,7 +276,17 @@ export class SettingsView {
     this.testBtn.disabled = true;
     mount(this.testResult, h('span', { class: 'test-result testing' }, '…'));
     try {
-      const result = await window.mystApi.ai.testConnection();
+      const settings = {
+        provider: this.providerSelect.value,
+        model: this.modelInput.value,
+        temperature: parseFloat(this.tempInput.value),
+        maxTokens: parseInt(this.maxTokensInput.value, 10),
+        baseUrl: this.baseUrlInput.value || undefined,
+      };
+      if (this.apiKeyInput.value) {
+        settings.apiKey = this.apiKeyInput.value;
+      }
+      const result = await window.mystApi.ai.testWithSettings(settings);
       if (result.ok) {
         notify.success(t('settings.testSuccess'));
         mount(this.testResult, h('span', { class: 'test-result success' }, t('settings.testSuccess')));

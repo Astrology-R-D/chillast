@@ -58,6 +58,11 @@ class IpcRouter {
     if (this.ai) {
       this._handle('ai:status', () => this.ai.status());
       this._handle('ai:testConnection', () => this.ai.testConnection());
+      this._handle('ai:testWithSettings', (_e, settings) => this.ai.testWithSettings(settings));
+      this._handle('ai:providers', () => {
+        const ModelProvider = require('../core/ai/ModelProvider');
+        return ModelProvider.listProviders();
+      });
       this._handle('ai:configure', async (_e, settings) => {
         if (settings.apiKey) {
           const { safeStorage } = require('electron');
