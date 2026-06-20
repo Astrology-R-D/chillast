@@ -36,6 +36,8 @@ export class AiSidebar {
     this._context = {};
     this._streaming = false;
     this._messages = [];
+    this._currentSessionId = null;
+    this._sessions = [];
     this._currentAiEl = null;
     this._currentAiText = '';
     this._build();
@@ -96,9 +98,45 @@ export class AiSidebar {
     // Intro message
     this._addAiMessage('✶ AI 占星顾问已就绪\n\n你可以直接提问，或点击「AI 解读」分析当前星盘。');
 
-    window.mystApi.ai.onStatusChanged((status) => {
-      this._applyStatus(status);
-    });
+    // Load sessions from store
+    this._loadSessions();
+  }
+
+  async _loadSessions() {
+    try {
+      const result = await window.mystApi.ai.sessions.list();
+      if (result.ok && result.data && result.data.length) {
+        this._sessions = result.data;
+        // Load most recent session
+        const latest = result.data[0];
+        this._currentSessionId = latest.id;
+        this._renderHistory(latest.messages || []);
+      } else {
+        // Create a new session
+        const created = await window.mystApi.ai.sessions.create();
+        if (created.ok && created.data) {
+          this._currentSessionId = created.data.id;
+        }
+      }
+    } catch (_) {
+      // Fallback: no persistence
+    }
+  }
+
+  _renderHistory(messages) {
+    // Clear existing messages except intro
+    this._messages = [];
+    clear(this._msgList);
+    // Re-add intro
+    this._addAiMessage('✶ AI 占星顾问已就绪\n\n你可以直接提问，或点击「AI 解读」分析当前星盘。');
+    // Render history
+    for (const m of messages) {
+      if (m.role === 'user') {
+        this._addUserMessage(m.content);
+      } else if (m.role === 'ai') {
+        this._addAiMessage(m.content);
+      }
+    }
   }
 
   _send() {
@@ -186,7 +224,12 @@ export class AiSidebar {
       }
     });
     window.mystApi.ai.onDone(() => {
+      const aiText = this._currentAiText;
       this._finishStreaming();
+      // Persist AI response
+      if (aiText && this._currentSessionId) {
+        window.mystApi.ai.sessions.append(this._currentSessionId, { role: 'ai', content: aiText });
+      }
     });
     window.mystApi.ai.onError(({ message }) => {
       if (this._currentAiEl) {
@@ -197,10 +240,22 @@ export class AiSidebar {
   }
 
   _runChat(text) {
-    this._sessionId = String(Date.now());
+    this._sessionId = this._currentSessionId || String(Date.now());
     this._registerListeners();
+
+    // Append user message to session store
+    if (this._currentSessionId) {
+      window.mystApi.ai.sessions.append(this._currentSessionId, { role: 'user', content: text });
+    }
+
     this._startAiStream();
-    window.mystApi.ai.chat([{ role: 'user', content: text }], {});
+
+    // Build full message list for LLM context
+    const allMessages = this._messages
+      .filter((m) => m.role === 'user' || m.role === 'ai')
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    window.mystApi.ai.chat(allMessages, { sessionId: this._sessionId });
   }
 
   _triggerInterpret() {
@@ -216,6 +271,13 @@ export class AiSidebar {
   }
 
   async updateStatus() {
+    // Register status change listener (once)
+    if (!this._statusListenerRegistered) {
+      this._statusListenerRegistered = true;
+      window.mystApi.ai.onStatusChanged((status) => {
+        this._applyStatus(status);
+      });
+    }
     try {
       const result = await window.mystApi.ai.status();
       const status = result.ok ? result.data : null;
