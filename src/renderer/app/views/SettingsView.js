@@ -73,8 +73,8 @@ export class SettingsView {
       placeholder: t('settings.baseUrlPlaceholder'),
     });
 
-    const savedTemp = status && status.configured ? '0.7' : '0.7';
-    const savedMaxTokens = status && status.configured ? '4096' : '4096';
+    const savedTemp = (status && typeof status.temperature === 'number') ? String(status.temperature) : '0.7';
+    const savedMaxTokens = (status && typeof status.maxTokens === 'number') ? String(status.maxTokens) : '4096';
 
     this.tempInput = h('input', {
       class: 'input',

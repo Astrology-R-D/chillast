@@ -56,12 +56,22 @@ class Main {
       : path.join(__dirname, '..', '..', 'assets', 'knowledge', 'builtin');
     const userKnowledgePath = path.join(app.getPath('userData'), 'knowledge', 'user');
     this.aiService = new AiService(this.astrologyService, this.chineseAstrologyService);
+
+    // Load persisted non-secret settings from data/ai-settings.json
+    const aiSettingsPath = path.join(baseDir, 'ai-settings.json');
+    const persistedSettings = fs.existsSync(aiSettingsPath)
+      ? JSON.parse(fs.readFileSync(aiSettingsPath, 'utf-8'))
+      : {};
+
     const aiSettings = {
       ...(this.config.ai || {}),
+      ...persistedSettings,
       knowledgeBuiltinPath: builtinKnowledgePath,
       knowledgeUserPath: userKnowledgePath,
     };
-    const credPath = path.join(app.getPath('userData'), 'ai-credentials.json');
+
+    // Load encrypted API key from data/ai-credentials.json
+    const credPath = path.join(baseDir, 'ai-credentials.json');
     if (fs.existsSync(credPath)) {
       try {
         const { safeStorage } = require('electron');

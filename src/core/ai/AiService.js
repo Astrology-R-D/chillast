@@ -39,6 +39,8 @@ class AiService {
       provider: (this._mp._settings && this._mp._settings.provider) || '',
       model: (this._mp._settings && this._mp._settings.model) || '',
       baseUrl: (this._mp._settings && this._mp._settings.baseUrl) || '',
+      temperature: this._mp._settings && this._mp._settings.temperature,
+      maxTokens: this._mp._settings && this._mp._settings.maxTokens,
       knowledgeDocCount: this._kb ? this._kb.listDocuments().length : 0,
     };
   }
