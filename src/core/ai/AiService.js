@@ -23,14 +23,23 @@ class AiService {
   async configure(settings) {
     await this._mp.configure(settings);
 
-    // KB and tools initialization failures should not block configuration
+    // Verify chat model works — don't block on failure, just log
+    try {
+      await this._mp.testConnection();
+    } catch (e) {
+      console.error('[AiService] Chat model test failed:', e.message);
+      // Don't throw — user may still want to use the service with a different model later
+    }
+
+    // KB initialization may fail if embeddings API is unavailable (e.g. DeepSeek doesn't support embeddings)
+    // Chat can still work without RAG
     try {
       this._kb = new KnowledgeBase(this._mp);
       if (settings.knowledgeBuiltinPath) {
         await this._kb.initialize(settings.knowledgeBuiltinPath, settings.knowledgeUserPath || null);
       }
     } catch (e) {
-      console.error('[AiService] KnowledgeBase init failed:', e.message);
+      console.error('[AiService] KnowledgeBase init failed, continuing without RAG:', e.message);
       this._kb = null;
     }
 
