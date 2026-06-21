@@ -6,3 +6,5 @@ tests/screenshots/
 .DS_Store
 Thumbs.db
 .npm-cache/
+.codely-cli/
+.superpowers/

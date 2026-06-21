@@ -370,6 +370,29 @@
 .chat-msg-ai .chat-msg-body th { background: var(--bg-input); color: var(--accent-strong); font-weight: var(--fw-semibold); }
 .chat-cursor { animation: blink 1s step-end infinite; color: var(--accent); font-weight: bold; }
 
+/* —— Tool-call cards (AI-coding-app style) ——————————————————— */
+.tool-card {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin: var(--sp-1) 0; padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-input);
+  border: 1px solid var(--border-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+  font-size: var(--fs-xs);
+}
+.tool-card-icon { color: var(--accent); display: inline-block; }
+.tool-card.running .tool-card-icon { animation: spin 1.4s linear infinite; }
+.tool-card-name {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  color: var(--text-primary);
+}
+.tool-card-status { margin-left: auto; color: var(--text-muted); }
+.tool-card.done { border-left-color: var(--success); }
+.tool-card.done .tool-card-icon { color: var(--success); animation: none; }
+.tool-card.done .tool-card-status { color: var(--success); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @keyframes blink { 50% { opacity: 0; } }
 
 .chat-input-row { display: flex; gap: var(--sp-1); padding: var(--sp-2); border-top: 1px solid var(--border-soft); flex-shrink: 0; }
@@ -383,7 +406,19 @@
   height: 100vh;
   border-left: 1px solid var(--border-soft);
   background: var(--bg-panel-solid);
+  position: relative;
 }
+/* Drag handle on the sidebar's left edge to resize its width. */
+.ai-sidebar-resize {
+  position: absolute;
+  left: -3px; top: 0; bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.ai-sidebar-resize:hover,
+.ai-sidebar-resize.dragging { background: var(--accent); opacity: 0.5; }
+body.ai-resizing { cursor: col-resize; user-select: none; }
 .ai-sidebar-header {
   display: flex;
   align-items: center;

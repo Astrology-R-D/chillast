@@ -12,7 +12,9 @@ export class AiSidebar {
     this._messages = [];
     this._currentSessionId = null;
     this._sessions = [];
-    this._currentAiEl = null;
+    this._aiTurnEl = null;
+    this._currentTextEl = null;
+    this._currentSegmentText = '';
     this._currentAiText = '';
     this._statusListenerRegistered = false;
     this._build();
@@ -71,12 +73,12 @@ export class AiSidebar {
       onclick: () => this._stop(),
     }, t('ai.stop'));
 
-    this._interpretBtn = h('button', {
-      class: 'btn btn-sm btn-ghost',
-      onclick: () => this._triggerInterpret(),
-    }, t('ai.interpret'));
+    // Drag handle on the left edge to resize the sidebar.
+    this._resizeHandle = h('div', { class: 'ai-sidebar-resize', title: t('ai.resize') });
+    this._resizeHandle.addEventListener('mousedown', (e) => this._startResize(e));
 
     this._root = h('aside', { class: 'ai-sidebar' }, [
+      this._resizeHandle,
       h('div', { class: 'ai-sidebar-header' }, [
         h('span', { class: 'fs-md fw-semibold' }, t('ai.title')),
         h('div', { class: 'llm-status-indicator' }, [
@@ -96,7 +98,6 @@ export class AiSidebar {
           this._input,
           this._sendBtn,
           this._stopBtn,
-          this._interpretBtn,
         ]),
       ]),
     ]);
@@ -217,7 +218,6 @@ export class AiSidebar {
     this._sendBtn.style.display = streaming ? 'none' : '';
     this._stopBtn.style.display = streaming ? '' : 'none';
     this._input.disabled = streaming;
-    this._interpretBtn.disabled = streaming;
     // Lock session controls while a response streams so the dropdown can't
     // drift out of sync with the conversation being rendered.
     this._sessionSelect.disabled = streaming;
@@ -243,33 +243,79 @@ export class AiSidebar {
 
   _startAiStream() {
     this._currentAiText = '';
-    this._currentAiEl = h('div', { class: 'chat-msg chat-msg-ai' }, [
-      h('div', { class: 'chat-msg-body', html: '' }),
-      h('span', { class: 'chat-cursor' }, '▌'),
-    ]);
-    this._msgList.appendChild(this._currentAiEl);
+    this._currentSegmentText = '';
+    this._currentTextEl = null;
+    // One assistant "turn" holds interleaved text segments + tool-call cards.
+    this._aiTurnEl = h('div', { class: 'chat-msg chat-msg-ai' });
+    this._msgList.appendChild(this._aiTurnEl);
     this._scrollToBottom();
     this._setStreaming(true);
   }
 
   _appendToken(token) {
-    if (!this._currentAiEl) return;
+    if (!this._aiTurnEl) return;
     this._currentAiText += token;
-    const body = this._currentAiEl.querySelector('.chat-msg-body');
-    if (body) body.innerHTML = renderMarkdown(this._currentAiText);
+    // Start a fresh text segment at the beginning or right after a tool card.
+    if (!this._currentTextEl) {
+      this._currentSegmentText = '';
+      this._currentTextEl = h('div', { class: 'chat-msg-body' });
+      this._aiTurnEl.appendChild(this._currentTextEl);
+    }
+    this._currentSegmentText += token;
+    this._currentTextEl.innerHTML = renderMarkdown(this._currentSegmentText);
     this._scrollToBottom();
   }
 
+  // Render a tool invocation as a distinct card (AI-coding-app style) instead of
+  // inline markdown. Closes the current text segment so later text flows below it.
+  _addToolCard(toolName) {
+    if (!this._aiTurnEl) return;
+    this._currentTextEl = null;
+    const card = h('div', { class: 'tool-card running', dataset: { tool: toolName, started: String(Date.now()) } }, [
+      h('span', { class: 'tool-card-icon' }, '⚙'),
+      h('span', { class: 'tool-card-name' }, toolName),
+      h('span', { class: 'tool-card-status' }, t('ai.toolRunning')),
+    ]);
+    this._aiTurnEl.appendChild(card);
+    this._scrollToBottom();
+  }
+
+  _completeToolCard(toolName) {
+    if (!this._aiTurnEl) return;
+    for (const c of this._aiTurnEl.querySelectorAll('.tool-card.running')) {
+      if (c.dataset.tool === toolName && c.dataset.completing !== '1') {
+        c.dataset.completing = '1';
+        // Fast tools (instant reads) finish in the same tick as 'calling', so the
+        // running state never paints. Hold it for a minimum so it's visible.
+        const elapsed = Date.now() - Number(c.dataset.started || 0);
+        const wait = Math.max(0, 450 - elapsed);
+        const finish = () => {
+          c.classList.replace('running', 'done');
+          const icon = c.querySelector('.tool-card-icon');
+          if (icon) icon.textContent = '✓';
+          const status = c.querySelector('.tool-card-status');
+          if (status) status.textContent = t('ai.toolDone');
+        };
+        if (wait === 0) finish(); else setTimeout(finish, wait);
+        break;
+      }
+    }
+  }
+
   _finishStreaming() {
-    if (this._currentAiEl) {
-      const cursor = this._currentAiEl.querySelector('.chat-cursor');
-      if (cursor) cursor.remove();
+    // Settle any cards still "running" (e.g. on error/stop).
+    if (this._aiTurnEl) {
+      for (const c of this._aiTurnEl.querySelectorAll('.tool-card.running')) {
+        c.classList.replace('running', 'done');
+      }
     }
     if (this._currentAiText) {
       this._messages.push({ role: 'ai', content: this._currentAiText });
     }
     this._currentAiText = '';
-    this._currentAiEl = null;
+    this._currentSegmentText = '';
+    this._currentTextEl = null;
+    this._aiTurnEl = null;
     this._setStreaming(false);
     // Backend has persisted new messages; reload list so session labels reflect them.
     this._reloadSessionList();
@@ -295,14 +341,15 @@ export class AiSidebar {
       if (type === 'token') {
         this._appendToken(data);
       } else if (type === 'tool-call') {
-        this._appendToken(`\n\n_⚙ ${data.tool}..._\n`);
+        if (data.status === 'calling') this._addToolCard(data.tool);
+        else if (data.status === 'done') this._completeToolCard(data.tool);
       }
     });
     window.mystApi.ai.onDone(() => {
       this._finishStreaming();
     });
     window.mystApi.ai.onError(({ message }) => {
-      if (this._currentAiEl) {
+      if (this._aiTurnEl) {
         this._appendToken(`\n\n❌ ${message}`);
       }
       this._finishStreaming();
@@ -328,6 +375,53 @@ export class AiSidebar {
       chartType: this._context.chartType,
       sessionId: this._sessionId,
     });
+  }
+
+  // ── Public API (invoked by chart / 命理 views) ───────────
+
+  /** Run "AI 解读" on the current chart (one-shot RAG interpretation). */
+  triggerInterpret() { this._triggerInterpret(); }
+
+  /** Send a chat message programmatically (e.g. "解读我的八字"). */
+  sendMessage(text) {
+    const msg = String(text || '').trim();
+    if (!msg || this._streaming) return;
+    this._addUserMessage(msg);
+    this._runChat(msg);
+  }
+
+  // ── Resize ──────────────────────────────────────────────
+
+  _startResize(e) {
+    e.preventDefault();
+    const shell = this._root.closest('.app-shell');
+    if (!shell) return;
+    this._resizeHandle.classList.add('dragging');
+    document.body.classList.add('ai-resizing');
+    const onMove = (ev) => {
+      const width = Math.min(720, Math.max(300, window.innerWidth - ev.clientX));
+      shell.style.setProperty('--ai-sidebar-width', `${width}px`);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      this._resizeHandle.classList.remove('dragging');
+      document.body.classList.remove('ai-resizing');
+      const w = shell.style.getPropertyValue('--ai-sidebar-width');
+      if (w) { try { localStorage.setItem('ai.sidebarWidth', w); } catch (_) { /* ignore */ } }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  /** Restore persisted sidebar width. Call after the shell is mounted. */
+  restoreWidth() {
+    try {
+      const w = localStorage.getItem('ai.sidebarWidth');
+      if (!w) return;
+      const shell = this._root.closest('.app-shell');
+      if (shell) shell.style.setProperty('--ai-sidebar-width', w);
+    } catch (_) { /* ignore */ }
   }
 
   // ── Status ──────────────────────────────────────────────

@@ -3,7 +3,7 @@
 
 .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-width, 228px) 1fr 380px;
+  grid-template-columns: var(--sidebar-width, 228px) 1fr var(--ai-sidebar-width, 380px);
   grid-template-rows: 100vh;
   height: 100vh;
 }
@@ -151,6 +151,19 @@
   overflow: hidden;
   background: var(--bg-panel);
   border-radius: 0;
+}
+
+/* Unified BaZi result: all panels in one responsive grid (no chart column). */
+.bazi-result {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--sp-4);
+  align-content: start;
+  padding: var(--sp-4);
+  background: var(--bg-panel);
 }
 
 .workbench-main .chart-col {

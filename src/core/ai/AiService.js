@@ -3,18 +3,24 @@
 const ModelProvider = require('./ModelProvider');
 const KnowledgeBase = require('./KnowledgeBase');
 const ChainFactory = require('./ChainFactory');
-const { createTools } = require('./AstroToolkit');
+const ToolRegistry = require('./tools/ToolRegistry');
+const AstroToolProvider = require('./tools/AstroToolProvider');
+const ContextToolProvider = require('./tools/ContextToolProvider');
+const KnowledgeToolProvider = require('./tools/KnowledgeToolProvider');
+const ProfileToolProvider = require('./tools/ProfileToolProvider');
+const { build: buildChatPrompt } = require('./prompts/ChatPrompt');
 const { toText } = require('./prompts/ChartSerializer');
 const esm = require('./esm-bridge');
 
 class AiService {
-  constructor(astrologyService, chineseAstrologyService) {
+  constructor(astrologyService, chineseAstrologyService, profileRepository) {
     this._astrology = astrologyService;
     this._chinese = chineseAstrologyService;
+    this._profiles = profileRepository || null;
     this._mp = new ModelProvider();
     this._kb = null;
     this._chainFactory = null;
-    this._tools = [];
+    this._registry = null;
     this._configured = false;
     this._abortControllers = new Map();
     this._context = null;
@@ -43,16 +49,27 @@ class AiService {
       this._kb = null;
     }
 
+    // Build the pluggable tool registry. Adding a capability later = register a
+    // new provider here (or an MCP provider) — the agent loop never changes.
     try {
-      this._chainFactory = new ChainFactory(this._mp, this._kb);
-      this._tools = await createTools(this._astrology, this._chinese, this);
+      if (this._registry) await this._registry.disposeAll();
+      this._registry = new ToolRegistry();
+      this._registry.register(new AstroToolProvider(this._astrology, this._chinese));
+      this._registry.register(new ContextToolProvider(this));
+      this._registry.register(new ProfileToolProvider(this._profiles));
+      this._registry.register(new KnowledgeToolProvider(this._kb));
+      await this._registry.initAll();
     } catch (e) {
-      console.error('[AiService] Tools init failed:', e.message);
-      this._tools = [];
+      console.error('[AiService] Tool registry init failed:', e.message);
+      this._registry = new ToolRegistry();
     }
 
+    this._chainFactory = new ChainFactory(this._mp, this._kb);
     this._configured = true;
   }
+
+  /** Expose the tool registry (for the settings UI / introspection). */
+  getToolRegistry() { return this._registry; }
 
   status() {
     return {
@@ -120,8 +137,11 @@ class AiService {
   }
 
   /**
-   * Chat with tool-calling loop.
-   * @param {Array} userMessages - [{ role: 'user'|'assistant', content }]
+   * Interactive chat via a LangGraph ReAct agent. The agent owns the
+   * tool-calling loop and tool execution; tools come from the ToolRegistry, so
+   * the model autonomously chooses among compute / knowledge / (future) MCP
+   * tools. We translate the agent's event stream into token / tool-call events.
+   * @param {Array} userMessages - [{ role: 'user'|'assistant'|'ai', content }]
    * @param {object} [context]
    * @yields {{ type: 'token'|'tool-call'|'done', data }}
    */
@@ -132,71 +152,81 @@ class AiService {
     this._abortControllers.set(sessionId, ac);
 
     try {
-      const { model, systemPrompt, tools } = await this._chainFactory.prepareChatModel(
-        context.currentChartText || null,
-        this._tools,
-      );
+      const model = this._mp.chatModel();
+      const tools = this._registry ? await this._registry.getTools() : [];
+      const systemPrompt = buildChatPrompt(context.currentChartText || null);
 
-      const { SystemMessage, HumanMessage, AIMessage, ToolMessage } = await esm.load('@langchain/core/messages');
+      const { createReactAgent } = await esm.load('@langchain/langgraph/prebuilt');
+      const { HumanMessage, AIMessage } = await esm.load('@langchain/core/messages');
 
-      const messages = [new SystemMessage(systemPrompt)];
+      const agent = createReactAgent({ llm: model, tools, prompt: systemPrompt });
+
+      const lcMessages = [];
       for (const m of userMessages) {
         if (!m || !m.content) continue;
-        if (m.role === 'user') messages.push(new HumanMessage(m.content));
-        // Session store persists AI turns as role 'ai'; LangChain providers use 'assistant'.
-        else if (m.role === 'assistant' || m.role === 'ai') messages.push(new AIMessage(m.content));
+        if (m.role === 'user') lcMessages.push(new HumanMessage(m.content));
+        // Session store persists AI turns as role 'ai'; map to assistant message.
+        else if (m.role === 'assistant' || m.role === 'ai') lcMessages.push(new AIMessage(m.content));
       }
 
-      // Tool-calling loop (max 5 iterations to prevent infinite loops)
-      for (let iter = 0; iter < 5; iter++) {
-        if (ac.signal.aborted) break;
+      const stream = await agent.stream(
+        { messages: lcMessages },
+        { streamMode: ['messages', 'updates'], signal: ac.signal, recursionLimit: 25 },
+      );
 
-        let fullContent = '';
-        let toolCalls = [];
-
-        const stream = await model.stream(messages, { signal: ac.signal });
+      try {
         for await (const chunk of stream) {
           if (ac.signal.aborted) break;
-          const token = typeof chunk === 'string' ? chunk : (chunk.content || '');
-          if (token) {
-            fullContent += token;
-            yield { type: 'token', data: token };
-          }
-          // Collect tool calls from chunks
-          if (chunk.tool_calls && chunk.tool_calls.length) {
-            toolCalls.push(...chunk.tool_calls);
-          }
-        }
+          const [mode, payload] = chunk;
 
-        // If no tool calls, we're done
-        if (!toolCalls.length) break;
-
-        // Execute tool calls
-        messages.push(new AIMessage({ content: fullContent, tool_calls: toolCalls }));
-
-        for (const tc of toolCalls) {
-          if (ac.signal.aborted) break;
-          yield { type: 'tool-call', data: { tool: tc.name, status: 'calling' } };
-
-          const tool = tools.find((t) => t.name === tc.name);
-          let result = `未知工具: ${tc.name}`;
-          if (tool) {
-            try {
-              result = await tool.invoke(tc.args);
-            } catch (e) {
-              result = `工具调用失败: ${e.message}`;
+          if (mode === 'messages') {
+            // payload = [messageChunk, metadata]; stream only AI text tokens.
+            const msg = Array.isArray(payload) ? payload[0] : payload;
+            if (msg && this._msgType(msg) === 'ai') {
+              const text = this._extractText(msg.content);
+              if (text) yield { type: 'token', data: text };
+            }
+          } else if (mode === 'updates') {
+            // payload = { nodeName: { messages: [...] } }; surface tool activity.
+            for (const node of Object.keys(payload || {})) {
+              const msgs = (payload[node] && payload[node].messages) || [];
+              for (const m of msgs) {
+                const t = this._msgType(m);
+                if (t === 'ai' && m.tool_calls && m.tool_calls.length) {
+                  for (const tc of m.tool_calls) {
+                    yield { type: 'tool-call', data: { tool: tc.name, status: 'calling' } };
+                  }
+                } else if (t === 'tool') {
+                  yield { type: 'tool-call', data: { tool: m.name, status: 'done' } };
+                }
+              }
             }
           }
-
-          messages.push(new ToolMessage({ content: result, tool_call_id: tc.id }));
-          yield { type: 'tool-call', data: { tool: tc.name, status: 'done' } };
         }
-        // Loop continues — model will process tool results and generate final response
+      } catch (e) {
+        // A user-initiated stop aborts the stream; treat that as a clean end.
+        if (!ac.signal.aborted) throw e;
       }
     } finally {
       this._abortControllers.delete(sessionId);
     }
     yield { type: 'done', data: { sessionId } };
+  }
+
+  /** Robustly read a LangChain message's type across versions. */
+  _msgType(msg) {
+    if (typeof msg.getType === 'function') return msg.getType();
+    if (typeof msg._getType === 'function') return msg._getType();
+    return '';
+  }
+
+  /** Normalize message content (string or content-part array) to text. */
+  _extractText(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content.map((p) => (typeof p === 'string' ? p : (p && p.text) || '')).join('');
+    }
+    return '';
   }
 
   /**
@@ -246,6 +276,9 @@ class AiService {
   async close() {
     for (const ac of this._abortControllers.values()) ac.abort();
     this._abortControllers.clear();
+    if (this._registry) {
+      try { await this._registry.disposeAll(); } catch (_) { /* best-effort */ }
+    }
   }
 
   _ensureConfigured() {

@@ -49,7 +49,7 @@ export class ChartWorkbenchView {
 
     const primaryDefault = this.ctx.store.getState().selectedPrimaryId || profiles[0].id;
     this.primarySelect = profileSelect(profiles, primaryDefault);
-    this.primarySelect.addEventListener('change', () => this._autoRefresh());
+    this.primarySelect.addEventListener('change', () => { this._syncActiveProfile(); this._autoRefresh(); });
     this.secondarySelect = profileSelect(profiles, profiles[1] ? profiles[1].id : profiles[0].id);
     this.secondarySelect.addEventListener('change', () => this._autoRefresh());
 
@@ -89,6 +89,12 @@ export class ChartWorkbenchView {
     }, this._hasGenerated ? t('chart.regenerate') : t('chart.generate'));
     barChildren.push(this.generateBtn);
 
+    this.aiInterpretBtn = h('button', {
+      class: 'btn btn-ghost',
+      onclick: () => this.ctx.requestAiInterpret && this.ctx.requestAiInterpret(),
+    }, t('ai.interpret'));
+    barChildren.push(this.aiInterpretBtn);
+
     this.optionsHost = h('div', { class: 'workbench-options' });
     this.chartCol = h('div', { class: 'chart-col' }, [emptyResult()]);
     this.dataCol = h('div', { class: 'data-col' });
@@ -104,6 +110,8 @@ export class ChartWorkbenchView {
 
     mount(this.container, wrap);
     this._updateOptions();
+    // Seed the AI context with the default-selected profile when the view opens.
+    this._syncActiveProfile();
   }
 
   _currentType() {
@@ -177,6 +185,14 @@ export class ChartWorkbenchView {
     if (this._hasGenerated) this._compute();
   }
 
+  /** Push the currently-selected primary profile into the AI context. */
+  _syncActiveProfile() {
+    if (!this.primarySelect || !this.ctx.setActiveProfile) return;
+    const profiles = this.ctx.store.getState().profiles || [];
+    const p = profiles.find((x) => x.id === this.primarySelect.value);
+    if (p) this.ctx.setActiveProfile(p);
+  }
+
   async _compute() {
     const profiles = this.ctx.store.getState().profiles || [];
     const byId = (id) => profiles.find((p) => p.id === id);
@@ -184,6 +200,10 @@ export class ChartWorkbenchView {
 
     const primary = byId(this.primarySelect.value);
     const secondary = def.requiresSecondary ? byId(this.secondarySelect.value) : undefined;
+
+    // Make the AI aware of the profile being worked on, regardless of whether
+    // the chart computation below succeeds (it needs the swisseph backend).
+    if (primary && this.ctx.setActiveProfile) this.ctx.setActiveProfile(primary);
 
     if (def.requiresSecondary && secondary && secondary.id === primary.id) {
       notify.error(t('chart.sameProfile'));

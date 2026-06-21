@@ -57,7 +57,7 @@ class Main {
       ? path.join(process.resourcesPath, 'assets', 'knowledge', 'builtin')
       : path.join(__dirname, '..', '..', 'assets', 'knowledge', 'builtin');
     const userKnowledgePath = path.join(app.getPath('userData'), 'knowledge', 'user');
-    this.aiService = new AiService(this.astrologyService, this.chineseAstrologyService);
+    this.aiService = new AiService(this.astrologyService, this.chineseAstrologyService, this.profileRepository);
 
     // Load persisted non-secret settings from data/ai-settings.json
     const aiSettingsPath = path.join(baseDir, 'ai-settings.json');

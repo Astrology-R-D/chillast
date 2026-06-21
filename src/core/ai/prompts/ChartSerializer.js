@@ -1,5 +1,7 @@
 'use strict';
 
+const GENDER_ZH = { male: '男', female: '女', other: '其他' };
+
 function formatPoint(p) {
   const deg = p.dms ? `${p.dms.degrees}°${String(p.dms.minutes).padStart(2, '0')}′` : `${p.degreeInSign.toFixed(2)}°`;
   const retro = p.retrograde ? ' (逆行)' : '';
@@ -41,6 +43,23 @@ function toText(chartData) {
   lines.push(`【${meta.typeNameZh || meta.type || '星盘'}】${subjects}`);
   if (meta.subtitle) lines.push(meta.subtitle);
   lines.push('');
+
+  // Subject demographics — gender / birth moment / place. Without this the LLM
+  // has no way to know the person's sex and will guess (often wrongly).
+  const subjectList = chartData.subjects || [];
+  if (subjectList.length) {
+    lines.push('── 受测者信息 ──');
+    for (const s of subjectList) {
+      const name = s.nameZh || s.nameEn || '未命名';
+      const gender = GENDER_ZH[s.gender] || '未知';
+      const parts = [name, `性别：${gender}`];
+      if (s.birthLabel) parts.push(`出生：${s.birthLabel}`);
+      const locLabel = s.location && (s.location.label || s.location.name);
+      if (locLabel) parts.push(`地点：${locLabel}`);
+      lines.push(parts.join('，'));
+    }
+    lines.push('');
+  }
 
   const rings = chartData.rings || [];
   for (let ri = 0; ri < rings.length; ri++) {

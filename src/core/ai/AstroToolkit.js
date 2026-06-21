@@ -36,27 +36,23 @@ function _serializeChart(chart) {
     const { toText } = require('./prompts/ChartSerializer');
     return toText(chart);
   } catch (_) {
-    // Fallback if ChartSerializer is not available at runtime
     return JSON.stringify(chart, null, 2).slice(0, 4000);
   }
 }
 
 /**
- * Create an array of LangChain DynamicStructuredTool instances that wrap the
- * core astrology engine services. These tools are designed for use inside a
- * ReAct agent loop: each tool accepts flat numeric/string inputs (no nested
- * objects), performs the computation, and returns a string result.
+ * Build the astrology/命理 computation tools (no app context needed).
+ * Each tool takes flat numeric/string inputs and returns a string result,
+ * suitable for a ReAct agent.
  *
  * @param {import('../astrology/AstrologyService')} astrologyService
  * @param {import('../chinese/ChineseAstrologyService')} chineseAstrologyService
- * @param {import('./AiService')} aiService
  * @returns {Promise<import('@langchain/core/tools').DynamicStructuredTool[]>}
  */
-async function createTools(astrologyService, chineseAstrologyService, aiService) {
+async function buildComputeTools(astrologyService, chineseAstrologyService) {
   const { DynamicStructuredTool } = await esm.load('@langchain/core/tools');
   const z = require('zod');
 
-  // Shared sub-schema: the six birth-data fields every tool needs.
   const birthSchema = {
     year: z.number().int().describe('出生年份，如 1990'),
     month: z.number().int().min(1).max(12).describe('出生月份 1-12'),
@@ -67,7 +63,6 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     longitude: z.number().min(-180).max(180).describe('出生地经度'),
   };
 
-  // ── Tool 1: Natal chart ────────────────────────────────────────────────
   const computeNatalChart = new DynamicStructuredTool({
     name: 'compute_natal_chart',
     description:
@@ -76,10 +71,7 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     func: async (input) => {
       try {
         const profile = _makeProfile('查询对象', input);
-        const chart = astrologyService.computeChart({
-          type: 'natal',
-          primary: profile,
-        });
+        const chart = astrologyService.computeChart({ type: 'natal', primary: profile });
         return _serializeChart(chart);
       } catch (e) {
         return `计算失败: ${e.message}`;
@@ -87,7 +79,6 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     },
   });
 
-  // ── Tool 2: Transit chart ──────────────────────────────────────────────
   const computeTransit = new DynamicStructuredTool({
     name: 'compute_transit',
     description:
@@ -116,7 +107,6 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     },
   });
 
-  // ── Tool 3: Synastry (comparison) chart ────────────────────────────────
   const computeSynastry = new DynamicStructuredTool({
     name: 'compute_synastry',
     description:
@@ -140,27 +130,17 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     func: async (input) => {
       try {
         const profileA = _makeProfile('A', {
-          year: input.year1,
-          month: input.month1,
-          day: input.day1,
-          hour: input.hour1,
-          minute: input.minute1,
-          latitude: input.latitude1,
-          longitude: input.longitude1,
+          year: input.year1, month: input.month1, day: input.day1,
+          hour: input.hour1, minute: input.minute1,
+          latitude: input.latitude1, longitude: input.longitude1,
         });
         const profileB = _makeProfile('B', {
-          year: input.year2,
-          month: input.month2,
-          day: input.day2,
-          hour: input.hour2,
-          minute: input.minute2,
-          latitude: input.latitude2,
-          longitude: input.longitude2,
+          year: input.year2, month: input.month2, day: input.day2,
+          hour: input.hour2, minute: input.minute2,
+          latitude: input.latitude2, longitude: input.longitude2,
         });
         const chart = astrologyService.computeChart({
-          type: 'synastry',
-          primary: profileA,
-          secondary: profileB,
+          type: 'synastry', primary: profileA, secondary: profileB,
         });
         return _serializeChart(chart);
       } catch (e) {
@@ -169,7 +149,6 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     },
   });
 
-  // ── Tool 4: BaZi (Four Pillars of Destiny) ────────────────────────────
   const computeBazi = new DynamicStructuredTool({
     name: 'compute_bazi',
     description:
@@ -179,15 +158,11 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
       try {
         const result = chineseAstrologyService.computeBaZi({
           birthData: {
-            year: input.year,
-            month: input.month,
-            day: input.day,
-            hour: input.hour,
-            minute: input.minute,
+            year: input.year, month: input.month, day: input.day,
+            hour: input.hour, minute: input.minute,
             location: {
               label: `${input.latitude},${input.longitude}`,
-              latitude: input.latitude,
-              longitude: input.longitude,
+              latitude: input.latitude, longitude: input.longitude,
             },
           },
         });
@@ -197,10 +172,20 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
           `八字四柱: ${p.year.full} ${p.month.full} ${p.day.full} ${p.hour.full}`,
           `日主: ${dm.char} (${dm.element})`,
         ];
+        const a = result.analysis;
+        if (a) {
+          const PL = { year: '年柱', month: '月柱', day: '日柱', hour: '时柱' };
+          lines.push('十神与藏干:');
+          for (const pil of a.pillars) {
+            const hidden = pil.hidden.map((h) => `${h.char}(${h.tenGod || '-'})`).join(' ');
+            lines.push(`  ${PL[pil.key]}: ${pil.stemChar}[${pil.stemTenGod}] ${pil.branchChar} 藏干:${hidden}`);
+          }
+          const ec = a.elementCounts;
+          lines.push(`五行统计(含藏干): 木${ec.wood} 火${ec.fire} 土${ec.earth} 金${ec.metal} 水${ec.water}`);
+          lines.push(`日主旺弱(参考): ${a.strength.label}`);
+        }
         if (result.lunar) {
-          lines.push(
-            `农历: ${result.lunar.lunarYear || ''} ${result.lunar.lunarMonth || ''}${result.lunar.lunarDay || ''}`,
-          );
+          lines.push(`农历: ${result.lunar.lunarYear || ''} ${result.lunar.lunarMonth || ''}${result.lunar.lunarDay || ''}`);
         }
         return lines.join('\n');
       } catch (e) {
@@ -209,22 +194,16 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     },
   });
 
-  // ── Tool 5: Solar Return chart ──────────────────────────────────────────
   const computeSolarReturn = new DynamicStructuredTool({
     name: 'compute_solar_return',
     description:
       '计算某人的太阳返照盘（Solar Return），分析指定年份的年运主题。需要出生数据和目标年份。',
-    schema: z.object({
-      ...birthSchema,
-      targetYear: z.number().int().describe('返照年份'),
-    }),
+    schema: z.object({ ...birthSchema, targetYear: z.number().int().describe('返照年份') }),
     func: async (input) => {
       try {
         const profile = _makeProfile('查询对象', input);
         const chart = astrologyService.computeChart({
-          type: 'solarReturn',
-          primary: profile,
-          options: { year: input.targetYear },
+          type: 'solarReturn', primary: profile, options: { year: input.targetYear },
         });
         return _serializeChart(chart);
       } catch (e) {
@@ -233,7 +212,6 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     },
   });
 
-  // ── Tool 6: Secondary Progressions chart ───────────────────────────────
   const computeProgressed = new DynamicStructuredTool({
     name: 'compute_progressed',
     description:
@@ -251,9 +229,7 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
           Date.UTC(input.targetYear, input.targetMonth - 1, input.targetDay, 12),
         ).toISOString();
         const chart = astrologyService.computeChart({
-          type: 'progressed',
-          primary: profile,
-          options: { targetDate },
+          type: 'progressed', primary: profile, options: { targetDate },
         });
         return _serializeChart(chart);
       } catch (e) {
@@ -262,7 +238,23 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     },
   });
 
-  // ── Tool 7: Get current context (no params) ─────────────────────────────
+  return [
+    computeNatalChart, computeTransit, computeSynastry,
+    computeBazi, computeSolarReturn, computeProgressed,
+  ];
+}
+
+/**
+ * Build the app-context introspection tools. These read live UI state from
+ * AiService.getContext() (current route, active profile, last chart).
+ *
+ * @param {import('./AiService')} aiService
+ * @returns {Promise<import('@langchain/core/tools').DynamicStructuredTool[]>}
+ */
+async function buildContextTools(aiService) {
+  const { DynamicStructuredTool } = await esm.load('@langchain/core/tools');
+  const z = require('zod');
+
   const getCurrentContext = new DynamicStructuredTool({
     name: 'get_current_context',
     description:
@@ -274,15 +266,12 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
       const profile = ctx.activeProfile;
       const chartType = ctx.chartType || '无';
       const lines = [`当前页面: ${route}`];
-      if (profile) {
-        lines.push(`选中档案: ${profile.nameZh || profile.nameEn || '未命名'}`);
-      }
+      if (profile) lines.push(`选中档案: ${profile.nameZh || profile.nameEn || '未命名'}`);
       lines.push(`最后计算: ${chartType}`);
       return lines.join('\n');
     },
   });
 
-  // ── Tool 8: Get current chart data (no params) ─────────────────────────
   const getCurrentChart = new DynamicStructuredTool({
     name: 'get_current_chart',
     description:
@@ -295,11 +284,10 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
     },
   });
 
-  // ── Tool 9: Get active profile (no params) ─────────────────────────────
   const getActiveProfile = new DynamicStructuredTool({
     name: 'get_active_profile',
     description:
-      '获取当前选中档案的出生信息（姓名、出生日期时间、出生地经纬度）。无需输入参数。',
+      '获取当前选中档案的出生信息（姓名、性别、出生日期时间、出生地经纬度）。无需输入参数。',
     schema: z.object({}),
     func: async () => {
       const ctx = (aiService && aiService.getContext()) || {};
@@ -307,21 +295,23 @@ async function createTools(astrologyService, chineseAstrologyService, aiService)
       if (!p) return '当前没有选中的档案。';
       const b = p.birthData || {};
       const loc = b.location || {};
-      return `${p.nameZh || p.nameEn || '未命名'}，${b.year}年${b.month}月${b.day}日 ${b.hour}:${String(b.minute).padStart(2,'0')}，${loc.label || ''}（${loc.latitude}°N, ${loc.longitude}°E）`;
+      const genderZh = { male: '男', female: '女', other: '其他' }[p.gender] || '未知';
+      return `${p.nameZh || p.nameEn || '未命名'}，性别${genderZh}，${b.year}年${b.month}月${b.day}日 ${b.hour}:${String(b.minute).padStart(2, '0')}，${loc.label || ''}（${loc.latitude}°N, ${loc.longitude}°E）`;
     },
   });
 
+  return [getCurrentContext, getCurrentChart, getActiveProfile];
+}
+
+/**
+ * Backward-compatible aggregate: all astrology + context tools in one array.
+ * New code should prefer the ToolRegistry + provider architecture.
+ */
+async function createTools(astrologyService, chineseAstrologyService, aiService) {
   return [
-    computeNatalChart,
-    computeTransit,
-    computeSynastry,
-    computeBazi,
-    computeSolarReturn,
-    computeProgressed,
-    getCurrentContext,
-    getCurrentChart,
-    getActiveProfile,
+    ...(await buildComputeTools(astrologyService, chineseAstrologyService)),
+    ...(await buildContextTools(aiService)),
   ];
 }
 
-module.exports = { createTools };
+module.exports = { createTools, buildComputeTools, buildContextTools };

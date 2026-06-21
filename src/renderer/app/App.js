@@ -55,6 +55,9 @@ export class App {
       refreshProfiles: () => this.refreshProfiles(),
       navigate: (route) => this.navigate(route),
       setLastChart: (chartData, chartType) => this.setLastChart(chartData, chartType),
+      setActiveProfile: (profile) => this.setActiveProfile(profile),
+      requestAiInterpret: () => this.requestAiInterpret(),
+      requestAiChat: (text) => this.requestAiChat(text),
     };
     this.views.profiles = new ProfilesView(ctx);
     this.views.personal = new ChartView(ctx);
@@ -144,6 +147,7 @@ export class App {
     ]);
 
     mount(this.root, [sidebar, main, this.aiSidebar.element]);
+    this.aiSidebar.restoreWidth();
     this.aiSidebar.updateStatus().catch(() => {});
   }
 
@@ -181,6 +185,35 @@ export class App {
     this.currentContext.lastChartData = chartData;
     this.currentContext.chartType = chartType;
     this._pushContext();
+  }
+
+  /**
+   * Push the profile the user is actively working with into the AI context.
+   * Used by views (chart workbench, bazi) where the chosen profile isn't the
+   * store's selectedPrimaryId. Updates context directly to avoid a store
+   * re-render, so the AI's get_active_profile reflects the real selection even
+   * when chart computation is unavailable.
+   */
+  setActiveProfile(profile) {
+    this.currentContext.activeProfile = profile || null;
+    this._pushContext();
+  }
+
+  /** Ensure the AI sidebar is visible (used before triggering an AI action). */
+  _ensureAiVisible() {
+    if (this.aiCollapsed) this._toggleAiSidebar();
+  }
+
+  /** Triggered by a chart view's "AI 解读" button. */
+  requestAiInterpret() {
+    this._ensureAiVisible();
+    if (this.aiSidebar) this.aiSidebar.triggerInterpret();
+  }
+
+  /** Triggered by a view that wants the AI to chat about the current subject. */
+  requestAiChat(text) {
+    this._ensureAiVisible();
+    if (this.aiSidebar) this.aiSidebar.sendMessage(text);
   }
 
   _renderActive() {
