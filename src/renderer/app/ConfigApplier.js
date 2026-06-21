@@ -45,5 +45,6 @@ export function applyConfig(config) {
     if (l.sidebarWidth != null) set('--sidebar-width', `${l.sidebarWidth}px`);
     if (l.chartCanvasMaxWidth != null) set('--chart-max-width', `${l.chartCanvasMaxWidth}px`);
     if (l.workbenchGridColumns != null) set('--workbench-grid', l.workbenchGridColumns);
+    if (l.headerHeight != null) set('--header-height', `${l.headerHeight}px`);
   }
 }

@@ -26,6 +26,23 @@ const DEFAULT_MODELS = {
 
 const NO_KEY_PROVIDERS = new Set(['ollama']);
 
+// Chinese display names for the built-in tool providers (the `id`s are English).
+const TOOL_PROVIDER_LABELS = {
+  astro: '占星排盘工具',
+  context: '当前上下文工具',
+  kb: '知识库检索',
+  mcp: 'MCP 外部工具',
+  profiles: '档案查询工具',
+};
+
+// Tool definitions only carry an English `name` + a Chinese `description`. Use the
+// first clause of the description as a readable Chinese name; full text → tooltip.
+function toolZhName(tool) {
+  const desc = (tool.description || '').trim();
+  if (!desc) return tool.name;
+  return desc.split(/[。；;\n]/)[0].trim() || tool.name;
+}
+
 export class SettingsView {
   constructor(context) {
     this.ctx = context;
@@ -44,6 +61,8 @@ export class SettingsView {
     const status = await this._fetchStatus();
     const knowledgeDocs = await this._fetchKnowledge();
     const sessions = await this._fetchSessions();
+    const toolProviders = await this._fetchTools();
+    const mcpInfo = await this._fetchMcp();
 
     this.providerSelect = h('select', {
       class: 'select',
@@ -92,7 +111,7 @@ export class SettingsView {
     this.maxTokensValue = h('span', { class: 'range-value' }, savedMaxTokens);
 
     this.testBtn = h('button', {
-      class: 'btn btn-sm btn-ghost',
+      class: 'btn btn-ghost',
       onclick: () => this._onTestConnection(),
     }, t('settings.testConnection'));
 
@@ -134,26 +153,192 @@ export class SettingsView {
         this.maxTokensInput,
         this.maxTokensValue,
       ]),
-      h('div', { class: 'settings-row' }, [
-        h('label', {}, ''),
+      h('div', { class: 'settings-actions' }, [
+        this.saveBtn,
         this.testBtn,
         this.testResult,
       ]),
-      this.saveBtn,
     ]);
 
     const knowledgeSection = this._buildKnowledgeSection(knowledgeDocs);
 
     const sessionsSection = this._buildSessionsSection(sessions);
 
+    const toolsSection = this._buildToolsSection(toolProviders, mcpInfo);
+
     const statusSection = this._buildStatusSection(status, knowledgeDocs);
 
     mount(this.container, h('div', { class: 'settings-container' }, [
       aiConfigSection,
+      toolsSection,
       knowledgeSection,
       sessionsSection,
       statusSection,
     ]));
+  }
+
+  // —— Tools & MCP —————————————————————————————————————————————
+  _buildToolsSection(providers, mcpInfo) {
+    // Provider list with per-provider enable toggle, Chinese tool names and a
+    // status light (no status text).
+    const providerRows = (providers || []).map((p) => {
+      const statusClass = !p.enabled ? 'is-off' : (p.ready ? 'is-on' : 'is-warn');
+      const statusTitle = !p.enabled
+        ? t('settings.toolDisabled')
+        : (p.ready ? t('settings.toolReady') : t('settings.toolNotReady'));
+      const toggle = h('input', {
+        type: 'checkbox',
+        checked: p.enabled,
+        onchange: (e) => this._onToggleProvider(p.id, e.target.checked),
+      });
+      const toolItems = (p.tools || []).map((tool) =>
+        h('div', { class: 'tool-item', title: tool.description || '' }, [
+          h('span', { class: 'tool-item-name' }, toolZhName(tool)),
+          h('span', { class: 'tool-item-id' }, tool.name),
+        ]));
+      return h('div', { class: 'tool-provider-row' }, [
+        h('div', { class: 'tool-provider-head' }, [
+          h('label', { class: 'tool-provider-name' }, [toggle, h('span', {}, ` ${TOOL_PROVIDER_LABELS[p.id] || p.id}`)]),
+          h('span', { class: 'tool-provider-count' }, `${(p.tools || []).length}`),
+          h('span', { class: `status-dot ${statusClass}`, title: statusTitle }),
+        ]),
+        h('div', { class: 'tool-item-list' }, toolItems.length
+          ? toolItems
+          : [h('span', { class: 'text-muted fs-xs' }, '—')]),
+      ]);
+    });
+
+    // MCP servers: editable draft, saved as a whole.
+    this._mcpDraft = JSON.parse(JSON.stringify((mcpInfo && mcpInfo.servers) || {}));
+    this._mcpHost = h('div', { class: 'mcp-server-list' });
+    this._renderMcpServers();
+
+    const toolCount = (mcpInfo && mcpInfo.toolCount) || 0;
+
+    return h('div', { class: 'settings-section' }, [
+      h('h3', {}, t('settings.toolsTitle')),
+      h('div', { class: 'fs-sm text-muted mb-2' }, t('settings.toolsHint')),
+      h('div', { class: 'tool-provider-list' }, providerRows),
+      h('h4', { class: 'mt-3 mb-1' }, t('settings.mcpTitle')),
+      h('div', { class: 'fs-sm text-muted mb-2' }, t('settings.mcpHint', { count: toolCount })),
+      this._mcpHost,
+      this._buildMcpAddForm(),
+    ]);
+  }
+
+  _renderMcpServers() {
+    const names = Object.keys(this._mcpDraft);
+    if (!names.length) {
+      mount(this._mcpHost, h('div', { class: 'fs-sm text-muted' }, t('settings.mcpEmpty')));
+      return;
+    }
+    mount(this._mcpHost, names.map((name) => {
+      const cfg = this._mcpDraft[name];
+      const transport = cfg.transport || (cfg.url ? 'http' : 'stdio');
+      const target = cfg.url || `${cfg.command || ''} ${(cfg.args || []).join(' ')}`.trim();
+      return h('div', { class: 'knowledge-list-item' }, [
+        h('span', {}, [
+          h('label', {}, [
+            h('input', {
+              type: 'checkbox',
+              checked: !!cfg.enabled,
+              onchange: (e) => this._onToggleMcpServer(name, e.target.checked),
+            }),
+            h('span', { class: 'doc-name', style: { marginLeft: '6px' } }, name),
+          ]),
+          h('span', { class: 'doc-source' }, `${transport} · ${target}`),
+        ]),
+        h('button', { class: 'btn btn-sm btn-ghost', onclick: () => this._onRemoveMcpServer(name) }, t('settings.removeDoc')),
+      ]);
+    }));
+  }
+
+  _buildMcpAddForm() {
+    const nameInput = h('input', { class: 'input', placeholder: t('settings.mcpName') });
+    const transportSelect = h('select', { class: 'select' }, [
+      h('option', { value: 'stdio' }, 'stdio'),
+      h('option', { value: 'sse' }, 'sse'),
+      h('option', { value: 'http' }, 'http'),
+    ]);
+    const targetInput = h('input', { class: 'input', placeholder: t('settings.mcpTargetHint') });
+    const addBtn = h('button', {
+      class: 'btn btn-ghost',
+      onclick: () => this._onAddMcpServer(nameInput, transportSelect, targetInput),
+    }, t('settings.mcpAdd'));
+    const saveBtn = h('button', {
+      class: 'btn btn-primary',
+      onclick: () => this._onSaveMcp(),
+    }, t('settings.mcpSave'));
+
+    return h('div', { class: 'mcp-add-form mt-2' }, [
+      h('div', { class: 'mcp-add-row' }, [nameInput, transportSelect, targetInput, addBtn]),
+      h('div', { class: 'mt-2' }, [saveBtn]),
+    ]);
+  }
+
+  async _onToggleProvider(id, enabled) {
+    try { await window.mystApi.ai.tools.setProviderEnabled(id, enabled); }
+    catch (err) { notify.error(err.message); }
+  }
+
+  _onToggleMcpServer(name, enabled) {
+    if (enabled && !confirm(t('settings.mcpEnableConfirm', { name }))) {
+      this._renderMcpServers();
+      return;
+    }
+    if (this._mcpDraft[name]) this._mcpDraft[name].enabled = enabled;
+  }
+
+  _onRemoveMcpServer(name) {
+    delete this._mcpDraft[name];
+    this._renderMcpServers();
+  }
+
+  _onAddMcpServer(nameInput, transportSelect, targetInput) {
+    const name = nameInput.value.trim();
+    const transport = transportSelect.value;
+    const target = targetInput.value.trim();
+    if (!name || !target) { notify.error(t('settings.mcpAddInvalid')); return; }
+    const cfg = { transport, enabled: false };
+    if (transport === 'stdio') {
+      const parts = target.split(/\s+/);
+      cfg.command = parts[0];
+      cfg.args = parts.slice(1);
+    } else {
+      cfg.url = target;
+    }
+    this._mcpDraft[name] = cfg;
+    nameInput.value = '';
+    targetInput.value = '';
+    this._renderMcpServers();
+  }
+
+  async _onSaveMcp() {
+    const hasEnabled = Object.values(this._mcpDraft).some((c) => c && c.enabled);
+    if (hasEnabled && !confirm(t('settings.mcpSaveConfirm'))) return;
+    try {
+      const result = await window.mystApi.ai.mcp.save(this._mcpDraft);
+      if (result.ok) {
+        notify.success(t('settings.mcpSaved'));
+        await this._refresh();
+      } else {
+        notify.error(result.error || t('settings.mcpSaveFailed'));
+      }
+    } catch (err) { notify.error(err.message); }
+  }
+
+  async _fetchTools() {
+    try {
+      const result = await window.mystApi.ai.tools.describe();
+      return result.ok ? (result.data || []) : [];
+    } catch (_) { return []; }
+  }
+
+  async _fetchMcp() {
+    try {
+      const result = await window.mystApi.ai.mcp.list();
+      return result.ok ? (result.data || { servers: {}, toolCount: 0 }) : { servers: {}, toolCount: 0 };
+    } catch (_) { return { servers: {}, toolCount: 0 }; }
   }
 
   _buildSessionsSection(sessions) {

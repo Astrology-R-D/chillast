@@ -15,7 +15,7 @@ function _summary(p) {
 
 /**
  * ProfileToolProvider — lets the agent look up saved profiles by name, not just
- * the currently-selected one. This is what enables "我是刘陈文君，你能查到我的信息吗"
+ * the currently-selected one. This is what enables "我是Chilliziehen，你能查到我的信息吗"
  * to be answered: the agent can search the repository instead of being limited
  * to the active selection.
  */
@@ -49,7 +49,7 @@ class ProfileToolProvider extends ToolProvider {
       name: 'find_profile_by_name',
       description:
         '按姓名查找已保存的档案，返回其出生信息（姓名、性别、出生年月日时、出生地）。支持部分匹配。当用户报出姓名并询问其资料时使用。',
-      schema: z.object({ name: z.string().describe('要查找的姓名，支持部分匹配，如“刘陈文君”') }),
+      schema: z.object({ name: z.string().describe('要查找的姓名，支持部分匹配，如“Chilliziehen”') }),
       func: async (input) => {
         const q = String(input.name || '').trim().toLowerCase();
         if (!q) return '请提供要查找的姓名。';

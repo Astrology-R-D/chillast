@@ -12,8 +12,10 @@
     "bgPanelSolid": "#252526",
     "bgElevated":   "rgba(45, 45, 45, 0.92)",
     "bgInput":      "rgba(28, 28, 28, 0.88)",
+    "bgDropdown":   "#171717",
     "borderSoft":   "rgba(70, 70, 70, 0.55)",
     "borderStrong": "rgba(110, 110, 110, 0.65)",
+    "borderAccent": "rgba(79, 193, 255, 0.38)",
     "textPrimary":  "#d4d4d4",
     "textSecondary":"#9d9d9d",
     "textMuted":    "#6d6d6d",
@@ -39,8 +41,8 @@
   },
 
   "radii": {
-    "sm": "0",
-    "md": "0",
+    "sm": "4px",
+    "md": "4px",
     "lg": "0",
     "full": "0"
   },
@@ -54,7 +56,8 @@
     "sidebarWidth": 228,
     "chartCanvasMaxWidth": 480,
     "workbenchGridColumns": "1fr 1fr",
-    "responsiveBreakpoint": 1200
+    "responsiveBreakpoint": 1200,
+    "headerHeight": 56
   },
 
   "chart": {
@@ -104,7 +107,23 @@
     "temperature": 0.7,
     "maxTokens": 4096,
     "enableRag": true,
-    "ragTopK": 6
+    "ragTopK": 6,
+    "mcpServers": {}
+  },
+
+  "embeddings": {
+    "provider": "local",
+    "model": "Xenova/bge-small-zh-v1.5",
+    "endpoint": "https://hf-mirror.com",
+    "localPath": "",
+    "offline": false
+  },
+
+  "ui": {
+    "showBrandSub": false,
+    "showHeaderChips": false,
+    "showViewSubtitle": false,
+    "aiGlyph": "✦"
   },
 
   "locale": "zh"

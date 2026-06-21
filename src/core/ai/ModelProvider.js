@@ -109,18 +109,68 @@ class ModelProvider {
 
     this._model = new ChatCls(chatOpts);
 
-    if (map.emb) {
+    // Tear down a previous embeddings worker (if any) before building the new one.
+    if (this._embeddings && typeof this._embeddings.close === 'function') {
+      try { await this._embeddings.close(); } catch (_) { /* best-effort */ }
+    }
+    this._embeddings = await this._resolveEmbeddings(settings, { provider, baseUrl, map });
+  }
+
+  /**
+   * Build the embeddings model. Embeddings are configured INDEPENDENTLY of the
+   * chat provider (e.g. DeepSeek has no embeddings API), via settings.embeddings:
+   *   { provider: 'local', model, endpoint, localPath, offline, cacheDir }
+   *   { provider: 'openai' | 'openai_compat', model, baseUrl, apiKey }
+   *   { provider: 'none' }
+   * Falls back to the chat provider's embeddings for back-compat when unset.
+   */
+  async _resolveEmbeddings(settings, { provider, baseUrl, map }) {
+    const emb = settings.embeddings || null;
+
+    if (emb && emb.provider) {
+      if (emb.provider === 'none') return null;
+
+      if (emb.provider === 'local') {
+        // Local, offline-capable Chinese embeddings via Transformers.js (no API
+        // key). Inference runs on a WORKER THREAD so the heavy embed never blocks
+        // the main process during the first-run index build.
+        const WorkerEmbeddings = require('./WorkerEmbeddings');
+        return new WorkerEmbeddings({
+          model: emb.model || 'Xenova/bge-small-zh-v1.5',
+          endpoint: process.env.HF_ENDPOINT || emb.endpoint,
+          cacheDir: emb.cacheDir,
+          localPath: emb.localPath,
+          offline: emb.offline,
+        });
+      }
+
+      // openai / openai_compat / any OpenAI-compatible embeddings endpoint.
+      const embMod = await esm.load('@langchain/openai');
+      const opts = { model: emb.model || 'text-embedding-3-small' };
+      const key = emb.apiKey || settings.apiKey;
+      if (key) opts.apiKey = key;
+      if (emb.baseUrl) opts.configuration = { baseURL: emb.baseUrl };
+      return new embMod.OpenAIEmbeddings(opts);
+    }
+
+    // Back-compat: derive from the chat provider's embeddings (if it has any).
+    if (map && map.emb) {
       const embMod = await esm.load(map.emb.pkg);
       const EmbCls = embMod[map.emb.cls];
-      const embOpts = {};
-      if (settings.apiKey) embOpts.apiKey = settings.apiKey;
-      if (baseUrl && provider !== 'ollama') {
-        embOpts.configuration = { baseURL: baseUrl };
-      }
-      this._embeddings = new EmbCls(embOpts);
-    } else {
-      this._embeddings = null;
+      const opts = {};
+      if (settings.apiKey) opts.apiKey = settings.apiKey;
+      if (baseUrl && provider !== 'ollama') opts.configuration = { baseURL: baseUrl };
+      return new EmbCls(opts);
     }
+    return null;
+  }
+
+  /** Release the embeddings worker thread (if local). */
+  async close() {
+    if (this._embeddings && typeof this._embeddings.close === 'function') {
+      try { await this._embeddings.close(); } catch (_) { /* best-effort */ }
+    }
+    this._embeddings = null;
   }
 
   chatModel() { return this._model; }

@@ -100,7 +100,7 @@ await test('KnowledgeToolProvider is empty when KB not ready, one tool when read
 await test('ProfileToolProvider finds a saved profile by name', async () => {
   const repo = {
     list: () => ([
-      { nameZh: '刘陈文君', gender: 'female', birthData: { year: 1998, month: 7, day: 5, hour: 14, minute: 20, location: { label: '上海', latitude: 31.2, longitude: 121.5 } } },
+      { nameZh: 'Chilliziehen', gender: 'female', birthData: { year: 1998, month: 7, day: 5, hour: 14, minute: 20, location: { label: '上海', latitude: 31.2, longitude: 121.5 } } },
       { nameZh: '张三', gender: 'male', birthData: { year: 1990, month: 1, day: 1, hour: 9, minute: 0, location: { label: '北京', latitude: 39.9, longitude: 116.4 } } },
     ]),
   };
@@ -109,8 +109,8 @@ await test('ProfileToolProvider finds a saved profile by name', async () => {
   assert.deepStrictEqual(tools.map((t) => t.name), ['list_profiles', 'find_profile_by_name']);
 
   const find = tools.find((t) => t.name === 'find_profile_by_name');
-  const hit = await find.invoke({ name: '刘陈文君' });
-  assert.ok(hit.includes('刘陈文君') && hit.includes('女') && hit.includes('1998'), hit);
+  const hit = await find.invoke({ name: 'Chilliziehen' });
+  assert.ok(hit.includes('Chilliziehen') && hit.includes('女') && hit.includes('1998'), hit);
   const miss = await find.invoke({ name: '查无此人' });
   assert.ok(miss.includes('没有找到'), miss);
 });

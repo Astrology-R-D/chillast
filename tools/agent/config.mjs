@@ -55,17 +55,22 @@ export async function loadConfig() {
   const provider = persisted.provider || aiDefaults.provider || process.env.AI_PROVIDER || 'openai';
   const model = persisted.model || aiDefaults.model || process.env.AI_MODEL || 'gpt-4o';
   const baseUrl = persisted.baseUrl || aiDefaults.baseUrl || process.env.AI_BASE_URL || '';
-  const temperature = 0.3;
+  // Low temperature for faithful, deterministic cleaning.
+  const temperature = Number(process.env.CLEAN_TEMPERATURE ?? 0.1);
+  // Large output budget so cleaned chunks are never truncated. Without this the
+  // provider's small default cap silently drops most of the content.
+  const maxTokens = Number(process.env.CLEAN_MAX_TOKENS || 8192);
 
-  return { provider, model, apiKey, baseUrl, temperature };
+  return { provider, model, apiKey, baseUrl, temperature, maxTokens };
 }
 
 export async function createChatModel(config) {
-  const { provider, model, apiKey, baseUrl, temperature } = config;
+  const { provider, model, apiKey, baseUrl, temperature, maxTokens } = config;
 
   if (provider === 'openai' || provider === 'deepseek' || provider === 'openai_compat') {
     const { ChatOpenAI } = await import('@langchain/openai');
     const opts = { model, temperature, apiKey: apiKey || undefined };
+    if (maxTokens) opts.maxTokens = maxTokens;
     if (baseUrl) opts.configuration = { baseURL: baseUrl };
     else if (provider === 'deepseek') opts.configuration = { baseURL: 'https://api.deepseek.com' };
     return new ChatOpenAI(opts);
@@ -73,12 +78,14 @@ export async function createChatModel(config) {
 
   if (provider === 'anthropic') {
     const { ChatAnthropic } = await import('@langchain/anthropic');
-    return new ChatAnthropic({ model, temperature, apiKey: apiKey || undefined });
+    return new ChatAnthropic({ model, temperature, apiKey: apiKey || undefined, maxTokens: maxTokens || 4096 });
   }
 
   if (provider === 'ollama') {
     const { ChatOllama } = await import('@langchain/community/chat_models/ollama');
-    return new ChatOllama({ model, temperature, baseUrl: baseUrl || 'http://localhost:11434' });
+    const opts = { model, temperature, baseUrl: baseUrl || 'http://localhost:11434' };
+    if (maxTokens) opts.numPredict = maxTokens;
+    return new ChatOllama(opts);
   }
 
   throw new Error(`不支持的 provider: ${provider}`);

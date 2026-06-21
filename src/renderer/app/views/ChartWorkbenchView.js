@@ -89,10 +89,11 @@ export class ChartWorkbenchView {
     }, this._hasGenerated ? t('chart.regenerate') : t('chart.generate'));
     barChildren.push(this.generateBtn);
 
+    const aiGlyph = (this.ctx.config && this.ctx.config.ui && this.ctx.config.ui.aiGlyph) || '✦';
     this.aiInterpretBtn = h('button', {
-      class: 'btn btn-ghost',
+      class: 'btn btn-ghost btn-ai',
       onclick: () => this.ctx.requestAiInterpret && this.ctx.requestAiInterpret(),
-    }, t('ai.interpret'));
+    }, [h('span', { class: 'svg-glyph' }, aiGlyph), t('ai.interpret')]);
     barChildren.push(this.aiInterpretBtn);
 
     this.optionsHost = h('div', { class: 'workbench-options' });

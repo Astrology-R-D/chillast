@@ -38,28 +38,47 @@ export class AiSidebar {
       }
     });
 
-    // Session dropdown
-    this._sessionSelect = h('select', {
-      class: 'select ai-session-select',
-      onchange: (e) => this._switchSession(e.target.value),
-    }, [h('option', { value: '' }, t('ai.sessionList'))]);
+    // ── Session controls (VSCode-style) ──────────────────────
+    // A wide "current session" button shows the active conversation and opens a
+    // history popover; a separate "＋" clearly starts a new chat.
+    this._sessionTitleEl = h('span', { class: 'ai-session-current-title' }, t('ai.emptySession'));
+    this._historyBtn = h('button', {
+      class: 'btn btn-sm btn-ghost ai-session-history-btn',
+      title: t('ai.history'),
+      onclick: (e) => { e.stopPropagation(); this._toggleSessionPanel(); },
+    }, [
+      h('span', { class: 'ai-session-history-icon svg-glyph' }, '☰'),
+      this._sessionTitleEl,
+      h('span', { class: 'ai-session-caret' }, '⌄'),
+    ]);
 
     this._newSessionBtn = h('button', {
-      class: 'btn btn-sm btn-ghost',
+      class: 'btn btn-sm btn-primary ai-session-new-btn',
       title: t('ai.newSession'),
       onclick: () => this._createSession(),
-    }, '＋');
+    }, [h('span', { class: 'svg-glyph' }, '＋'), t('ai.newChat')]);
 
-    this._deleteSessionBtn = h('button', {
-      class: 'btn btn-sm btn-ghost',
-      title: t('ai.deleteSession'),
-      onclick: () => this._deleteCurrentSession(),
-    }, '✕');
+    // History popover (hidden until toggled). Anchored under the session bar.
+    this._sessionList = h('div', { class: 'ai-session-list' });
+    this._sessionPanel = h('div', { class: 'ai-session-panel', style: { display: 'none' } }, [
+      h('div', { class: 'ai-session-panel-header' }, t('ai.history')),
+      this._sessionList,
+    ]);
+    // Close the popover when clicking anywhere outside it.
+    this._onDocClick = (e) => {
+      if (!this._sessionPanelOpen) return;
+      if (this._sessionPanel.contains(e.target) || this._historyBtn.contains(e.target)) return;
+      this._closeSessionPanel();
+    };
+    document.addEventListener('mousedown', this._onDocClick);
 
-    this._input = h('input', {
+    // Textarea so the user can insert newlines (Shift+Enter); Enter sends.
+    this._input = h('textarea', {
       class: 'input chat-input',
+      rows: '1',
       placeholder: t('ai.inputPlaceholder'),
       onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } },
+      oninput: () => this._autoGrowInput(),
     });
 
     this._sendBtn = h('button', {
@@ -86,10 +105,10 @@ export class AiSidebar {
           this._llmStatusText,
         ]),
       ]),
-      h('div', { class: 'ai-session-toolbar' }, [
-        this._sessionSelect,
+      h('div', { class: 'ai-session-bar' }, [
+        this._historyBtn,
         this._newSessionBtn,
-        this._deleteSessionBtn,
+        this._sessionPanel,
       ]),
       this._statusBanner,
       h('div', { class: 'ai-sidebar-body' }, [
@@ -127,11 +146,55 @@ export class AiSidebar {
   }
 
   _refreshSessionDropdown() {
-    clear(this._sessionSelect);
-    for (const s of this._sessions) {
-      const label = this._sessionLabel(s);
-      this._sessionSelect.appendChild(h('option', { value: s.id, selected: s.id === this._currentSessionId }, label));
+    this._renderSessionList();
+    this._updateSessionBarTitle();
+  }
+
+  _updateSessionBarTitle() {
+    const current = this._sessions.find((s) => s.id === this._currentSessionId);
+    this._sessionTitleEl.textContent = current ? this._sessionLabel(current) : t('ai.emptySession');
+  }
+
+  _renderSessionList() {
+    clear(this._sessionList);
+    if (!this._sessions.length) {
+      this._sessionList.appendChild(h('div', { class: 'ai-session-empty' }, t('ai.noSessions')));
+      return;
     }
+    for (const s of this._sessions) {
+      const isActive = s.id === this._currentSessionId;
+      const item = h('div', { class: `ai-session-item${isActive ? ' is-active' : ''}` }, [
+        h('span', {
+          class: 'ai-session-item-title',
+          onclick: () => { this._switchSession(s.id); this._closeSessionPanel(); },
+        }, this._sessionLabel(s)),
+        h('button', {
+          class: 'btn btn-sm btn-ghost ai-session-item-del',
+          title: t('ai.deleteSession'),
+          onclick: (e) => { e.stopPropagation(); this._deleteSession(s.id); },
+        }, '✕'),
+      ]);
+      this._sessionList.appendChild(item);
+    }
+  }
+
+  _toggleSessionPanel() {
+    if (this._sessionPanelOpen) this._closeSessionPanel();
+    else this._openSessionPanel();
+  }
+
+  _openSessionPanel() {
+    if (this._streaming) return;
+    this._renderSessionList();
+    this._sessionPanel.style.display = '';
+    this._historyBtn.classList.add('is-open');
+    this._sessionPanelOpen = true;
+  }
+
+  _closeSessionPanel() {
+    this._sessionPanel.style.display = 'none';
+    this._historyBtn.classList.remove('is-open');
+    this._sessionPanelOpen = false;
   }
 
   _sessionLabel(s) {
@@ -151,6 +214,7 @@ export class AiSidebar {
         this._sessions.unshift(result.data);
         this._refreshSessionDropdown();
         this._renderMessages([]);
+        this._closeSessionPanel();
       }
     } catch (_) {}
   }
@@ -168,17 +232,22 @@ export class AiSidebar {
     } catch (_) {}
   }
 
-  async _deleteCurrentSession() {
-    if (!this._currentSessionId) return;
+  async _deleteSession(id) {
+    if (!id || this._streaming) return;
     if (!confirm(t('ai.deleteSessionConfirm'))) return;
     try {
-      await window.mystApi.ai.sessions.delete(this._currentSessionId);
-      this._sessions = this._sessions.filter((s) => s.id !== this._currentSessionId);
+      await window.mystApi.ai.sessions.delete(id);
+      this._sessions = this._sessions.filter((s) => s.id !== id);
       notify.success(t('ai.sessionDeleted'));
-      if (this._sessions.length) {
-        await this._switchSession(this._sessions[0].id);
+      // Only need to switch/create when the deleted session was the active one.
+      if (id === this._currentSessionId) {
+        if (this._sessions.length) {
+          await this._switchSession(this._sessions[0].id);
+        } else {
+          await this._createSession();
+        }
       } else {
-        await this._createSession();
+        this._refreshSessionDropdown();
       }
     } catch (_) {}
   }
@@ -202,8 +271,17 @@ export class AiSidebar {
     const text = this._input.value.trim();
     if (!text || this._streaming) return;
     this._input.value = '';
+    this._autoGrowInput();
     this._addUserMessage(text);
     this._runChat(text);
+  }
+
+  /** Grow the chat textarea with its content, up to a max height. */
+  _autoGrowInput() {
+    const el = this._input;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }
 
   _stop() {
@@ -218,11 +296,11 @@ export class AiSidebar {
     this._sendBtn.style.display = streaming ? 'none' : '';
     this._stopBtn.style.display = streaming ? '' : 'none';
     this._input.disabled = streaming;
-    // Lock session controls while a response streams so the dropdown can't
+    // Lock session controls while a response streams so the active session can't
     // drift out of sync with the conversation being rendered.
-    this._sessionSelect.disabled = streaming;
+    this._historyBtn.disabled = streaming;
     this._newSessionBtn.disabled = streaming;
-    this._deleteSessionBtn.disabled = streaming;
+    if (streaming) this._closeSessionPanel();
   }
 
   _addUserMessage(text) {

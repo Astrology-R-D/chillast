@@ -58,6 +58,7 @@ class IpcRouter {
     // AI handlers
     if (this.ai) {
       this._handle('ai:status', () => this.ai.status());
+      this._handle('ai:initStatus', () => (this.ai.getInitStatus ? this.ai.getInitStatus() : null));
       this._handle('ai:testConnection', () => this.ai.testConnection());
       this._handle('ai:testWithSettings', (_e, settings) => this.ai.testWithSettings(settings));
       this._handle('ai:providers', () => {
@@ -87,18 +88,45 @@ class IpcRouter {
           }
         }
 
-        // Save non-secret settings
-        const settingsPath = path.join(dataDir, 'ai-settings.json');
-        const persisted = {
+        // Persist non-secret settings, preserving fields owned by other panels
+        // (mcpServers, toolProviders) so saving the provider doesn't wipe them.
+        this._writeAiSettings({
+          ...this._readAiSettings(),
           provider: settings.provider,
           model: settings.model,
           baseUrl: settings.baseUrl || '',
           temperature: settings.temperature,
           maxTokens: settings.maxTokens,
-        };
-        fs.writeFileSync(settingsPath, JSON.stringify(persisted, null, 2), 'utf-8');
+        });
 
-        await this.ai.configure(settings);
+        // Carry persisted MCP/tool prefs into the configure call.
+        const merged = { ...this._readAiSettings(), ...settings };
+        await this.ai.configure(merged);
+        if (this.webContents) this.webContents.send('ai:statusChanged', this.ai.status());
+        return { ok: true };
+      });
+      this._handle('ai:tools:describe', async () => {
+        const reg = this.ai.getToolRegistry();
+        return reg ? reg.describe() : [];
+      });
+      this._handle('ai:tools:setProviderEnabled', (_e, id, enabled) => {
+        const reg = this.ai.getToolRegistry();
+        if (reg) reg.setEnabled(id, !!enabled);
+        const s = this._readAiSettings();
+        s.toolProviders = { ...(s.toolProviders || {}), [id]: !!enabled };
+        this._writeAiSettings(s);
+        return { ok: true };
+      });
+      this._handle('ai:mcp:list', () => {
+        const m = this.ai.getMcpManager();
+        if (!m) return { servers: {}, toolCount: 0, connected: false };
+        return { servers: m.getConfig(), toolCount: m.getTools().length, connected: m.isConnected() };
+      });
+      this._handle('ai:mcp:save', async (_e, servers) => {
+        const s = this._readAiSettings();
+        s.mcpServers = servers || {};
+        this._writeAiSettings(s);
+        if (this.ai.updateMcp) await this.ai.updateMcp(servers || {});
         if (this.webContents) this.webContents.send('ai:statusChanged', this.ai.status());
         return { ok: true };
       });
@@ -228,6 +256,24 @@ class IpcRouter {
       this.aiSessionStore.setTitle(sessionId, title);
       if (this.webContents) this.webContents.send('ai:sessionsChanged');
     } catch (_) { /* titling is best-effort */ }
+  }
+
+  /** Path to the persisted non-secret AI settings document. */
+  _aiSettingsPath() {
+    const { app } = require('electron');
+    return require('path').join(app.getPath('userData'), 'data', 'ai-settings.json');
+  }
+
+  _readAiSettings() {
+    try { return JSON.parse(require('fs').readFileSync(this._aiSettingsPath(), 'utf-8')); }
+    catch (_) { return {}; }
+  }
+
+  _writeAiSettings(obj) {
+    const fs = require('fs');
+    const p = this._aiSettingsPath();
+    fs.mkdirSync(require('path').dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(obj, null, 2), 'utf-8');
   }
 
   /** Wrap a handler so thrown errors become a structured envelope. */

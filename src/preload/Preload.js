@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld('mystApi', {
     onDone: (callback) => ipcRenderer.on('ai:done', (_e, data) => callback(data)),
     onError: (callback) => ipcRenderer.on('ai:error', (_e, data) => callback(data)),
     onStatusChanged: (callback) => ipcRenderer.on('ai:statusChanged', (_e, data) => callback(data)),
+    onInitProgress: (callback) => ipcRenderer.on('ai:initProgress', (_e, data) => callback(data)),
+    initStatus: () => invoke('ai:initStatus'),
     onSessionsChanged: (callback) => ipcRenderer.on('ai:sessionsChanged', () => callback()),
     removeAllListeners: () => {
       // Only the per-request streaming channels are cleared between turns;
@@ -67,6 +69,14 @@ contextBridge.exposeInMainWorld('mystApi', {
       list: () => invoke('ai:knowledge:list'),
       import: (filePaths) => invoke('ai:knowledge:import', filePaths),
       remove: (docId) => invoke('ai:knowledge:remove', docId),
+    },
+    tools: {
+      describe: () => invoke('ai:tools:describe'),
+      setProviderEnabled: (id, enabled) => invoke('ai:tools:setProviderEnabled', id, enabled),
+    },
+    mcp: {
+      list: () => invoke('ai:mcp:list'),
+      save: (servers) => invoke('ai:mcp:save', servers),
     },
     sessions: {
       list: () => invoke('ai:sessions:list'),

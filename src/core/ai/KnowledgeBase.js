@@ -12,9 +12,14 @@ class KnowledgeBase {
     this._userPath = null;
     this._indexDir = null;
     this._ragTopK = 6;
+    this._onProgress = null;
   }
 
   setRagTopK(k) { this._ragTopK = k; }
+
+  /** Register a progress sink for the (slow) first-run index build. */
+  setProgressHandler(fn) { this._onProgress = fn; }
+  _emit(p) { if (this._onProgress) { try { this._onProgress(p); } catch (_) { /* ignore */ } } }
 
   async initialize(builtinPath, userDataPath, indexDir) {
     const embeddings = this._mp.embeddings();
@@ -27,8 +32,9 @@ class KnowledgeBase {
     // Try loading persisted index first
     if (this._indexDir && fs.existsSync(this._indexDir)) {
       try {
-        this._store = await HNSWLib.load(embeddings, this._indexDir);
+        this._store = await HNSWLib.load(this._indexDir, embeddings);
         this._docs = this._rebuildDocList(builtinPath, userDataPath);
+        this._emit({ phase: 'ready', fromCache: true, docs: this._docs.length });
         return;
       } catch (e) {
         console.error('[KnowledgeBase] load index failed, rebuilding:', e.message);
@@ -67,16 +73,49 @@ class KnowledgeBase {
       await loadDir(userDataPath, 'user');
     }
 
-    if (allChunks.length) {
-      this._store = await HNSWLib.fromDocuments(allChunks, embeddings);
-      if (this._indexDir) {
-        if (!fs.existsSync(this._indexDir)) fs.mkdirSync(this._indexDir, { recursive: true });
-        await this._store.save(this._indexDir);
+    try {
+      if (allChunks.length) {
+        this._emit({ phase: 'preparing', total: allChunks.length });
+        this._store = await this._buildStore(allChunks, embeddings, HNSWLib);
+        if (this._indexDir) {
+          if (!fs.existsSync(this._indexDir)) fs.mkdirSync(this._indexDir, { recursive: true });
+          await this._store.save(this._indexDir);
+        }
       }
+      this._emit({ phase: 'ready', docs: this._docs.length, chunks: allChunks.length });
+    } catch (e) {
+      this._emit({ phase: 'error', message: e.message });
+      throw e;
     }
   }
 
+  /**
+   * Build the vector store in small batches, yielding to the event loop between
+   * each so the main process stays responsive (UI + IPC) during the heavy embed,
+   * while emitting progress. The first batch triggers the lazy model download.
+   */
+  async _buildStore(allChunks, embeddings, HNSWLib) {
+    const BATCH = 32;
+    let store = null;
+    for (let i = 0; i < allChunks.length; i += BATCH) {
+      const batch = allChunks.slice(i, i + BATCH);
+      if (!store) {
+        this._emit({ phase: 'model' }); // first embed downloads/loads the model
+        store = await HNSWLib.fromDocuments(batch, embeddings);
+      } else {
+        await store.addDocuments(batch);
+      }
+      this._emit({ phase: 'indexing', done: Math.min(i + BATCH, allChunks.length), total: allChunks.length });
+      await new Promise((r) => setImmediate(r)); // yield: flush IPC, keep UI alive
+    }
+    return store;
+  }
+
   _extractDomain(content) {
+    // Explicit marker (written by the cleaning pipeline) is authoritative and
+    // avoids guessing from title wording.
+    const marker = content.match(/<!--\s*domain:\s*([a-z-]+)\s*-->/i);
+    if (marker) return marker[1].toLowerCase();
     const firstLine = content.split('\n').find((l) => l.trim());
     if (!firstLine) return 'general';
     const title = firstLine.replace(/^#+\s*/, '');

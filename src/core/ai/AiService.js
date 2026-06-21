@@ -27,10 +27,33 @@ class AiService {
     this._configured = false;
     this._abortControllers = new Map();
     this._context = null;
+    this._initProgress = null;
+    this._initProgressHandler = null;
+    this._kbInitializing = false;
+  }
+
+  /** Sink for knowledge-base init progress (model download + index build). */
+  setInitProgressHandler(fn) { this._initProgressHandler = fn; }
+  getInitStatus() { return this._initProgress; }
+  _emitInit(p) {
+    this._initProgress = p;
+    if (this._initProgressHandler) { try { this._initProgressHandler(p); } catch (_) { /* ignore */ } }
   }
 
   async configure(settings) {
     await this._mp.configure(settings);
+
+    // Surface local embedding-model download progress in the startup overlay —
+    // but ONLY while the KB index is initializing. A model load triggered later
+    // (e.g. the first chat query, or the silent warm-up) must not pop the overlay.
+    const emb = this._mp.embeddings();
+    if (emb && typeof emb.setModelProgressHandler === 'function') {
+      emb.setModelProgressHandler((d) => {
+        if (this._kbInitializing && d && d.status === 'progress' && d.total) {
+          this._emitInit({ phase: 'model', percent: Math.round((d.loaded / d.total) * 100), file: d.file });
+        }
+      });
+    }
 
     // Verify chat model works — don't block on failure, just log
     try {
@@ -47,11 +70,25 @@ class AiService {
       try {
         this._kb = new KnowledgeBase(this._mp);
         this._kb.setRagTopK(settings.ragTopK || 6);
+        this._kb.setProgressHandler((p) => this._emitInit(p));
         if (settings.knowledgeBuiltinPath) {
-          await this._kb.initialize(settings.knowledgeBuiltinPath, settings.knowledgeUserPath || null, settings.knowledgeIndexDir || null);
+          this._emitInit({ phase: 'preparing' });
+          this._kbInitializing = true;
+          try {
+            await this._kb.initialize(settings.knowledgeBuiltinPath, settings.knowledgeUserPath || null, settings.knowledgeIndexDir || null);
+          } finally {
+            this._kbInitializing = false;
+          }
+          // Warm the embedding model up in the background (silent — no overlay) so
+          // the first retrieval query doesn't pay the model-load cost on demand.
+          if (emb && typeof emb.warmup === 'function') {
+            emb.warmup().catch(() => { /* best-effort */ });
+          }
         }
       } catch (e) {
         console.error('[AiService] KnowledgeBase init failed, continuing without RAG:', e.message);
+        this._kbInitializing = false;
+        this._emitInit({ phase: 'error', message: e.message });
         this._kb = null;
       }
     }
@@ -312,6 +349,9 @@ class AiService {
     this._abortControllers.clear();
     if (this._registry) {
       try { await this._registry.disposeAll(); } catch (_) { /* best-effort */ }
+    }
+    if (this._mp && typeof this._mp.close === 'function') {
+      try { await this._mp.close(); } catch (_) { /* best-effort */ }
     }
   }
 

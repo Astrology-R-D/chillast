@@ -66,9 +66,36 @@ class Main {
       : {};
 
     const vectorIndexDir = path.join(baseDir, 'vector-index');
+
+    // Packaged builds ship a pre-downloaded embedding model + a pre-built vector
+    // index as extraResources (see package.json build). Use the bundled model
+    // offline, and seed userData's index from the bundle on first run (so the
+    // app is instant + offline, never downloads or rebuilds).
+    const bundledModelsDir = app.isPackaged ? path.join(process.resourcesPath, 'models') : null;
+    const bundledIndexDir = app.isPackaged ? path.join(process.resourcesPath, 'vector-index') : null;
+    if (bundledIndexDir && fs.existsSync(bundledIndexDir) && !fs.existsSync(vectorIndexDir)) {
+      try {
+        fs.cpSync(bundledIndexDir, vectorIndexDir, { recursive: true });
+      } catch (e) {
+        console.error('[Main] seeding bundled vector-index failed:', e.message);
+      }
+    }
+    const bundledModel = bundledModelsDir && fs.existsSync(bundledModelsDir)
+      ? { localPath: bundledModelsDir, offline: true }
+      : {};
+
     const aiSettings = {
       ...(this.config.ai || {}),
       ...persistedSettings,
+      // Embeddings are configured independently of the chat provider. Cache the
+      // local model under userData (node_modules is read-only when packaged);
+      // when packaged, prefer the bundled offline model.
+      embeddings: {
+        ...(this.config.embeddings || {}),
+        ...(persistedSettings.embeddings || {}),
+        cacheDir: path.join(baseDir, 'models'),
+        ...bundledModel,
+      },
       knowledgeBuiltinPath: builtinKnowledgePath,
       knowledgeUserPath: userKnowledgePath,
       knowledgeIndexDir: vectorIndexDir,
@@ -92,6 +119,11 @@ class Main {
         aiSettings.apiKey = cred.apiKey || '';
       } catch (_) {}
     }
+    // Stream knowledge-base init progress (model download + index build) to the
+    // renderer so the first-run wait shows a non-blocking overlay, not a freeze.
+    this.aiService.setInitProgressHandler((p) => {
+      if (this.router && this.router.webContents) this.router.webContents.send('ai:initProgress', p);
+    });
     this.aiService.configure(aiSettings).then(() => {
       if (this.router && this.router.webContents) {
         this.router.webContents.send('ai:statusChanged', this.aiService.status());

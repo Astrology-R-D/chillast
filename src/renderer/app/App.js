@@ -14,6 +14,7 @@ import { SynastryView } from './views/SynastryView.js';
 import { ChineseAstrologyView } from './views/ChineseAstrologyView.js';
 import { SolarTermCalendarView } from './views/SolarTermCalendarView.js';
 import { AiSidebar } from './components/AiSidebar.js';
+import { InitProgress } from './components/InitProgress.js';
 import { SettingsView } from './views/SettingsView.js';
 
 const ROUTES = [
@@ -94,8 +95,10 @@ export class App {
   }
 
   _buildShell() {
+    const ui = (this.config && this.config.ui) || {};
     this.headerTitle = h('h1', {}, '');
-    this.headerSub = h('div', { class: 'subtitle' }, '');
+    // Subtitle is opt-in via config (ui.showViewSubtitle) — keeps the header clean.
+    this.headerSub = ui.showViewSubtitle ? h('div', { class: 'subtitle' }, '') : null;
     this.contentEl = h('div', { class: 'content' });
 
     this.navEls = {};
@@ -116,7 +119,7 @@ export class App {
         h('div', { class: 'brand-mark svg-glyph' }, '✶'),
         h('div', {}, [
           h('div', { class: 'brand-title' }, t('app.title')),
-          h('div', { class: 'brand-sub' }, t('app.brandSub')),
+          ui.showBrandSub ? h('div', { class: 'brand-sub' }, t('app.brandSub')) : null,
         ]),
       ]),
       ...nav,
@@ -125,16 +128,20 @@ export class App {
 
     this.aiSidebar = new AiSidebar({ onNavigate: (route) => this.navigate(route) });
 
+    const aiGlyph = ui.aiGlyph || '✦';
     this.aiToggleBtn = h('button', {
       class: 'btn btn-sm ai-toggle-btn is-active',
       title: t('ai.toggle'),
       onclick: () => this._toggleAiSidebar(),
-    }, '✦');
+    }, [
+      h('span', { class: 'svg-glyph ai-toggle-glyph' }, aiGlyph),
+      h('span', { class: 'ai-toggle-label' }, t('ai.toggle')),
+    ]);
 
-    // Add toggle to header actions
+    // Header chips (sign / chart counts) are opt-in via config (ui.showHeaderChips).
     const headerActions = h('div', { class: 'header-actions' }, [
-      h('span', { class: 'chip' }, t('app.chipSigns', { count: this.reference.signs.length })),
-      h('span', { class: 'chip' }, t('app.chipCharts', { count: this.reference.chartTypes.length })),
+      ui.showHeaderChips ? h('span', { class: 'chip' }, t('app.chipSigns', { count: this.reference.signs.length })) : null,
+      ui.showHeaderChips ? h('span', { class: 'chip' }, t('app.chipCharts', { count: this.reference.chartTypes.length })) : null,
       this.aiToggleBtn,
     ]);
 
@@ -146,9 +153,13 @@ export class App {
       this.contentEl,
     ]);
 
-    mount(this.root, [sidebar, main, this.aiSidebar.element]);
+    // Non-blocking startup overlay for KB model download + index build.
+    this.initProgress = new InitProgress();
+
+    mount(this.root, [sidebar, main, this.aiSidebar.element, this.initProgress.element]);
     this.aiSidebar.restoreWidth();
     this.aiSidebar.updateStatus().catch(() => {});
+    this.initProgress.start().catch(() => {});
   }
 
   navigate(route) {
@@ -159,7 +170,7 @@ export class App {
     const view = this.views[route];
     if (meta && view) {
       this.headerTitle.textContent = view.title.h1;
-      this.headerSub.textContent = view.title.sub;
+      if (this.headerSub) this.headerSub.textContent = view.title.sub;
     }
     this._syncNav();
     this._renderActive();

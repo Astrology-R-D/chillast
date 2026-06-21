@@ -18,14 +18,16 @@
   flex-direction: column;
   background: var(--bg-panel-solid);
   border-right: 1px solid var(--border-soft);
-  padding: var(--sp-4) 0;
+  padding: 0 0 var(--sp-4);
   gap: var(--sp-half);
 }
 .brand {
   display: flex; align-items: center; gap: var(--sp-2);
-  padding: var(--sp-1) var(--sp-4) var(--sp-4);
+  height: var(--header-height);
+  padding: 0 var(--sp-4);
   border-bottom: 1px solid var(--border-soft);
   margin-bottom: var(--sp-2);
+  flex-shrink: 0;
 }
 .brand-mark {
   width: 36px; height: 36px; border-radius: 0;
@@ -41,12 +43,25 @@
   padding: var(--sp-3) var(--sp-4) var(--sp-1); text-transform: uppercase;
 }
 .nav-item {
+  position: relative; overflow: hidden;
   display: flex; align-items: center; gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-4); border-radius: 0;
   color: var(--text-secondary); cursor: pointer;
   border-left: 2px solid transparent; transition: var(--transition);
   user-select: none;
 }
+/* Glass shine that sweeps left → right on hover. */
+.nav-item::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.10) 50%,
+    transparent 80%);
+  transform: translateX(-110%);
+  transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.nav-item:hover::after { transform: translateX(110%); }
 .nav-item:hover { background: rgba(79, 193, 255, 0.08); color: var(--text-primary); }
 .nav-item.is-active {
   background: rgba(86, 156, 214, 0.18);
@@ -63,7 +78,8 @@
 }
 .app-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: var(--sp-3) var(--sp-6); border-bottom: 1px solid var(--border-soft);
+  height: var(--header-height); flex-shrink: 0;
+  padding: 0 var(--sp-6); border-bottom: 1px solid var(--border-soft);
   background: var(--bg-panel-solid);
 }
 .app-header h1 { font-size: var(--fs-xl); }
@@ -119,6 +135,9 @@
 .workbench-bar .btn { font-size: var(--fs-sm); }
 
 .workbench-bar .select { max-width: 220px; height: 34px; }
+/* Keep inputs the same height as selects/buttons so the controls line up. */
+.workbench-bar .input,
+.workbench-options .input { height: 34px; }
 
 .workbench-options {
   overflow: hidden;

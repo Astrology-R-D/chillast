@@ -1,0 +1,366 @@
+[
+  {
+    "book": "人生的十二个面向",
+    "segments": 242,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "planets-houses",
+        "outName": "人生的十二个面向-planets-houses.md",
+        "segs": 183,
+        "chars": 207230
+      },
+      {
+        "domain": "general",
+        "outName": "人生的十二个面向-general.md",
+        "segs": 42,
+        "chars": 69595
+      },
+      {
+        "domain": "aspects",
+        "outName": "人生的十二个面向-aspects.md",
+        "segs": 15,
+        "chars": 7923
+      },
+      {
+        "domain": "patterns",
+        "outName": "人生的十二个面向-patterns.md",
+        "segs": 2,
+        "chars": 1637
+      }
+    ]
+  },
+  {
+    "book": "内在的天空",
+    "segments": 137,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "内在的天空-general.md",
+        "segs": 100,
+        "chars": 141075
+      },
+      {
+        "domain": "retrograde",
+        "outName": "内在的天空-retrograde.md",
+        "segs": 4,
+        "chars": 8074
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "内在的天空-planets-signs.md",
+        "segs": 4,
+        "chars": 7143
+      },
+      {
+        "domain": "patterns",
+        "outName": "内在的天空-patterns.md",
+        "segs": 3,
+        "chars": 4505
+      },
+      {
+        "domain": "planets-houses",
+        "outName": "内在的天空-planets-houses.md",
+        "segs": 18,
+        "chars": 28510
+      },
+      {
+        "domain": "aspects",
+        "outName": "内在的天空-aspects.md",
+        "segs": 8,
+        "chars": 8744
+      }
+    ]
+  },
+  {
+    "book": "内在的宇宙",
+    "segments": 204,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "内在的宇宙-general.md",
+        "segs": 49,
+        "chars": 31018
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "内在的宇宙-planets-signs.md",
+        "segs": 99,
+        "chars": 23250
+      },
+      {
+        "domain": "aspects",
+        "outName": "内在的宇宙-aspects.md",
+        "segs": 41,
+        "chars": 16665
+      },
+      {
+        "domain": "planets-houses",
+        "outName": "内在的宇宙-planets-houses.md",
+        "segs": 13,
+        "chars": 7683
+      },
+      {
+        "domain": "patterns",
+        "outName": "内在的宇宙-patterns.md",
+        "segs": 2,
+        "chars": 282
+      }
+    ]
+  },
+  {
+    "book": "占星全书",
+    "segments": 430,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "占星全书-general.md",
+        "segs": 235,
+        "chars": 108949
+      },
+      {
+        "domain": "planets-houses",
+        "outName": "占星全书-planets-houses.md",
+        "segs": 40,
+        "chars": 35030
+      },
+      {
+        "domain": "transit",
+        "outName": "占星全书-transit.md",
+        "segs": 16,
+        "chars": 25314
+      },
+      {
+        "domain": "synastry",
+        "outName": "占星全书-synastry.md",
+        "segs": 9,
+        "chars": 5635
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "占星全书-planets-signs.md",
+        "segs": 27,
+        "chars": 45978
+      },
+      {
+        "domain": "aspects",
+        "outName": "占星全书-aspects.md",
+        "segs": 93,
+        "chars": 63317
+      },
+      {
+        "domain": "patterns",
+        "outName": "占星全书-patterns.md",
+        "segs": 10,
+        "chars": 8158
+      }
+    ]
+  },
+  {
+    "book": "当代占星研究",
+    "segments": 437,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "当代占星研究-general.md",
+        "segs": 212,
+        "chars": 169588
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "当代占星研究-planets-signs.md",
+        "segs": 77,
+        "chars": 66876
+      },
+      {
+        "domain": "aspects",
+        "outName": "当代占星研究-aspects.md",
+        "segs": 37,
+        "chars": 27212
+      },
+      {
+        "domain": "planets-houses",
+        "outName": "当代占星研究-planets-houses.md",
+        "segs": 92,
+        "chars": 46800
+      },
+      {
+        "domain": "transit",
+        "outName": "当代占星研究-transit.md",
+        "segs": 12,
+        "chars": 3737
+      },
+      {
+        "domain": "patterns",
+        "outName": "当代占星研究-patterns.md",
+        "segs": 6,
+        "chars": 3031
+      },
+      {
+        "domain": "retrograde",
+        "outName": "当代占星研究-retrograde.md",
+        "segs": 1,
+        "chars": 199
+      }
+    ]
+  },
+  {
+    "book": "昨日的天空：占星与轮回",
+    "segments": 163,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "昨日的天空：占星与轮回-general.md",
+        "segs": 70,
+        "chars": 88194
+      },
+      {
+        "domain": "planets-houses",
+        "outName": "昨日的天空：占星与轮回-planets-houses.md",
+        "segs": 21,
+        "chars": 38801
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "昨日的天空：占星与轮回-planets-signs.md",
+        "segs": 18,
+        "chars": 20774
+      },
+      {
+        "domain": "aspects",
+        "outName": "昨日的天空：占星与轮回-aspects.md",
+        "segs": 46,
+        "chars": 42837
+      },
+      {
+        "domain": "transit",
+        "outName": "昨日的天空：占星与轮回-transit.md",
+        "segs": 8,
+        "chars": 7327
+      }
+    ]
+  },
+  {
+    "book": "灵魂的功课",
+    "segments": 52,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "灵魂的功课-general.md",
+        "segs": 6,
+        "chars": 16321
+      },
+      {
+        "domain": "planets-houses",
+        "outName": "灵魂的功课-planets-houses.md",
+        "segs": 19,
+        "chars": 43260
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "灵魂的功课-planets-signs.md",
+        "segs": 3,
+        "chars": 3447
+      },
+      {
+        "domain": "aspects",
+        "outName": "灵魂的功课-aspects.md",
+        "segs": 24,
+        "chars": 62050
+      }
+    ]
+  },
+  {
+    "book": "灵魂的目标",
+    "segments": 101,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "灵魂的目标-general.md",
+        "segs": 35,
+        "chars": 79821
+      },
+      {
+        "domain": "patterns",
+        "outName": "灵魂的目标-patterns.md",
+        "segs": 32,
+        "chars": 74758
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "灵魂的目标-planets-signs.md",
+        "segs": 34,
+        "chars": 78761
+      }
+    ]
+  },
+  {
+    "book": "生命四元素",
+    "segments": 75,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "general",
+        "outName": "生命四元素-general.md",
+        "segs": 44,
+        "chars": 63036
+      },
+      {
+        "domain": "patterns",
+        "outName": "生命四元素-patterns.md",
+        "segs": 18,
+        "chars": 17093
+      },
+      {
+        "domain": "planets-signs",
+        "outName": "生命四元素-planets-signs.md",
+        "segs": 6,
+        "chars": 5837
+      },
+      {
+        "domain": "synastry",
+        "outName": "生命四元素-synastry.md",
+        "segs": 3,
+        "chars": 7022
+      },
+      {
+        "domain": "planets-houses",
+        "outName": "生命四元素-planets-houses.md",
+        "segs": 4,
+        "chars": 4317
+      }
+    ]
+  },
+  {
+    "book": "顺逆皆宜的人生",
+    "segments": 103,
+    "preservedPct": 100,
+    "outputs": [
+      {
+        "domain": "aspects",
+        "outName": "顺逆皆宜的人生-aspects.md",
+        "segs": 84,
+        "chars": 165458
+      },
+      {
+        "domain": "general",
+        "outName": "顺逆皆宜的人生-general.md",
+        "segs": 14,
+        "chars": 22916
+      },
+      {
+        "domain": "patterns",
+        "outName": "顺逆皆宜的人生-patterns.md",
+        "segs": 5,
+        "chars": 4851
+      }
+    ]
+  }
+]

@@ -40,7 +40,7 @@ export class ChineseAstrologyView {
         labeled(t('chinese.labelProfile'), this.profileSelect),
         h('button', { class: 'btn btn-primary', onclick: () => this._compute() }, t('chinese.generate')),
         h('button', {
-          class: 'btn btn-ghost',
+          class: 'btn btn-ghost btn-ai',
           onclick: () => {
             const profiles = this.ctx.store.getState().profiles || [];
             const p = profiles.find((x) => x.id === this.profileSelect.value);
@@ -49,7 +49,10 @@ export class ChineseAstrologyView {
               this.ctx.requestAiChat('请结合我当前选中档案的八字命盘，进行详细的传统命理分析（五行旺衰、十神、藏干、格局与人生建议）。');
             }
           },
-        }, t('ai.interpret')),
+        }, [
+          h('span', { class: 'svg-glyph' }, (this.ctx.config && this.ctx.config.ui && this.ctx.config.ui.aiGlyph) || '✦'),
+          t('ai.interpret'),
+        ]),
       ]),
       this.resultHost,
     ]);

@@ -35,10 +35,12 @@
   --bg-panel-solid: #252526;
   --bg-elevated: rgba(45, 45, 45, 0.92);
   --bg-input: rgba(28, 28, 28, 0.88);
+  --bg-dropdown: #171717;
 
   /* Lines & strokes */
   --border-soft: rgba(70, 70, 70, 0.55);
   --border-strong: rgba(110, 110, 110, 0.65);
+  --border-accent: rgba(79, 193, 255, 0.38);
 
   /* Text */
   --text-primary: #d4d4d4;
@@ -76,6 +78,10 @@
   --font-glyph: "Maple Mono NF CN", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols2", serif;
 
   --transition: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Shared height for the three top bars so their bottom borders line up
+     across the sidebar / main / AI columns (overridden by ConfigApplier). */
+  --header-height: 56px;
 
   /* Token scale defaults (overridden by ConfigApplier at runtime) */
   --sp-0: 0px; --sp-half: 2px; --sp-px: 1px;

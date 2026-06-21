@@ -300,7 +300,25 @@ async function buildContextTools(aiService) {
     },
   });
 
-  return [getCurrentContext, getCurrentChart, getActiveProfile];
+  const getCurrentTime = new DynamicStructuredTool({
+    name: 'get_current_time',
+    description:
+      '获取当前真实的系统日期与时间（含星期、时区与 ISO 格式）。涉及“今天/现在/此刻/当前行运/最近天象/年龄”等与当前时间相关的问题时调用。无需输入参数。',
+    schema: z.object({}),
+    func: async () => {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const week = '日一二三四五六'[now.getDay()];
+      const offsetH = -now.getTimezoneOffset() / 60;
+      const tz = `UTC${offsetH >= 0 ? '+' : ''}${offsetH}`;
+      return [
+        `当前时间：${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} 星期${week}（${tz}）`,
+        `ISO：${now.toISOString()}`,
+      ].join('\n');
+    },
+  });
+
+  return [getCurrentContext, getCurrentChart, getActiveProfile, getCurrentTime];
 }
 
 /**
