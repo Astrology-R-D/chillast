@@ -22,6 +22,7 @@
       "src/**/*",
       "fonts/**/*",
       "locale/**/*",
+      "vendor/sxwnl/src/**/*.js",
       "config.json",
       "package.json"
     ],
