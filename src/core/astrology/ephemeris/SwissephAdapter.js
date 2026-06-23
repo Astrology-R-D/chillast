@@ -58,7 +58,8 @@ class SwissephAdapter extends EphemerisAdapter {
     const bodyKeys = Constants.DEFAULT_BODY_KEYS;
     const pointKeys = Constants.DEFAULT_POINT_KEYS;
     for (const key of bodyKeys) {
-      points.push(this._pointFromCalc(key, jdUt, latitude, longitude, hsysCode));
+      const p = this._pointFromCalc(key, jdUt, latitude, longitude, hsysCode);
+      if (p) points.push(p);
     }
     for (const key of pointKeys) {
       if (key === 'southnode') {
@@ -70,7 +71,8 @@ class SwissephAdapter extends EphemerisAdapter {
         }
         continue;
       }
-      points.push(this._pointFromCalc(key, jdUt, latitude, longitude, hsysCode));
+      const p = this._pointFromCalc(key, jdUt, latitude, longitude, hsysCode);
+      if (p) points.push(p);
     }
 
     return {
@@ -84,7 +86,15 @@ class SwissephAdapter extends EphemerisAdapter {
 
   _pointFromCalc(key, jdUt, latitude, longitude, hsysCode) {
     const Constants = require('../Constants');
-    const body = SwissEphCore.calcBody(jdUt, BODY_IDS[key]);
+    let body;
+    try {
+      body = SwissEphCore.calcBody(jdUt, BODY_IDS[key]);
+    } catch (e) {
+      // A single body outside its ephemeris range (e.g. Chiron is restricted to
+      // ~675–4650 AD) must NOT abort the whole chart — just omit that body.
+      console.warn(`[swisseph] 跳过天体 ${key}（${e.message}）`);
+      return null;
+    }
     const lon = AngleMath.normalize(body.longitude);
     const retrograde = body.longitudeSpeed < 0;
     const kind = Constants.DEFAULT_POINT_KEYS.includes(key) ? 'point' : 'body';
