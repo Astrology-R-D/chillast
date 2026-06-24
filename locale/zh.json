@@ -2,7 +2,7 @@
   "app": {
     "title": "CHILLAST",
     "brandSub": "PERSONAL ASTROLOGY ANALYSIS",
-    "version": "v0.0.2 · CHILLAST",
+    "version": "v0.0.3 · CHILLAST",
     "chipSigns": "{{count}} 星座",
     "chipCharts": "{{count}} 种星盘",
     "bootText": "正在校准星图…",

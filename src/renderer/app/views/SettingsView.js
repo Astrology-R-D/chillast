@@ -47,6 +47,14 @@ function toolZhName(tool) {
 export class SettingsView {
   constructor(context) {
     this.ctx = context;
+    // Refresh the tools / knowledge / status sections when the AI service finishes
+    // (re)configuring — e.g. after first-launch async init or saving a key — so they
+    // don't show stale "empty". Only redraw when this view is the one on screen.
+    if (window.mystApi && window.mystApi.ai && window.mystApi.ai.onStatusChanged) {
+      window.mystApi.ai.onStatusChanged(() => {
+        if (this.container && this.container.querySelector('.settings-container')) this._draw();
+      });
+    }
   }
 
   get title() {
