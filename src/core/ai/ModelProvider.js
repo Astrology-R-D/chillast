@@ -107,7 +107,15 @@ class ModelProvider {
       if (baseUrl) chatOpts.configuration = { baseURL: baseUrl };
     }
 
-    this._model = new ChatCls(chatOpts);
+    // Chat model construction can throw when no API key is set yet (e.g. first
+    // launch before the user configures one). That must NOT block embeddings /
+    // knowledge-base / tools — leave the chat model unset and carry on.
+    try {
+      this._model = new ChatCls(chatOpts);
+    } catch (e) {
+      this._model = null;
+      console.warn('[ModelProvider] chat model not ready (configure a key):', e.message);
+    }
 
     // Tear down a previous embeddings worker (if any) before building the new one.
     if (this._embeddings && typeof this._embeddings.close === 'function') {

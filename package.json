@@ -31,8 +31,13 @@
     ],
     "asarUnpack": [
       "src/core/ai/EmbeddingWorker.js",
+      "node_modules/@huggingface/**",
       "node_modules/onnxruntime-node/**",
-      "node_modules/@huggingface/transformers/**",
+      "node_modules/onnxruntime-common/**",
+      "node_modules/sharp/**",
+      "node_modules/@img/**",
+      "node_modules/detect-libc/**",
+      "node_modules/semver/**",
       "node_modules/hnswlib-node/**",
       "node_modules/swisseph-v2/**"
     ],

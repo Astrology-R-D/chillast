@@ -31,6 +31,7 @@ class AiService {
     this._initProgress = null;
     this._initProgressHandler = null;
     this._kbInitializing = false;
+    this._lastSettings = null;
   }
 
   /** Sink for knowledge-base init progress (model download + index build). */
@@ -42,7 +43,20 @@ class AiService {
   }
 
   async configure(settings) {
-    await this._mp.configure(settings);
+    // Re-configures from the settings UI only carry chat fields (provider/model/
+    // key/…). Merge over the first (startup) settings so server-owned fields —
+    // knowledge paths, embeddings, search — are never lost, else the KB silently
+    // stops loading after the user saves a key.
+    const merged = { ...(this._lastSettings || {}), ...settings };
+    this._lastSettings = merged;
+    settings = merged;
+
+    // A failed chat-model build (e.g. no key yet) must NOT abort KB/tool init.
+    try {
+      await this._mp.configure(settings);
+    } catch (e) {
+      console.error('[AiService] model provider configure failed (continuing):', e.message);
+    }
 
     // Surface local embedding-model download progress in the startup overlay —
     // but ONLY while the KB index is initializing. A model load triggered later
