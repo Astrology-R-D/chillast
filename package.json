@@ -10,11 +10,19 @@
     "start": "electron .",
     "test": "node tests/RunAll.js",
     "smoke": "node tests/SmokeRenderer.js",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "dev:react": "concurrently -k \"npm:dev:renderer\" \"wait-on tcp:5173 && cross-env CHILLAST_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
+    "build:renderer": "vite build",
+    "start:react": "npm run build:renderer && cross-env CHILLAST_RENDERER=react electron .",
+    "test:renderer": "vitest run",
+    "test:renderer:watch": "vitest",
+    "test:loader": "node --test tests/RendererLoader.test.js",
+    "smoke:react": "npm run build:renderer && electron tests/SmokeReactRenderer.js",
     "rebuild": "electron-rebuild -f --only swisseph-v2",
     "rebuild:node": "npm rebuild swisseph-v2",
     "build:index": "node tools/build-index.mjs",
     "stage:index": "node tools/stage-index.mjs",
-    "predist": "electron-rebuild -f --only swisseph-v2",
+    "predist": "npm run build:renderer && electron-rebuild -f --only swisseph-v2",
     "dist": "electron-builder"
   },
   "build": {
@@ -23,6 +31,7 @@
     "npmRebuild": false,
     "files": [
       "src/**/*",
+      "dist/renderer-react/**/*",
       "fonts/**/*",
       "locale/**/*",
       "vendor/sxwnl/src/**/*.js",
@@ -68,18 +77,37 @@
     "@langchain/mcp-adapters": "^0.6.0",
     "@langchain/openai": "^0.3.0",
     "@modelcontextprotocol/sdk": "^1.12.3",
+    "@tanstack/react-query": "^5.101.4",
     "circular-natal-horoscope-js": "^1.1.0",
     "hnswlib-node": "^3.0.0",
     "langchain": "^0.3.0",
+    "lucide-react": "^1.28.0",
     "luxon": "^3.7.2",
     "pdf-parse": "^1.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-resizable-panels": "^2.1.9",
     "swisseph-v2": "^1.0.0",
     "tz-lookup": "^6.1.24",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.0",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "concurrently": "^10.0.4",
+    "cross-env": "^10.1.0",
     "electron": "^42.4.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10",
+    "wait-on": "^9.1.0"
   }
 }
