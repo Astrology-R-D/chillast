@@ -44,13 +44,13 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
 ::selection {
-  color: var(--selection-text);
-  background: var(--selection-bg);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--focus) 24%, transparent);
 }
 
 * {

@@ -5,6 +5,50 @@ import { expect, test } from 'vitest';
 
 const stylesDirectory = resolve(process.cwd(), 'src/renderer-react/styles');
 
+const approvedThemes = {
+  light: {
+    'surface-base': '#f4f4f6',
+    'surface-panel': 'rgba(250, 250, 251, .88)',
+    'surface-work': '#fff',
+    'surface-raised': '#fff',
+    'surface-hover': '#ededf0',
+    'surface-selected': '#e5e5e9',
+    'text-primary': '#18181b',
+    'text-secondary': '#5b5b63',
+    'text-muted': '#8a8a93',
+    'border-subtle': 'rgba(24, 24, 27, .10)',
+    'border-strong': 'rgba(24, 24, 27, .20)',
+    focus: '#2563eb',
+    danger: '#c93434',
+    success: '#167a50',
+    'shadow-float': '0 12px 32px rgba(24, 24, 27, .14)',
+  },
+  dark: {
+    'surface-base': '#171719',
+    'surface-panel': 'rgba(30, 30, 33, .88)',
+    'surface-work': '#1c1c1f',
+    'surface-raised': '#26262a',
+    'surface-hover': '#2b2b2f',
+    'surface-selected': '#333338',
+    'text-primary': '#f0f0f2',
+    'text-secondary': '#aaaab2',
+    'text-muted': '#74747d',
+    'border-subtle': 'rgba(255, 255, 255, .09)',
+    'border-strong': 'rgba(255, 255, 255, .17)',
+    focus: '#6ea8fe',
+    danger: '#ff6b6b',
+    success: '#50c99a',
+    'shadow-float': '0 16px 40px rgba(0, 0, 0, .36)',
+  },
+} as const;
+
+function getThemeBlock(css: string, theme: keyof typeof approvedThemes): string {
+  const selector = theme === 'light' ? ":root\\[data-theme='light'\\]" : ":root\\[data-theme='dark'\\]";
+  const block = css.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1];
+  if (!block) throw new Error(`Missing ${theme} theme block`);
+  return block;
+}
+
 test('defines all Maple Mono faces with resolvable repository assets', () => {
   const fontsPath = resolve(stylesDirectory, 'fonts.css');
   const css = readFileSync(fontsPath, 'utf8');
@@ -34,14 +78,18 @@ test('defines theme, density, token, and global foundations', () => {
   expect(tokens).toContain('--motion-fast: 120ms');
   expect(tokens).toContain('--motion-normal: 170ms');
   expect(tokens).toContain('letter-spacing: 0');
-  expect(themes).toContain('--surface-base: #f4f4f6');
-  expect(themes).toContain('--surface-work: #ffffff');
-  expect(themes).toContain('--surface-base: #171719');
-  expect(themes).toContain('--surface-work: #1c1c1f');
+  for (const [theme, expectedTokens] of Object.entries(approvedThemes)) {
+    const block = getThemeBlock(themes, theme as keyof typeof approvedThemes);
+    for (const [token, value] of Object.entries(expectedTokens)) {
+      expect(block, `${theme} --${token}`).toContain(`--${token}: ${value};`);
+    }
+  }
   expect(density).toMatch(/data-density='compact'[\s\S]*--control-height: 32px/);
   expect(density).toMatch(/data-density='comfortable'[\s\S]*--control-height: 36px/);
   expect(global).toContain('overflow: hidden');
   expect(global).toContain(':focus-visible');
+  expect(global).toContain('var(--focus)');
+  expect(global).not.toContain('var(--focus-ring)');
   expect(global).toContain('prefers-reduced-motion: reduce');
 });
 
