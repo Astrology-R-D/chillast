@@ -59,6 +59,31 @@ describe('createPreferencesStore', () => {
     expect(storage.getItem('chillast.theme')).toBe('dark');
     expect(storage.getItem('chillast.density')).toBe('comfortable');
   });
+
+  test('uses defaults when persisted values cannot be read', () => {
+    const storage = createStorage();
+    storage.getItem = () => {
+      throw new DOMException('Access denied', 'SecurityError');
+    };
+
+    expect(() => createPreferencesStore(storage)).not.toThrow();
+    expect(createPreferencesStore(storage).getState()).toMatchObject({
+      theme: 'system',
+      density: 'compact',
+    });
+  });
+
+  test('updates state when persisted values cannot be written', () => {
+    const storage = createStorage();
+    storage.setItem = () => {
+      throw new DOMException('Quota denied', 'QuotaExceededError');
+    };
+    const store = createPreferencesStore(storage);
+
+    expect(() => store.getState().setTheme('dark')).not.toThrow();
+    expect(() => store.getState().setDensity('comfortable')).not.toThrow();
+    expect(store.getState()).toMatchObject({ theme: 'dark', density: 'comfortable' });
+  });
 });
 
 describe('document preference sync', () => {

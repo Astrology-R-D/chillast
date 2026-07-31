@@ -1,5 +1,5 @@
 :root {
-  --font-family: 'Maple Mono NF CN', 'Microsoft YaHei UI', monospace;
+  --font-family: 'Maple Mono NF CN', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', sans-serif;
   --font-size-xs: 11px;
   --font-size-sm: 12px;
   --font-size-base: 13px;

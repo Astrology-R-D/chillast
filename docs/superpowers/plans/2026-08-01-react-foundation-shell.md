@@ -839,7 +839,7 @@ Create `src/renderer-react/styles/themes.css`:
   --surface-base: #f4f4f6; --surface-panel: rgba(250, 250, 251, .88);
   --surface-work: #ffffff; --surface-raised: #ffffff; --surface-hover: #ededf0;
   --surface-selected: #e5e5e9; --text-primary: #18181b; --text-secondary: #5b5b63;
-  --text-muted: #8a8a93; --border-subtle: rgba(24, 24, 27, .10);
+  --text-muted: #6f6f77; --border-subtle: rgba(24, 24, 27, .10);
   --border-strong: rgba(24, 24, 27, .20); --focus: #2563eb; --danger: #c93434;
   --success: #167a50; --shadow-float: 0 12px 32px rgba(24, 24, 27, .14);
 }
@@ -848,11 +848,13 @@ Create `src/renderer-react/styles/themes.css`:
   --surface-base: #171719; --surface-panel: rgba(30, 30, 33, .88);
   --surface-work: #1c1c1f; --surface-raised: #26262a; --surface-hover: #2b2b2f;
   --surface-selected: #333338; --text-primary: #f0f0f2; --text-secondary: #aaaab2;
-  --text-muted: #74747d; --border-subtle: rgba(255, 255, 255, .09);
+  --text-muted: #8e8e96; --border-subtle: rgba(255, 255, 255, .09);
   --border-strong: rgba(255, 255, 255, .17); --focus: #6ea8fe; --danger: #ff6b6b;
   --success: #50c99a; --shadow-float: 0 16px 40px rgba(0, 0, 0, .36);
 }
 ```
+
+Theme tests must parse the rendered token values and compute WCAG relative luminance. `--text-muted` must maintain at least 4.5:1 contrast against both `--surface-base` and `--surface-work` in each theme, while `--text-secondary` retains higher contrast for visual hierarchy.
 
 Create `src/renderer-react/styles/density.css`:
 

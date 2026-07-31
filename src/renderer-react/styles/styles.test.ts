@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { build } from 'vite';
 import { expect, test } from 'vitest';
@@ -15,7 +15,7 @@ const approvedThemes = {
     'surface-selected': '#e5e5e9',
     'text-primary': '#18181b',
     'text-secondary': '#5b5b63',
-    'text-muted': '#8a8a93',
+    'text-muted': '#6f6f77',
     'border-subtle': 'rgba(24, 24, 27, .10)',
     'border-strong': 'rgba(24, 24, 27, .20)',
     focus: '#2563eb',
@@ -32,7 +32,7 @@ const approvedThemes = {
     'surface-selected': '#333338',
     'text-primary': '#f0f0f2',
     'text-secondary': '#aaaab2',
-    'text-muted': '#74747d',
+    'text-muted': '#8e8e96',
     'border-subtle': 'rgba(255, 255, 255, .09)',
     'border-strong': 'rgba(255, 255, 255, .17)',
     focus: '#6ea8fe',
@@ -49,7 +49,32 @@ function getThemeBlock(css: string, theme: keyof typeof approvedThemes): string 
   return block;
 }
 
-test('defines all Maple Mono faces with resolvable repository assets', () => {
+function getToken(block: string, token: string): string {
+  const value = block.match(new RegExp(`--${token}:\\s*([^;]+);`))?.[1];
+  if (!value) throw new Error(`Missing --${token}`);
+  return value.trim();
+}
+
+function relativeLuminance(hex: string): number {
+  const value = hex.slice(1);
+  const channels = (value.length === 3 ? [...value].map((character) => character.repeat(2)) : value.match(/../g))!;
+  const [red, green, blue] = channels.map((channel) => {
+    const component = Number.parseInt(channel, 16) / 255;
+    return component <= 0.04045 ? component / 12.92 : ((component + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
+
+test('defines four compact Maple Mono WOFF2 faces', () => {
   const fontsPath = resolve(stylesDirectory, 'fonts.css');
   const css = readFileSync(fontsPath, 'utf8');
   const urls = [...css.matchAll(/url\(['"]?([^'")]+)['"]?\)/g)].map((match) => match[1]);
@@ -62,7 +87,15 @@ test('defines all Maple Mono faces with resolvable repository assets', () => {
   expect(css).toMatch(/font-weight: 500/);
   expect(css).toMatch(/font-weight: 600/);
   expect(css).toMatch(/font-weight: 700/);
-  expect(urls.every((url) => existsSync(resolve(dirname(fontsPath), url)))).toBe(true);
+  expect(urls.every((url) => url.endsWith('.woff2'))).toBe(true);
+
+  for (const url of urls) {
+    const assetPath = resolve(dirname(fontsPath), url);
+    expect(existsSync(assetPath), url).toBe(true);
+    const size = statSync(assetPath).size;
+    expect(size, `${url} should be nontrivial`).toBeGreaterThan(1_000);
+    expect(size, `${url} should remain below 5 MB`).toBeLessThan(5_000_000);
+  }
 });
 
 test('defines theme, density, token, and global foundations', () => {
@@ -72,6 +105,7 @@ test('defines theme, density, token, and global foundations', () => {
   const global = readFileSync(resolve(stylesDirectory, 'global.css'), 'utf8');
 
   expect(tokens).toContain("--font-family: 'Maple Mono NF CN'");
+  expect(tokens).toContain("'Microsoft YaHei', 'Segoe UI', sans-serif");
   expect(tokens).toContain('--radius-sm: 4px');
   expect(tokens).toContain('--radius-md: 6px');
   expect(tokens).toContain('--radius-lg: 8px');
@@ -93,7 +127,25 @@ test('defines theme, density, token, and global foundations', () => {
   expect(global).toContain('prefers-reduced-motion: reduce');
 });
 
-test('Vite emits all four fonts and rewrites production CSS asset paths', async () => {
+test.each(['light', 'dark'] as const)(
+  '%s muted text meets WCAG AA on base and work surfaces while remaining subordinate',
+  (theme) => {
+    const themes = readFileSync(resolve(stylesDirectory, 'themes.css'), 'utf8');
+    const block = getThemeBlock(themes, theme);
+    const muted = getToken(block, 'text-muted');
+    const secondary = getToken(block, 'text-secondary');
+
+    for (const surface of ['surface-base', 'surface-work']) {
+      const background = getToken(block, surface);
+      expect(contrastRatio(muted, background), `${theme} muted on ${surface}`).toBeGreaterThanOrEqual(
+        4.5,
+      );
+      expect(contrastRatio(secondary, background)).toBeGreaterThan(contrastRatio(muted, background));
+    }
+  },
+);
+
+test('Vite emits four WOFF2 subsets under 10 MB total with rewritten CSS paths', async () => {
   const result = await build({
     configFile: resolve(process.cwd(), 'vite.config.mts'),
     logLevel: 'silent',
@@ -105,13 +157,20 @@ test('Vite emits all four fonts and rewrites production CSS asset paths', async 
   }
 
   const assets = result.output.filter((output) => output.type === 'asset');
-  const fontAssets = assets.filter((asset) => asset.fileName.endsWith('.ttf'));
+  const fontAssets = assets.filter((asset) => asset.fileName.endsWith('.woff2'));
   const productionCss = assets
     .filter((asset) => asset.fileName.endsWith('.css'))
     .map((asset) => asset.source.toString())
     .join('\n');
 
   expect(fontAssets).toHaveLength(4);
-  expect(productionCss).not.toContain('../../../fonts/');
-  expect(productionCss.match(/url\([^)]*\.ttf\)/g)).toHaveLength(4);
+  expect(
+    fontAssets.reduce(
+      (total, asset) =>
+        total + (typeof asset.source === 'string' ? Buffer.byteLength(asset.source) : asset.source.length),
+      0,
+    ),
+  ).toBeLessThan(10_000_000);
+  expect(productionCss).not.toContain('.ttf');
+  expect(productionCss.match(/url\([^)]*\.woff2\)/g)).toHaveLength(4);
 });

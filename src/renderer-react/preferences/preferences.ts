@@ -17,13 +17,29 @@ export interface PreferencesState extends PreferenceValues {
 const THEME_KEY = 'chillast.theme';
 const DENSITY_KEY = 'chillast.density';
 
+function safeGetItem(storage: Storage, key: string): string | null {
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(storage: Storage, key: string, value: string): void {
+  try {
+    storage.setItem(key, value);
+  } catch {
+    // Preferences remain usable when persistence is unavailable.
+  }
+}
+
 function readTheme(storage: Storage): ThemePreference {
-  const value = storage.getItem(THEME_KEY);
+  const value = safeGetItem(storage, THEME_KEY);
   return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
 }
 
 function readDensity(storage: Storage): Density {
-  const value = storage.getItem(DENSITY_KEY);
+  const value = safeGetItem(storage, DENSITY_KEY);
   return value === 'compact' || value === 'comfortable' ? value : 'compact';
 }
 
@@ -31,19 +47,19 @@ export function createPreferencesStore(storage: Storage): StoreApi<PreferencesSt
   const theme = readTheme(storage);
   const density = readDensity(storage);
 
-  storage.setItem(THEME_KEY, theme);
-  storage.setItem(DENSITY_KEY, density);
+  safeSetItem(storage, THEME_KEY, theme);
+  safeSetItem(storage, DENSITY_KEY, density);
 
   return createStore<PreferencesState>((set) => ({
     theme,
     density,
     setTheme(nextTheme) {
-      storage.setItem(THEME_KEY, nextTheme);
       set({ theme: nextTheme });
+      safeSetItem(storage, THEME_KEY, nextTheme);
     },
     setDensity(nextDensity) {
-      storage.setItem(DENSITY_KEY, nextDensity);
       set({ density: nextDensity });
+      safeSetItem(storage, DENSITY_KEY, nextDensity);
     },
   }));
 }

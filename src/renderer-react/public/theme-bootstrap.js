@@ -1,6 +1,32 @@
 (function bootstrapTheme() {
-  var storedPreference = localStorage.getItem('chillast.theme');
-  var storedDensity = localStorage.getItem('chillast.density');
+  var memory = {};
+  var storage;
+
+  try {
+    storage = window.localStorage;
+  } catch (_error) {
+    storage = null;
+  }
+
+  function read(key) {
+    try {
+      return storage ? storage.getItem(key) : memory[key] || null;
+    } catch (_error) {
+      return memory[key] || null;
+    }
+  }
+
+  function write(key, value) {
+    memory[key] = value;
+    try {
+      if (storage) storage.setItem(key, value);
+    } catch (_error) {
+      // The in-memory value remains available for this bootstrap run.
+    }
+  }
+
+  var storedPreference = read('chillast.theme');
+  var storedDensity = read('chillast.density');
   var preference = ['system', 'light', 'dark'].includes(storedPreference)
     ? storedPreference
     : 'system';
@@ -13,8 +39,8 @@
     theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
 
-  localStorage.setItem('chillast.theme', preference);
-  localStorage.setItem('chillast.density', density);
+  write('chillast.theme', preference);
+  write('chillast.density', density);
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.themePreference = preference;
   document.documentElement.dataset.density = density;

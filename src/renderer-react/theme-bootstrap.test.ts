@@ -36,3 +36,49 @@ test('persists defaults when theme preferences are missing', () => {
   expect(localStorage.getItem('chillast.theme')).toBe('system');
   expect(localStorage.getItem('chillast.density')).toBe('compact');
 });
+
+test('applies defaults when localStorage access is denied', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new DOMException('Access denied', 'SecurityError');
+    },
+  });
+
+  try {
+    expect(() => window.eval(bootstrapScript)).not.toThrow();
+  } finally {
+    if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+  }
+
+  expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+  expect(document.documentElement).toHaveAttribute('data-theme-preference', 'system');
+  expect(document.documentElement).toHaveAttribute('data-density', 'compact');
+});
+
+test('applies defaults when localStorage methods throw', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  const throwingStorage = {
+    getItem() {
+      throw new DOMException('Access denied', 'SecurityError');
+    },
+    setItem() {
+      throw new DOMException('Quota denied', 'QuotaExceededError');
+    },
+  };
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: throwingStorage,
+  });
+
+  try {
+    expect(() => window.eval(bootstrapScript)).not.toThrow();
+  } finally {
+    if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+  }
+
+  expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+  expect(document.documentElement).toHaveAttribute('data-theme-preference', 'system');
+  expect(document.documentElement).toHaveAttribute('data-density', 'compact');
+});
