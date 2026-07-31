@@ -1,0 +1,16 @@
+:root,
+:root[data-density='compact'] {
+  --control-height: 32px;
+  --row-height: 32px;
+  --panel-padding: 12px;
+  --panel-gap: 8px;
+  --control-padding-inline: 10px;
+}
+
+:root[data-density='comfortable'] {
+  --control-height: 36px;
+  --row-height: 36px;
+  --panel-padding: 16px;
+  --panel-gap: 12px;
+  --control-padding-inline: 12px;
+}

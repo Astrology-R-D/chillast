@@ -18,4 +18,5 @@
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.themePreference = preference;
   document.documentElement.dataset.density = density;
+  document.documentElement.style.colorScheme = theme;
 })();
