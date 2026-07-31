@@ -32,7 +32,7 @@ React smoke test.
 
 - Modify `package.json`: add React tooling scripts, dependencies, and packaged renderer files.
 - Modify `package-lock.json`: generated dependency lock changes.
-- Create `vite.config.ts`: Vite root, relative asset base, output, and Vitest settings.
+- Create `vite.config.mts`: Vite root, relative asset base, output, and Vitest settings.
 - Create `tsconfig.json`: project references for the renderer.
 - Create `tsconfig.renderer.json`: strict browser/React compiler settings.
 - Create `src/main/RendererLoader.js`: pure renderer target selection and loading.
@@ -42,6 +42,7 @@ React smoke test.
 ### Renderer platform
 
 - Create `src/renderer-react/index.html`: CSP, pre-paint theme script, and React mount point.
+- Create `src/renderer-react/build-configuration.test.ts`: CSP and generated build-artifact regression checks.
 - Create `src/renderer-react/public/theme-bootstrap.js`: synchronous pre-paint theme and density attributes.
 - Create `src/renderer-react/main.tsx`: renderer entry.
 - Create `src/renderer-react/api/contracts.ts`: config, locale, AI status, and IPC envelope types.
@@ -88,10 +89,11 @@ React smoke test.
 **Files:**
 - Modify: `package.json`
 - Modify: `package-lock.json`
-- Create: `vite.config.ts`
+- Create: `vite.config.mts`
 - Create: `tsconfig.json`
 - Create: `tsconfig.renderer.json`
 - Create: `src/renderer-react/index.html`
+- Create: `src/renderer-react/build-configuration.test.ts`
 - Create: `src/renderer-react/public/theme-bootstrap.js`
 - Create: `src/renderer-react/main.tsx`
 - Create: `src/renderer-react/test/setup.ts`
@@ -169,32 +171,33 @@ Create `tsconfig.renderer.json`:
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "tsBuildInfoFile": "./dist/.cache/tsconfig.renderer.tsbuildinfo",
     "jsx": "react-jsx",
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src/renderer-react", "vite.config.ts"]
+  "include": ["src/renderer-react", "vite.config.mts"]
 }
 ```
 
-Create `vite.config.ts`:
+Create `vite.config.mts`:
 
 ```ts
-import path from 'node:path';
-import { defineConfig } from 'vitest/config';
+import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  root: path.resolve(__dirname, 'src/renderer-react'),
+  root: fileURLToPath(new URL('./src/renderer-react', import.meta.url)),
   base: './',
   plugins: [react()],
   build: {
-    outDir: path.resolve(__dirname, 'dist/renderer-react'),
+    outDir: fileURLToPath(new URL('./dist/renderer-react', import.meta.url)),
     emptyOutDir: true,
   },
   test: {
     environment: 'jsdom',
-    setupFiles: ['./src/renderer-react/test/setup.ts'],
-    include: ['src/renderer-react/**/*.test.{ts,tsx}'],
+    setupFiles: [fileURLToPath(new URL('./src/renderer-react/test/setup.ts', import.meta.url))],
+    include: ['**/*.test.{ts,tsx}'],
     css: true,
   },
 });
@@ -210,9 +213,9 @@ Create `src/renderer-react/index.html`:
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; font-src 'self'; connect-src 'self' https: http: ws://127.0.0.1:*;" />
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; font-src 'self'; connect-src 'self' ws://127.0.0.1:*;" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="./theme-bootstrap.js"></script>
+    <script vite-ignore src="./theme-bootstrap.js"></script>
     <title>CHILLAST</title>
   </head>
   <body>
@@ -278,7 +281,7 @@ Expected: both commands exit 0 and `dist/renderer-react/index.html` exists.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add package.json package-lock.json vite.config.ts tsconfig.json tsconfig.renderer.json src/renderer-react
+git add package.json package-lock.json vite.config.mts tsconfig.json tsconfig.renderer.json src/renderer-react
 git commit -m "build(ui): add React renderer toolchain"
 ```
 

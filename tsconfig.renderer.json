@@ -14,8 +14,9 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "tsBuildInfoFile": "./dist/.cache/tsconfig.renderer.tsbuildinfo",
     "jsx": "react-jsx",
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src/renderer-react", "vite.config.ts"]
+  "include": ["src/renderer-react", "vite.config.mts"]
 }
