@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
+import type { LocaleDictionary } from '../api/contracts';
 import { I18nProvider, useI18n } from './I18nProvider';
 
 function Translation({ id, variables }: { id: string; variables?: Record<string, string | number> }) {
@@ -36,6 +37,28 @@ describe('I18nProvider', () => {
     );
 
     expect(screen.getByText('missing.key')).toBeInTheDocument();
+  });
+
+  test('returns the key when a nested dictionary value is null', () => {
+    const dictionary = { malformed: null } as unknown as LocaleDictionary;
+    render(
+      <I18nProvider dictionary={dictionary}>
+        <Translation id="malformed.key" />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText('malformed.key')).toBeInTheDocument();
+  });
+
+  test('does not traverse arrays as locale dictionaries', () => {
+    const dictionary = { malformed: ['unexpected translation'] } as unknown as LocaleDictionary;
+    render(
+      <I18nProvider dictionary={dictionary}>
+        <Translation id="malformed.0" />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText('malformed.0')).toBeInTheDocument();
   });
 
   test('throws when the hook is used outside the provider', () => {

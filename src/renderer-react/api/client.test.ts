@@ -38,8 +38,8 @@ test('accesses mystApi when a request is made rather than at module load', async
         },
       }),
       initStatus: async () => ({ ok: true, data: null }),
-      onStatusChanged: () => ({}),
-      onInitProgress: () => ({}),
+      onStatusChanged: () => () => {},
+      onInitProgress: () => () => {},
     },
   };
 

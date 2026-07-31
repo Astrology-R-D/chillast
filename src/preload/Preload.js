@@ -11,6 +11,13 @@ const { contextBridge, ipcRenderer } = require('electron');
  * Every call returns the IpcRouter envelope `{ ok, data | error }`.
  */
 const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
+const subscribe = (channel, callback) => {
+  const listener = (_event, data) => callback(data);
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.removeListener(channel, listener);
+  };
+};
 
 contextBridge.exposeInMainWorld('mystApi', {
   /** Static reference data (signs, aspects, chart types, …). */
@@ -55,8 +62,8 @@ contextBridge.exposeInMainWorld('mystApi', {
     onToken: (callback) => ipcRenderer.on('ai:token', (_e, data) => callback(data)),
     onDone: (callback) => ipcRenderer.on('ai:done', (_e, data) => callback(data)),
     onError: (callback) => ipcRenderer.on('ai:error', (_e, data) => callback(data)),
-    onStatusChanged: (callback) => ipcRenderer.on('ai:statusChanged', (_e, data) => callback(data)),
-    onInitProgress: (callback) => ipcRenderer.on('ai:initProgress', (_e, data) => callback(data)),
+    onStatusChanged: (callback) => subscribe('ai:statusChanged', callback),
+    onInitProgress: (callback) => subscribe('ai:initProgress', callback),
     initStatus: () => invoke('ai:initStatus'),
     onSessionsChanged: (callback) => ipcRenderer.on('ai:sessionsChanged', () => callback()),
     removeAllListeners: () => {

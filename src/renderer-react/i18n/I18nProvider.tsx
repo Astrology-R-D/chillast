@@ -10,12 +10,17 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 function findTranslation(dictionary: LocaleDictionary, key: string): string | undefined {
-  let current: string | LocaleDictionary = dictionary;
+  let current: unknown = dictionary;
   for (const segment of key.split('.')) {
-    if (typeof current === 'string' || !Object.prototype.hasOwnProperty.call(current, segment)) {
+    if (
+      typeof current !== 'object'
+      || current === null
+      || Array.isArray(current)
+      || !Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
       return undefined;
     }
-    current = current[segment];
+    current = (current as Record<string, unknown>)[segment];
   }
   return typeof current === 'string' ? current : undefined;
 }

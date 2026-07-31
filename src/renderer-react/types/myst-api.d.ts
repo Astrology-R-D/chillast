@@ -7,13 +7,11 @@ import type {
 } from '../api/contracts';
 
 declare global {
-  type MystApiListenerRegistration = object;
-
   interface MystAiApi {
     status(): Promise<IpcResult<AiStatus>>;
     initStatus(): Promise<IpcResult<AiInitProgress | null>>;
-    onStatusChanged(callback: (status: AiStatus) => void): MystApiListenerRegistration;
-    onInitProgress(callback: (progress: AiInitProgress) => void): MystApiListenerRegistration;
+    onStatusChanged(callback: (status: AiStatus) => void): () => void;
+    onInitProgress(callback: (progress: AiInitProgress) => void): () => void;
   }
 
   interface MystApi {
