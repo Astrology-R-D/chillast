@@ -151,9 +151,10 @@ The default desktop layout contains three simultaneously visible columns:
 
 All dividers are keyboard accessible and draggable. Panel widths persist. The
 shell enforces minimum usable widths so the chart and AI input cannot collapse
-into unusable states. At narrow widths, the navigation collapses first; the AI
-sidebar remains available as a controlled overlay only when three usable
-columns cannot fit.
+into unusable states. The default `1440x920` window keeps all three columns
+visible. As the window approaches the existing `1100x720` minimum, navigation
+collapses first; the AI sidebar remains available as a controlled overlay only
+when three usable columns cannot fit.
 
 Navigation retains the existing brand, feature groups, and routes. It adds
 stable locations for the active profile, background computation status, and AI
@@ -337,7 +338,7 @@ new renderer passes parity verification.
 - Electron smoke tests verify preload/IPC integration, profile persistence,
   chart generation, valid SVG output, and AI streaming.
 - Playwright visual tests cover light/dark themes, both density modes, and
-  representative desktop widths.
+  `1440x920`, `1280x800`, and the `1100x720` minimum window.
 - Focused interaction tests cover chart/table linkage, comparison modes, split
   panel resizing, system-theme changes, dirty profile navigation, AI stop/retry,
   and report section locking.
@@ -347,8 +348,9 @@ new renderer passes parity verification.
 - All existing user-facing features are available through the React renderer.
 - Theme defaults to system and manual light/dark overrides persist.
 - Compact and comfortable density settings consistently affect shared UI.
-- Navigation, chart/data workspace, and AI are simultaneously usable at the
-  supported default desktop window size.
+- Navigation, chart/data workspace, and AI are simultaneously usable at
+  `1440x920`; the documented collapsed/overlay behavior is usable at
+  `1100x720`.
 - Chart and table selections synchronize in both directions.
 - Data tables provide sorting, filtering, pinned columns, comparison, copy, and
   CSV export.
