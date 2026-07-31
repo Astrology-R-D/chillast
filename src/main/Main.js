@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme, shell } = require('electron');
 
 const ProfileRepository = require('./ProfileRepository');
 const IpcRouter = require('./IpcRouter');
@@ -15,6 +15,7 @@ try {
 const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
 const AiSessionStore = require('./AiSessionStore');
+const { loadRenderer, selectRendererTarget } = require('./RendererLoader');
 
 const fs = require('fs');
 
@@ -151,12 +152,16 @@ class Main {
 
   createWindow() {
     const win = this.config.window || {};
+    const rendererTarget = selectRendererTarget();
+    const backgroundColor = rendererTarget.kind === 'legacy'
+      ? win.backgroundColor || '#1e1e1e'
+      : nativeTheme.shouldUseDarkColors ? '#171719' : '#f6f6f8';
     this.mainWindow = new BrowserWindow({
       width: win.width || 1440,
       height: win.height || 920,
       minWidth: win.minWidth || 1100,
       minHeight: win.minHeight || 720,
-      backgroundColor: win.backgroundColor || '#1e1e1e',
+      backgroundColor,
       title: 'CHILLAST',
       show: false,
       webPreferences: {
@@ -170,7 +175,9 @@ class Main {
 
     this.router.setWebContents(this.mainWindow.webContents);
 
-    this.mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'Index.html'));
+    loadRenderer(this.mainWindow, rendererTarget).catch((error) => {
+      console.error('[Main] Renderer load failed:', error);
+    });
     this.mainWindow.once('ready-to-show', () => this.mainWindow.show());
 
     // Open external links in the OS browser, never inside the app shell.
