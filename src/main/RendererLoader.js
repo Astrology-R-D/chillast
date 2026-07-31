@@ -20,7 +20,10 @@ function selectRendererTarget({ env = process.env, appRoot = DEFAULT_APP_ROOT } 
 
     return {
       kind: 'react-url',
-      value: rendererUrl.href.replace(/\/$/, ''),
+      value: rendererUrl.origin
+        + rendererUrl.pathname.replace(/\/$/, '')
+        + rendererUrl.search
+        + rendererUrl.hash,
     };
   }
 
@@ -42,4 +45,20 @@ function loadRenderer(win, target) {
   return win.loadFile(target.value);
 }
 
-module.exports = { loadRenderer, selectRendererTarget };
+function reportRendererFailure({ app, dialog, error, win }) {
+  const message = error instanceof Error ? error.message : String(error);
+  try {
+    dialog.showErrorBox('CHILLAST 启动失败', message);
+  } finally {
+    try {
+      if (win && !win.isDestroyed()) {
+        win.removeAllListeners('ready-to-show');
+        win.destroy();
+      }
+    } finally {
+      app.quit();
+    }
+  }
+}
+
+module.exports = { loadRenderer, reportRendererFailure, selectRendererTarget };

@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, ipcMain, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } = require('electron');
 
 const ProfileRepository = require('./ProfileRepository');
 const IpcRouter = require('./IpcRouter');
@@ -15,7 +15,11 @@ try {
 const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
 const AiSessionStore = require('./AiSessionStore');
-const { loadRenderer, selectRendererTarget } = require('./RendererLoader');
+const {
+  loadRenderer,
+  reportRendererFailure,
+  selectRendererTarget,
+} = require('./RendererLoader');
 
 const fs = require('fs');
 
@@ -152,7 +156,14 @@ class Main {
 
   createWindow() {
     const win = this.config.window || {};
-    const rendererTarget = selectRendererTarget();
+    let rendererTarget;
+    try {
+      rendererTarget = selectRendererTarget();
+    } catch (error) {
+      console.error('[Main] Renderer load failed:', error);
+      reportRendererFailure({ app, dialog, error, win: null });
+      return;
+    }
     const backgroundColor = rendererTarget.kind === 'legacy'
       ? win.backgroundColor || '#1e1e1e'
       : nativeTheme.shouldUseDarkColors ? '#171719' : '#f6f6f8';
@@ -175,8 +186,10 @@ class Main {
 
     this.router.setWebContents(this.mainWindow.webContents);
 
-    loadRenderer(this.mainWindow, rendererTarget).catch((error) => {
+    const rendererWindow = this.mainWindow;
+    loadRenderer(rendererWindow, rendererTarget).catch((error) => {
       console.error('[Main] Renderer load failed:', error);
+      reportRendererFailure({ app, dialog, error, win: rendererWindow });
     });
     this.mainWindow.once('ready-to-show', () => this.mainWindow.show());
 
