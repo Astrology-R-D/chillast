@@ -96,12 +96,26 @@ test('profile tags are trimmed and deduplicated case-insensitively', () => {
   const profile = Profile.fromJSON({ ...subjectA, tags: [' Friend ', 'WORK', 'friend', 'Work', ' family '] });
   assert.deepStrictEqual(profile.tags, ['Friend', 'WORK', 'family']);
 });
+test('profile tags normalize Unicode to NFC before deduplication', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: [' e\u0301 ', 'é'] });
+  assert.deepStrictEqual(profile.tags, ['é']);
+});
+test('profile tag case deduplication uses deterministic I/i folding', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['I', 'i'] });
+  assert.deepStrictEqual(profile.tags, ['I']);
+});
 test('profile tags ignore empty, non-string, and overlong entries', () => {
   const profile = Profile.fromJSON({
     ...subjectA,
-    tags: ['', '   ', null, 42, {}, 'x'.repeat(33), 'valid', '😀'.repeat(17)],
+    tags: ['', '   ', null, 42, {}, 'x'.repeat(33), 'valid'],
   });
   assert.deepStrictEqual(profile.tags, ['valid']);
+});
+test('profile tag length is limited by Unicode code points', () => {
+  const accepted = '😀'.repeat(32);
+  const rejected = '😀'.repeat(33);
+  const profile = Profile.fromJSON({ ...subjectA, tags: [accepted, rejected] });
+  assert.deepStrictEqual(profile.tags, [accepted]);
 });
 test('profile tags retain at most the first 20 normalized entries', () => {
   const profile = Profile.fromJSON({ ...subjectA, tags: Array.from({ length: 25 }, (_, i) => `tag-${i}`) });
@@ -113,6 +127,18 @@ test('profile tags cannot be mutated through input or aggregate references', () 
   input.push('two');
   assert.deepStrictEqual(profile.tags, ['one']);
   assert.throws(() => profile.tags.push('two'), TypeError);
+});
+test('profile tags property cannot be replaced or reconfigured', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['one'] });
+  assert.throws(() => { profile.tags = ['two']; }, TypeError);
+  assert.throws(() => { Object.defineProperty(profile, 'tags', { value: ['two'] }); }, TypeError);
+  assert.deepStrictEqual(profile.tags, ['one']);
+  assert.deepStrictEqual(Object.getOwnPropertyDescriptor(profile, 'tags'), {
+    value: profile.tags,
+    writable: false,
+    enumerable: true,
+    configurable: false,
+  });
 });
 test('withUpdates preserves tags when omitted', () => {
   const profile = Profile.fromJSON({ ...subjectA, tags: ['friend'] });

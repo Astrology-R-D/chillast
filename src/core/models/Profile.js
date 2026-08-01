@@ -13,9 +13,9 @@ function normalizeTags(tags) {
   const seen = new Set();
   for (const entry of tags) {
     if (typeof entry !== 'string') continue;
-    const tag = entry.trim();
-    if (!tag || tag.length > 32) continue;
-    const key = tag.toLocaleLowerCase();
+    const tag = entry.normalize('NFC').trim();
+    if (!tag || Array.from(tag).length > 32) continue;
+    const key = tag.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push(tag);
@@ -49,7 +49,12 @@ class Profile {
     this.gender = GENDERS.includes(gender) ? gender : 'other';
     this.birthData = birthData instanceof BirthData ? birthData : new BirthData(birthData || {});
     this.notes = String(notes || '');
-    this.tags = normalizeTags(tags);
+    Object.defineProperty(this, 'tags', {
+      value: normalizeTags(tags),
+      enumerable: true,
+      writable: false,
+      configurable: false,
+    });
     this.createdAt = createdAt || new Date().toISOString();
     this.updatedAt = updatedAt || this.createdAt;
   }

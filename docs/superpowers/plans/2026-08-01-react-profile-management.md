@@ -20,7 +20,7 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 
 ## Design Decisions
 
-- Normalize tags in the domain model by accepting only strings, trimming, removing empty values, limiting each tag to 32 characters and each profile to 20 tags, and deduplicating case-insensitively while retaining the first spelling. Missing or malformed legacy `tags` becomes `[]`.
+- Normalize tags to Unicode NFC in the domain model, accept only strings, trim and remove empty values, limit each tag to 32 Unicode code points and each profile to 20 tags, and deduplicate with locale-independent lowercase keys while retaining the first spelling. Missing or malformed legacy `tags` becomes a frozen `[]`.
 - Do not persist primary profile, recents, timezone, or UTC offset. Primary and recents use `localStorage`; timezone and offset are derived for the entered local birth moment.
 - Keep at most 50 recent profile uses and prune entries older than 90 days. The directory exposes 7-day and 30-day filters from that bounded map.
 - Resolve the primary profile to the persisted ID when it still exists, otherwise the first profile in the current sorted server response, otherwise `null`.
@@ -36,6 +36,8 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 - Modify `src/core/models/Profile.js`: normalize and serialize `tags` while accepting records that omit it.
 - Modify `tests/RunAll.js`: domain compatibility and normalization assertions.
 - Create `tests/ProfileRepository.test.js`: round-trip old and tagged profile documents through disk storage.
+- Create `tests/RunNodeTests.js`: discover and run root Node test files deterministically.
+- Create `tests/NodeTestRunner.test.js`: verify deterministic discovery and child failure propagation.
 - Create `src/core/astrology/LocationResolver.js`: derive IANA zone and historical offset with the same `tz-lookup` and Luxon path used by chart casting.
 - Create `tests/LocationResolver.test.js`: historical offset and invalid-coordinate coverage.
 - Modify `src/main/IpcRouter.js`: register `locations:resolve` and the injected close-decision callback under the existing trusted-frame envelope.
@@ -83,7 +85,7 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 - Modify `locale/zh.json`: directory, read/editor, location, validation, confirmation, and dirty-dialog strings.
 - Modify `src/renderer-react/shell/locale.test.ts`: require every new key.
 - Modify `tests/SmokeReactRenderer.js`: mock profile/location channels and verify profile CRUD, direct action intent, responsive geometry, and screenshot pixels.
-- Modify `package.json`: include new focused Node tests in security/preload verification scripts.
+- Modify `package.json`: keep `RunAll.js` and automatically discover root Node test files in the canonical test script.
 
 ---
 
@@ -93,6 +95,8 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 - Modify: `src/core/models/Profile.js`
 - Modify: `tests/RunAll.js`
 - Create: `tests/ProfileRepository.test.js`
+- Create: `tests/RunNodeTests.js`
+- Create: `tests/NodeTestRunner.test.js`
 - Modify: `package.json`
 
 - [ ] **Step 1: Add failing domain tests for absent, normalized, and serialized tags**
@@ -134,19 +138,19 @@ Add this function after `GENDERS` in `src/core/models/Profile.js`:
 
 ```js
 function normalizeTags(tags) {
-  if (!Array.isArray(tags)) return [];
+  if (!Array.isArray(tags)) return Object.freeze([]);
   const seen = new Set();
   const normalized = [];
   for (const value of tags) {
     if (typeof value !== 'string') continue;
-    const tag = value.trim();
-    const key = tag.toLocaleLowerCase();
-    if (!tag || tag.length > 32 || seen.has(key)) continue;
+    const tag = value.normalize('NFC').trim();
+    const key = tag.toLowerCase();
+    if (!tag || Array.from(tag).length > 32 || seen.has(key)) continue;
     seen.add(key);
     normalized.push(tag);
     if (normalized.length === 20) break;
   }
-  return normalized;
+  return Object.freeze(normalized);
 }
 ```
 
@@ -160,7 +164,12 @@ constructor({ id, nameZh, nameEn, gender, birthData, notes, tags, createdAt, upd
   this.gender = GENDERS.includes(gender) ? gender : 'other';
   this.birthData = birthData instanceof BirthData ? birthData : new BirthData(birthData || {});
   this.notes = String(notes || '');
-  this.tags = Object.freeze(normalizeTags(tags));
+  Object.defineProperty(this, 'tags', {
+    value: normalizeTags(tags),
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
   this.createdAt = createdAt || new Date().toISOString();
   this.updatedAt = updatedAt || this.createdAt;
 }
@@ -172,7 +181,7 @@ Add `tags: this.tags` after `notes` in `toJSON()`, and document `@param {string[
 
 Run: `node tests/RunAll.js`
 
-Expected: PASS with the three new model cases included in the final pass count.
+Expected: PASS with the normalization, code-point limit, and immutable-property cases included in the final pass count.
 
 - [ ] **Step 5: Add a failing repository compatibility test**
 
@@ -210,20 +219,20 @@ test('repository upgrades legacy records and round-trips normalized tags', (t) =
 
 - [ ] **Step 6: Register and run the repository test**
 
-Change the `test` script in `package.json` to:
+Create `tests/RunNodeTests.js` to sort and run every root `tests/*.test.js` file with `child_process.spawnSync`, propagating the child exit status. Change the `test` script in `package.json` to:
 
 ```json
-"test": "node tests/RunAll.js && node --test tests/ProfileRepository.test.js tests/AiServiceConfiguration.test.js tests/ModelProviderConfiguration.test.js tests/PackageResources.test.js"
+"test": "node tests/RunAll.js && node tests/RunNodeTests.js"
 ```
 
-Run: `node --test tests/ProfileRepository.test.js`
+Run: `node tests/RunNodeTests.js`
 
-Expected: PASS with `1` test and no temporary directory left behind.
+Expected: PASS for every discovered root Node test. A failing child test must produce a non-zero runner exit status, and temporary directories must be removed.
 
 - [ ] **Step 7: Commit the domain change**
 
 ```powershell
-git add src/core/models/Profile.js tests/RunAll.js tests/ProfileRepository.test.js package.json
+git add src/core/models/Profile.js tests/RunAll.js tests/ProfileRepository.test.js tests/RunNodeTests.js tests/NodeTestRunner.test.js package.json
 git commit -m "feat: persist normalized profile tags"
 ```
 
