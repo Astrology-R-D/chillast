@@ -40,7 +40,7 @@ function setup(
   list = vi.fn().mockResolvedValue({ ok: true, data: [alpha, beta] }),
   storage = memoryStorage(),
 ) {
-  const api = { profiles: { list, save: vi.fn(), remove: vi.fn() } };
+  const api = { profiles: { list, save: vi.fn(), remove: vi.fn() }, locations: { resolve: vi.fn().mockResolvedValue({ ok: true, data: { timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1987-02-02T20:05:00.000Z' } }) } };
   vi.stubGlobal('mystApi', api);
   const store = createProfileWorkspaceStore(storage, Date.now);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -178,7 +178,7 @@ test('retries only duplicate refresh and selects only the authoritative returned
   await screen.findByRole('heading', { name: 'Beatrice Longname' });
 
   await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('档案已保存，但刷新失败：刷新断开');
+  expect(await screen.findByText(/档案已保存，但刷新失败：刷新断开/)).toBeInTheDocument();
   expect(api.profiles.save).toHaveBeenCalledTimes(1);
   expect(document.querySelector('[data-profile-id="existing"]')).toHaveAttribute('aria-pressed', 'false');
   await userEvent.click(screen.getByRole('button', { name: '重试刷新档案' }));
@@ -385,4 +385,37 @@ test('keeps focus trapped on dialog status while delete and refresh are unresolv
   await act(async () => refreshResult.resolve({ ok: false, error: '刷新断开' }));
   const retry = await within(dialog).findByRole('button', { name: '重试刷新档案' });
   await waitFor(() => expect(retry).toHaveFocus());
+});
+
+test('opens create and edit modes inside the page while keeping the directory visible', async () => {
+  setup();
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '新建档案' }));
+  expect(screen.getByRole('form', { name: '新建档案' })).toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: '档案目录' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '取消' }));
+  expect(screen.getByRole('heading', { name: '王晓明' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  expect(screen.getByRole('form', { name: '编辑档案' })).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: '中文名字' })).toHaveValue('王晓明');
+});
+
+test('retains the authoritative saved edit after refresh failure and retries refresh without saving twice', async () => {
+  const saved = { ...alpha, nameZh: '王晓明更新', updatedAt: '2026-08-02T13:00:00.000Z' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: false, error: '刷新断开' }).mockResolvedValueOnce({ ok: true, data: [saved] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: saved });
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  const name = screen.getByRole('textbox', { name: '中文名字' });
+  await userEvent.clear(name);
+  await userEvent.type(name, '王晓明更新');
+  await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('档案已保存，但刷新失败：刷新断开');
+  expect(screen.getByRole('textbox', { name: '中文名字' })).toHaveValue('王晓明更新');
+  expect(api.profiles.save).toHaveBeenCalledTimes(1);
+  await userEvent.click(screen.getByRole('button', { name: '重试保存' }));
+  expect(await screen.findByRole('heading', { name: '王晓明更新' })).toBeInTheDocument();
+  expect(api.profiles.save).toHaveBeenCalledTimes(1);
+  expect(list).toHaveBeenCalledTimes(3);
 });

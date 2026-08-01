@@ -25,3 +25,12 @@ test('places the primary marker in a stable nonshrinking cell outside clamped ov
   expect(marker).toContain('flex-shrink: 0');
   expect(marker).toContain('overflow: visible');
 });
+
+test('keeps profile forms dense, tokenized, wrapping, and responsive without nested cards', () => {
+  expect(css).toMatch(/\.profile-form\s*\{[^}]*max-width:[^;}]+;[^}]*padding:/s);
+  expect(css).toMatch(/\.profile-form__segments\s*\{[^}]*grid-template-columns:\s*repeat\(5,/s);
+  expect(css).toMatch(/\.profile-field__error[^{]*\{[^}]*overflow-wrap:\s*anywhere/s);
+  expect(css).toMatch(/\.profile-form input[^{]*\{[^}]*background:\s*var\(--surface-base\)/s);
+  expect(css).toMatch(/@media \(max-width:\s*760px\)[\s\S]*\.profile-form__segments\s*\{[^}]*grid-template-columns:/s);
+  expect(css).not.toMatch(/\.profile-form[^,{]*\.\w*card/);
+});

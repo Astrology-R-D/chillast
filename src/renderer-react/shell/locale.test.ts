@@ -160,3 +160,37 @@ test('profile React source never uses the native confirm dialog', () => {
   const source = readFileSync(resolve(process.cwd(), 'src/renderer-react/features/profiles/ProfilePage.tsx'), 'utf8');
   expect(source).not.toMatch(/window\.confirm|\bconfirm\s*\(/);
 });
+
+test('contains the exact Task 6 profile editor localization contract', () => {
+  expect(Object.fromEntries([
+    'profiles.createHeading', 'profiles.editHeading', 'form.nameZh', 'form.nameEn', 'form.gender',
+    'form.birthDateTime', 'form.birthPlace', 'form.locationSearch', 'form.locationLabel', 'form.latitude',
+    'form.longitude', 'form.tags', 'form.tagPreview', 'form.notes', 'form.save', 'form.create', 'form.cancel',
+    'form.saving', 'form.retrySave', 'form.timezoneResolving', 'form.timezoneDerived', 'form.retryTimezone',
+    'form.errorNameRequired', 'form.errorGender', 'form.errorYear', 'form.errorMonth', 'form.errorDay',
+    'form.errorDate', 'form.errorHour', 'form.errorMinute', 'form.errorLocationRequired',
+    'form.errorLatitude', 'form.errorLongitude', 'form.errorTags',
+  ].map((key) => [key, resolveKey(key)]))).toEqual({
+    'profiles.createHeading': '新建档案', 'profiles.editHeading': '编辑档案',
+    'form.nameZh': '中文名字', 'form.nameEn': '英文名字', 'form.gender': '性别',
+    'form.birthDateTime': '出生日期与时间（公历，精确到分）', 'form.birthPlace': '出生地',
+    'form.locationSearch': '搜索出生地', 'form.locationLabel': '地点名称', 'form.latitude': '纬度', 'form.longitude': '经度',
+    'form.tags': '标签', 'form.tagPreview': '标签预览', 'form.notes': '备注',
+    'form.save': '保存修改', 'form.create': '创建档案', 'form.cancel': '取消', 'form.saving': '正在保存…', 'form.retrySave': '重试保存',
+    'form.timezoneResolving': '正在解析历史时区…', 'form.timezoneDerived': '派生时区（不会保存）：{{zone}} · {{offset}} · {{instant}}', 'form.retryTimezone': '重试时区解析',
+    'form.errorNameRequired': '至少填写中文或英文名字', 'form.errorGender': '请选择有效性别',
+    'form.errorYear': '年份须为 1 至 3000 的整数', 'form.errorMonth': '月份须为 1 至 12 的整数', 'form.errorDay': '日期须为有效整数',
+    'form.errorDate': '出生日期不存在', 'form.errorHour': '小时须为 0 至 23 的整数', 'form.errorMinute': '分钟须为 0 至 59 的整数',
+    'form.errorLocationRequired': '请填写地点名称', 'form.errorLatitude': '纬度须为 -90 至 90 的有限数字',
+    'form.errorLongitude': '经度须为 -180 至 180 的有限数字', 'form.errorTags': '最多 20 个标签，每个不超过 32 个字符',
+  });
+});
+
+test('resolves every translation referenced by Task 6 profile components', () => {
+  for (const file of ['ProfileEditor.tsx', 'LocationPicker.tsx']) {
+    const component = readFileSync(resolve(process.cwd(), `src/renderer-react/features/profiles/${file}`), 'utf8');
+    for (const [, key] of component.matchAll(/t\(['`]((?:profiles|form)\.[A-Za-z0-9]+)['`]/g)) {
+      expect(resolveKey(key), `${file}: ${key}`).toEqual(expect.any(String));
+    }
+  }
+});

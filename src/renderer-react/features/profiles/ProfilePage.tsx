@@ -8,6 +8,7 @@ import { profileWorkspaceStore, type ProfileWorkspaceState } from '../../stores/
 import type { RouteKey } from '../../shell/routes';
 import { ProfileDetail } from './ProfileDetail';
 import { ProfileDirectory } from './ProfileDirectory';
+import { ProfileForm, type ProfileFormRegistration } from './ProfileEditor';
 import { profileQueryKeys, refreshProfiles, useProfiles, useRemoveProfile, useSaveProfile } from './profileQueries';
 import './profiles.css';
 
@@ -16,11 +17,12 @@ interface ProfilePageProps {
   onNavigate(route: RouteKey): void;
   onCreate?: () => void;
   onEdit?: (profile: Profile) => void;
+  onFormRegistration?: (registration: ProfileFormRegistration | null) => void;
 }
 
 type DuplicatePhase = 'idle' | 'saving' | 'refreshing';
 
-export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate, onCreate, onEdit }: ProfilePageProps) {
+export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate, onCreate, onEdit, onFormRegistration }: ProfilePageProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const profiles = useProfiles();
@@ -29,6 +31,8 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   const primaryId = useStore(workspaceStore, (state) => state.primaryProfileId);
   const recents = useStore(workspaceStore, (state) => state.recentUses);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; profile?: Profile } | null>(null);
+  const [editorSaved, setEditorSaved] = useState<Profile | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const [duplicateError, setDuplicateError] = useState('');
@@ -78,9 +82,32 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
 
   const select = (id: string) => {
     setSelectedId(id);
+    setEditor(null); setEditorSaved(null);
     workspaceStore.getState().recordRecentUse(id);
   };
   const selected = profiles.data?.find(({ id }) => id === selectedId) ?? null;
+  const openCreate = () => { setEditor({ mode: 'create' }); setEditorSaved(null); onCreate?.(); };
+  const openEdit = (profile: Profile) => { setEditor({ mode: 'edit', profile }); setEditorSaved(null); onEdit?.(profile); };
+  const saveEditor = async (payload: ProfileSaveInput): Promise<Profile> => {
+    let authoritative = editorSaved;
+    if (!authoritative) {
+      authoritative = await save.mutateAsync(payload);
+      setEditorSaved(authoritative);
+      setEditor({ mode: 'edit', profile: authoritative });
+    }
+    try {
+      await refreshProfiles(queryClient);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(t('profiles.savedRefreshFailed', { message }));
+    }
+    const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
+    if (!refreshed.some(({ id }) => id === authoritative.id)) throw new Error(t('profiles.savedProfileMissing'));
+    setSelectedId(authoritative.id);
+    workspaceStore.getState().recordRecentUse(authoritative.id);
+    setEditor(null); setEditorSaved(null);
+    return authoritative;
+  };
   const beginDuplicate = (phase: Exclude<DuplicatePhase, 'idle'>): number | null => {
     if (duplicateBusyRef.current) return null;
     duplicateBusyRef.current = true;
@@ -218,9 +245,10 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   if (profiles.isPending) return <div className="profile-state" role="status">{t('profiles.loading')}</div>;
   if (profiles.isError && !profiles.data) return <div className="profile-state" role="alert"><p>{t('profiles.loadFailed', { message: profiles.error.message })}</p><button data-profile-control type="button" onClick={() => profiles.refetch()}>{t('profiles.retry')}</button></div>;
   return <div ref={pageRef} className="profile-page">
-    <ProfileDirectory profiles={profiles.data} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={() => onCreate?.()} />
+    <ProfileDirectory profiles={profiles.data} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
     <section className="profile-page__surface">
-      {selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => onEdit?.(selected)} onCopy={() => void duplicate(selected)}
+      {editor ? <ProfileForm key="profile-editor" profile={editorSaved ?? editor.profile} onSave={saveEditor} onCancel={() => { setEditor(null); setEditorSaved(null); }} onRegistration={onFormRegistration} />
+        : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => void duplicate(selected)}
         onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />
         : <div className="profile-page__blank">{t('profiles.selectPrompt')}</div>}
