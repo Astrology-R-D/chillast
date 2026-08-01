@@ -33,7 +33,7 @@ function persisted(storage: Storage): Record<string, unknown> {
 }
 
 describe('profile workspace persistence', () => {
-  test('starts empty and writes only canonical persistent fields', () => {
+  test('starts empty without writing when persisted state is missing', () => {
     const storage = createStorage();
     const store = createProfileWorkspaceStore(storage, () => NOW);
 
@@ -42,7 +42,8 @@ describe('profile workspace persistence', () => {
       recentUses: {},
       chartIntent: null,
     });
-    expect(persisted(storage)).toEqual({ primaryProfileId: null, recentUses: {} });
+    expect(storage.getItem(PROFILE_WORKSPACE_KEY)).toBeNull();
+    expect(storage.writes).toEqual([]);
   });
 
   test('restores a valid payload and prunes expired records at creation', () => {
@@ -60,7 +61,7 @@ describe('profile workspace persistence', () => {
     expect(store.getState().recentUses).toEqual({ 'profile-a': NOW - 90 * DAY_MS });
   });
 
-  test('prunes invalid recent entries without discarding valid workspace data', () => {
+  test('prunes invalid recents and clamps future recents without discarding valid data', () => {
     const storage = createStorage(JSON.stringify({
       primaryProfileId: 'profile-a',
       recentUses: {
@@ -74,7 +75,11 @@ describe('profile workspace persistence', () => {
 
     expect(store.getState()).toMatchObject({
       primaryProfileId: 'profile-a',
-      recentUses: { 'profile-a': NOW },
+      recentUses: { future: NOW, 'profile-a': NOW },
+    });
+    expect(persisted(storage)).toEqual({
+      primaryProfileId: 'profile-a',
+      recentUses: { future: NOW, 'profile-a': NOW },
     });
   });
 
@@ -83,16 +88,56 @@ describe('profile workspace persistence', () => {
     '[]',
     '{"primaryProfileId":"","recentUses":{}}',
     '{"primaryProfileId":null,"recentUses":[]}',
-    `{"primaryProfileId":null,"recentUses":{"profile-a":${NOW + 1}}}`,
     `{"primaryProfileId":null,"recentUses":{"__proto__":${NOW}}}`,
     `{"primaryProfileId":null,"recentUses":{"constructor":${NOW}}}`,
     `{"primaryProfileId":null,"recentUses":{"prototype":${NOW}}}`,
-  ])('replaces corrupt or unsafe persisted data: %s', (value) => {
+  ])('preserves malformed or unsafe persisted data for inspection: %s', (value) => {
     const storage = createStorage(value);
     const store = createProfileWorkspaceStore(storage, () => NOW);
 
     expect(store.getState()).toMatchObject({ primaryProfileId: null, recentUses: {} });
-    expect(persisted(storage)).toEqual({ primaryProfileId: null, recentUses: {} });
+    expect(storage.getItem(PROFILE_WORKSPACE_KEY)).toBe(value);
+    expect(storage.writes).toEqual([]);
+  });
+
+  test('does not overwrite storage after a read error and persists on a later action', () => {
+    const storage = createStorage(JSON.stringify({
+      primaryProfileId: 'unread',
+      recentUses: { unread: NOW },
+    }));
+    const read = storage.getItem.bind(storage);
+    let failRead = true;
+    storage.getItem = (key) => {
+      if (failRead) {
+        failRead = false;
+        throw new DOMException('denied', 'SecurityError');
+      }
+      return read(key);
+    };
+
+    const store = createProfileWorkspaceStore(storage, () => NOW);
+    expect(storage.writes).toEqual([]);
+    expect(store.getState().primaryProfileId).toBeNull();
+
+    store.getState().setPrimaryProfile('profile-a');
+    expect(persisted(storage)).toEqual({
+      primaryProfileId: 'profile-a',
+      recentUses: { 'profile-a': NOW },
+    });
+  });
+
+  test('preserves malformed JSON until an explicit action replaces it', () => {
+    const storage = createStorage('{forensic');
+    const store = createProfileWorkspaceStore(storage, () => NOW);
+
+    expect(storage.getItem(PROFILE_WORKSPACE_KEY)).toBe('{forensic');
+    expect(storage.writes).toEqual([]);
+
+    store.getState().setPrimaryProfile('profile-a');
+    expect(persisted(storage)).toEqual({
+      primaryProfileId: 'profile-a',
+      recentUses: { 'profile-a': NOW },
+    });
   });
 
   test('survives storage reads, writes, and JSON operations throwing', () => {
@@ -106,7 +151,9 @@ describe('profile workspace persistence', () => {
     const stringify = JSON.stringify;
     const parse = JSON.parse;
     vi.spyOn(JSON, 'stringify').mockImplementation(() => { throw new Error('stringify failed'); });
-    expect(() => createProfileWorkspaceStore(createStorage(), () => NOW)).not.toThrow();
+    const stringifyStore = createProfileWorkspaceStore(createStorage(), () => NOW);
+    expect(() => stringifyStore.getState().setPrimaryProfile('profile-a')).not.toThrow();
+    expect(stringifyStore.getState().primaryProfileId).toBe('profile-a');
     vi.mocked(JSON.stringify).mockImplementation(stringify);
     vi.spyOn(JSON, 'parse').mockImplementation(() => { throw new Error('parse failed'); });
     expect(createProfileWorkspaceStore(createStorage('{}'), () => NOW).getState().primaryProfileId).toBeNull();
@@ -171,7 +218,7 @@ describe('profile workspace actions', () => {
     expect(entries.slice(0, 3).map(([id]) => id)).toEqual(['profile-00', 'profile-03', 'profile-06']);
   });
 
-  test('accepts the inclusive 90-day boundary and ignores invalid or future uses', () => {
+  test('accepts the inclusive 90-day boundary, clamps future uses, and ignores invalid uses', () => {
     const store = createProfileWorkspaceStore(createStorage(), () => NOW);
 
     store.getState().recordRecentUse('boundary', NOW - 90 * DAY_MS);
@@ -180,7 +227,39 @@ describe('profile workspace actions', () => {
     store.getState().recordRecentUse('nan', Number.NaN);
     store.getState().recordRecentUse(' ', NOW);
 
-    expect(store.getState().recentUses).toEqual({ boundary: NOW - 90 * DAY_MS });
+    expect(store.getState().recentUses).toEqual({
+      future: NOW,
+      boundary: NOW - 90 * DAY_MS,
+    });
+  });
+
+  test('does not regress a recent use when an older event arrives later', () => {
+    const storage = createStorage();
+    const store = createProfileWorkspaceStore(storage, () => NOW);
+
+    store.getState().recordRecentUse('profile-a', NOW - 1);
+    store.getState().recordRecentUse('profile-a', NOW - DAY_MS);
+
+    expect(store.getState().recentUses).toEqual({ 'profile-a': NOW - 1 });
+    expect(persisted(storage)).toEqual({
+      primaryProfileId: null,
+      recentUses: { 'profile-a': NOW - 1 },
+    });
+  });
+
+  test('clamps persisted future recents when the clock moves backward', () => {
+    const storage = createStorage(JSON.stringify({
+      primaryProfileId: 'profile-a',
+      recentUses: { 'profile-a': NOW + DAY_MS },
+    }));
+
+    const store = createProfileWorkspaceStore(storage, () => NOW);
+
+    expect(store.getState().recentUses).toEqual({ 'profile-a': NOW });
+    expect(persisted(storage)).toEqual({
+      primaryProfileId: 'profile-a',
+      recentUses: { 'profile-a': NOW },
+    });
   });
 
   test('uses a finite per-call now override for validation and pruning', () => {
@@ -282,6 +361,49 @@ describe('chart navigation intent', () => {
     expect(recreated.getState()).toMatchObject({
       primaryProfileId: 'profile-a',
       recentUses: { 'profile-a': NOW },
+      chartIntent: null,
+    });
+  });
+});
+
+describe('reentrant persistence', () => {
+  const chartIntent = {
+    route: 'personal',
+    chartType: 'natal',
+    primaryProfileId: 'outer',
+  } as const;
+
+  test.each([
+    ['reconcileProfiles', (store: ReturnType<typeof createProfileWorkspaceStore>) => {
+      store.getState().reconcileProfiles(['outer']);
+    }],
+    ['setPrimaryProfile', (store: ReturnType<typeof createProfileWorkspaceStore>) => {
+      store.getState().setPrimaryProfile('outer');
+    }],
+    ['openChart', (store: ReturnType<typeof createProfileWorkspaceStore>) => {
+      store.getState().openChart(chartIntent);
+    }],
+  ] as const)('keeps nested state newest after %s notifies subscribers', (_name, outerAction) => {
+    const storage = createStorage();
+    const store = createProfileWorkspaceStore(storage, () => NOW);
+    let nested = false;
+    store.subscribe(() => {
+      if (nested) return;
+      nested = true;
+      store.getState().setPrimaryProfile('nested');
+    });
+
+    outerAction(store);
+
+    const memory = store.getState();
+    const recreated = createProfileWorkspaceStore(storage, () => NOW).getState();
+    expect(memory).toMatchObject({
+      primaryProfileId: 'nested',
+      recentUses: { nested: NOW },
+    });
+    expect(recreated).toMatchObject({
+      primaryProfileId: memory.primaryProfileId,
+      recentUses: memory.recentUses,
       chartIntent: null,
     });
   });

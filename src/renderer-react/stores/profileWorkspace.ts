@@ -29,6 +29,10 @@ interface PersistedProfileWorkspace {
   recentUses: Record<string, number>;
 }
 
+type ReadWorkspaceResult =
+  | { status: 'valid'; workspace: PersistedProfileWorkspace }
+  | { status: 'missing' | 'malformed' | 'read-error'; workspace: PersistedProfileWorkspace };
+
 function validId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const id = value.trim();
@@ -60,45 +64,73 @@ function normalizeRecents(
   allowedIds?: ReadonlySet<string>,
 ): Record<string, number> {
   return Object.entries(value)
-    .filter(([id, usedAt]) => {
-      return validId(id) === id
-        && typeof usedAt === 'number'
-        && Number.isFinite(usedAt)
-        && usedAt <= now
-        && usedAt >= now - RECENT_USE_MAX_AGE
-        && (!allowedIds || allowedIds.has(id));
+    .flatMap(([id, usedAt]) => {
+      if (
+        validId(id) !== id
+        || typeof usedAt !== 'number'
+        || !Number.isFinite(usedAt)
+        || (allowedIds && !allowedIds.has(id))
+      ) return [];
+
+      const timestamp = Math.min(usedAt, now);
+      return timestamp >= now - RECENT_USE_MAX_AGE ? [[id, timestamp] as const] : [];
     })
     .sort(([leftId, leftAt], [rightId, rightAt]) =>
-      (rightAt as number) - (leftAt as number) || compareIds(leftId, rightId))
+      rightAt - leftAt || compareIds(leftId, rightId))
     .slice(0, RECENT_USE_LIMIT)
     .reduce<Record<string, number>>((recents, [id, usedAt]) => {
-      recents[id] = usedAt as number;
+      recents[id] = usedAt;
       return recents;
     }, {});
+}
+
+function withRecentUse(
+  recentUses: Record<string, number>,
+  profileId: string,
+  usedAt: number,
+  now: number,
+): Record<string, number> {
+  const normalized = normalizeRecents(recentUses, now);
+  normalized[profileId] = Math.max(normalized[profileId] ?? Number.NEGATIVE_INFINITY, usedAt);
+  return normalizeRecents(normalized, now);
 }
 
 function emptyWorkspace(): PersistedProfileWorkspace {
   return { primaryProfileId: null, recentUses: {} };
 }
 
-function readWorkspace(storage: Storage, now: number): PersistedProfileWorkspace {
+function readWorkspace(storage: Storage, now: number): ReadWorkspaceResult {
+  let serialized: string | null;
   try {
-    const serialized = storage.getItem(PROFILE_WORKSPACE_KEY);
-    if (serialized === null) return emptyWorkspace();
-    const parsed: unknown = JSON.parse(serialized);
-    if (!isPlainObject(parsed) || !isPlainObject(parsed.recentUses)) return emptyWorkspace();
-    if (parsed.primaryProfileId !== null && validId(parsed.primaryProfileId) === null) {
-      return emptyWorkspace();
-    }
-    if (Object.keys(parsed.recentUses).some((key) => validId(key) !== key)) return emptyWorkspace();
+    serialized = storage.getItem(PROFILE_WORKSPACE_KEY);
+  } catch {
+    return { status: 'read-error', workspace: emptyWorkspace() };
+  }
+  if (serialized === null) return { status: 'missing', workspace: emptyWorkspace() };
 
-    return {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    return { status: 'malformed', workspace: emptyWorkspace() };
+  }
+  if (!isPlainObject(parsed) || !isPlainObject(parsed.recentUses)) {
+    return { status: 'malformed', workspace: emptyWorkspace() };
+  }
+  if (parsed.primaryProfileId !== null && validId(parsed.primaryProfileId) === null) {
+    return { status: 'malformed', workspace: emptyWorkspace() };
+  }
+  if (Object.keys(parsed.recentUses).some((key) => validId(key) !== key)) {
+    return { status: 'malformed', workspace: emptyWorkspace() };
+  }
+
+  return {
+    status: 'valid',
+    workspace: {
       primaryProfileId: parsed.primaryProfileId === null ? null : validId(parsed.primaryProfileId),
       recentUses: normalizeRecents(parsed.recentUses, now),
-    };
-  } catch {
-    return emptyWorkspace();
-  }
+    },
+  };
 }
 
 function persistWorkspace(storage: Storage, workspace: PersistedProfileWorkspace): void {
@@ -126,85 +158,89 @@ export function createProfileWorkspaceStore(
   storage: Storage,
   nowProvider: () => number = Date.now,
 ): StoreApi<ProfileWorkspaceState> {
-  const initial = readWorkspace(storage, safeNow(nowProvider));
-  persistWorkspace(storage, initial);
+  const readResult = readWorkspace(storage, safeNow(nowProvider));
+  const initial = readResult.workspace;
+  if (readResult.status === 'valid') persistWorkspace(storage, initial);
 
-  return createStore<ProfileWorkspaceState>((set, get) => ({
-    ...initial,
-    chartIntent: null,
-    reconcileProfiles(profileIds) {
-      const ids = [...new Set(profileIds.map(validId).filter((id): id is string => id !== null))];
-      const allowedIds = new Set(ids);
-      const state = get();
-      const next = {
-        primaryProfileId: state.primaryProfileId && allowedIds.has(state.primaryProfileId)
-          ? state.primaryProfileId
-          : ids[0] ?? null,
-        recentUses: normalizeRecents(state.recentUses, safeNow(nowProvider), allowedIds),
-      };
-      set(next);
-      persistWorkspace(storage, next);
-    },
-    setPrimaryProfile(profileId) {
-      const id = validId(profileId);
-      if (!id) return;
-      const now = safeNow(nowProvider);
-      const recentUses = normalizeRecents({ ...get().recentUses, [id]: now }, now);
-      const next = { primaryProfileId: id, recentUses };
-      set(next);
-      persistWorkspace(storage, next);
-    },
-    recordRecentUse(profileId, usedAt, nowOverride) {
-      const id = validId(profileId);
-      if (nowOverride !== undefined && !Number.isFinite(nowOverride)) return;
-      const now = nowOverride ?? safeNow(nowProvider);
-      const timestamp = usedAt ?? now;
-      if (!id || !Number.isFinite(timestamp) || timestamp > now || timestamp < now - RECENT_USE_MAX_AGE) return;
-      const next = {
-        primaryProfileId: get().primaryProfileId,
-        recentUses: normalizeRecents({ ...get().recentUses, [id]: timestamp }, now),
-      };
-      set({ recentUses: next.recentUses });
-      persistWorkspace(storage, next);
-    },
-    removeProfile(profileId) {
-      const id = validId(profileId);
-      if (!id) return;
-      const state = get();
-      if (state.primaryProfileId !== id && !Object.hasOwn(state.recentUses, id)) return;
-      const { [id]: _removed, ...recentUses } = state.recentUses;
-      const next = {
-        primaryProfileId: state.primaryProfileId === id ? null : state.primaryProfileId,
-        recentUses,
-      };
-      set(next);
-      persistWorkspace(storage, next);
-    },
-    openChart(intent) {
-      const normalizedIntent = validIntent(intent);
-      if (!normalizedIntent) return;
-      const now = safeNow(nowProvider);
-      const recentUses = normalizeRecents({
-        ...get().recentUses,
-        [normalizedIntent.primaryProfileId]: now,
-      }, now);
-      const next = {
-        primaryProfileId: normalizedIntent.primaryProfileId,
-        recentUses,
-        chartIntent: normalizedIntent,
-      };
-      set(next);
+  return createStore<ProfileWorkspaceState>((set, get) => {
+    const commit = (
+      next: PersistedProfileWorkspace & { chartIntent?: ChartNavigationIntent | null },
+    ): void => {
       persistWorkspace(storage, {
         primaryProfileId: next.primaryProfileId,
         recentUses: next.recentUses,
       });
-    },
-    consumeChartIntent() {
-      const intent = get().chartIntent;
-      if (intent) set({ chartIntent: null });
-      return intent;
-    },
-  }));
+      set(next);
+    };
+
+    return {
+      ...initial,
+      chartIntent: null,
+      reconcileProfiles(profileIds) {
+        const ids = [...new Set(profileIds.map(validId).filter((id): id is string => id !== null))];
+        const allowedIds = new Set(ids);
+        const state = get();
+        commit({
+          primaryProfileId: state.primaryProfileId && allowedIds.has(state.primaryProfileId)
+            ? state.primaryProfileId
+            : ids[0] ?? null,
+          recentUses: normalizeRecents(state.recentUses, safeNow(nowProvider), allowedIds),
+        });
+      },
+      setPrimaryProfile(profileId) {
+        const id = validId(profileId);
+        if (!id) return;
+        const now = safeNow(nowProvider);
+        commit({
+          primaryProfileId: id,
+          recentUses: withRecentUse(get().recentUses, id, now, now),
+        });
+      },
+      recordRecentUse(profileId, usedAt, nowOverride) {
+        const id = validId(profileId);
+        if (nowOverride !== undefined && !Number.isFinite(nowOverride)) return;
+        const now = nowOverride ?? safeNow(nowProvider);
+        if (!id || (usedAt !== undefined && !Number.isFinite(usedAt))) return;
+        const timestamp = Math.min(usedAt ?? now, now);
+        if (timestamp < now - RECENT_USE_MAX_AGE) return;
+        commit({
+          primaryProfileId: get().primaryProfileId,
+          recentUses: withRecentUse(get().recentUses, id, timestamp, now),
+        });
+      },
+      removeProfile(profileId) {
+        const id = validId(profileId);
+        if (!id) return;
+        const state = get();
+        if (state.primaryProfileId !== id && !Object.hasOwn(state.recentUses, id)) return;
+        const { [id]: _removed, ...recentUses } = state.recentUses;
+        commit({
+          primaryProfileId: state.primaryProfileId === id ? null : state.primaryProfileId,
+          recentUses,
+        });
+      },
+      openChart(intent) {
+        const normalizedIntent = validIntent(intent);
+        if (!normalizedIntent) return;
+        const now = safeNow(nowProvider);
+        commit({
+          primaryProfileId: normalizedIntent.primaryProfileId,
+          recentUses: withRecentUse(
+            get().recentUses,
+            normalizedIntent.primaryProfileId,
+            now,
+            now,
+          ),
+          chartIntent: normalizedIntent,
+        });
+      },
+      consumeChartIntent() {
+        const intent = get().chartIntent;
+        if (intent) set({ chartIntent: null });
+        return intent;
+      },
+    };
+  });
 }
 
 function createMemoryStorage(): Storage {
