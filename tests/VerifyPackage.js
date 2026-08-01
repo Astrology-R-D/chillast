@@ -39,6 +39,8 @@ for (const required of [
   'src/renderer/Index.html',
   'dist/renderer-react/index.html',
   'src/preload/Preload.js',
+  'src/core/util/UnicodeCaseFold.js',
+  'src/core/util/UnicodeCaseFoldData.js',
   'dist/renderer-react/theme-bootstrap.js',
 ]) {
   assert.ok(fileSet.has(required), `missing packaged file: ${required}`);
@@ -64,6 +66,8 @@ assert.match(reactHtml, /src="\.\/theme-bootstrap\.js"/);
 for (const archiveName of [
   'src/renderer/Index.html',
   'src/preload/Preload.js',
+  'src/core/util/UnicodeCaseFold.js',
+  'src/core/util/UnicodeCaseFoldData.js',
   'dist/renderer-react/index.html',
   'dist/renderer-react/theme-bootstrap.js',
   ...rootTtf,
@@ -84,7 +88,7 @@ console.log(JSON.stringify({
   reactWoff2: reactWoff2.length,
   script: scriptMatch[1],
   style: styleMatch[1],
-  sourceHashesVerified: 4 + rootTtf.length + reactWoff2.length + 2,
+  sourceHashesVerified: 6 + rootTtf.length + reactWoff2.length + 2,
   optionalResourceSources: [...OPTIONAL_RESOURCE_SOURCES],
   verifiedExtraResources: resourceVerification.verified,
   missingOptionalResources: resourceVerification.missingOptional,

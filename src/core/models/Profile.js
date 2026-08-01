@@ -1,14 +1,10 @@
 'use strict';
 
 const BirthData = require('./BirthData');
+const unicodeDefaultCaseFold = require('../util/UnicodeCaseFold');
 
 /** Allowed gender tokens kept stable for serialization. */
 const GENDERS = Object.freeze(['male', 'female', 'other']);
-
-/** Locale-independent Unicode case-fold approximation that includes casing expansions. */
-function caseFoldKey(value) {
-  return value.toUpperCase().toLowerCase();
-}
 
 /** Normalize persisted profile tags into an immutable, bounded string list. */
 function normalizeTags(tags) {
@@ -20,7 +16,7 @@ function normalizeTags(tags) {
     if (typeof entry !== 'string') continue;
     const tag = entry.normalize('NFC').trim();
     if (!tag || Array.from(tag).length > 32) continue;
-    const key = caseFoldKey(tag);
+    const key = unicodeDefaultCaseFold(tag);
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push(tag);

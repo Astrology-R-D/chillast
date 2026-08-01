@@ -20,7 +20,7 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 
 ## Design Decisions
 
-- Normalize tags to Unicode NFC in the domain model, accept only strings, trim and remove empty values, limit each tag to 32 Unicode code points and each profile to 20 tags, and deduplicate with locale-independent Unicode-compatible case-fold keys while retaining the first spelling. Missing or malformed legacy `tags` becomes a frozen `[]`.
+- Normalize tags to Unicode NFC in the domain model, accept only strings, trim and remove empty values, limit each tag to 32 Unicode code points and each profile to 20 tags, and deduplicate with Unicode 17.0.0 full default case-fold keys while retaining the first spelling. Generate the CommonJS folding table reproducibly from official `CaseFolding.txt` statuses C+F, excluding simple and Turkic mappings. Missing or malformed legacy `tags` becomes a frozen `[]`.
 - Do not persist primary profile, recents, timezone, or UTC offset. Primary and recents use `localStorage`; timezone and offset are derived for the entered local birth moment.
 - Keep at most 50 recent profile uses and prune entries older than 90 days. The directory exposes 7-day and 30-day filters from that bounded map.
 - Resolve the primary profile to the persisted ID when it still exists, otherwise the first profile in the current sorted server response, otherwise `null`.
@@ -34,6 +34,9 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 ### Domain and Electron boundary
 
 - Modify `src/core/models/Profile.js`: normalize and serialize `tags` while accepting records that omit it.
+- Create `src/core/util/UnicodeCaseFold.js`: apply full default Unicode folding to normalized tag keys.
+- Create `src/core/util/UnicodeCaseFoldData.js`: generated Unicode 17.0.0 C+F mapping table.
+- Create `tools/generate-unicode-case-folding.mjs`: reproduce the mapping table from official Unicode data.
 - Modify `tests/RunAll.js`: domain compatibility and normalization assertions.
 - Create `tests/ProfileRepository.test.js`: round-trip old and tagged profile documents through disk storage.
 - Create `tests/RunNodeTests.js`: discover and run root Node test files deterministically.
@@ -93,6 +96,9 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 
 **Files:**
 - Modify: `src/core/models/Profile.js`
+- Create: `src/core/util/UnicodeCaseFold.js`
+- Create: `src/core/util/UnicodeCaseFoldData.js`
+- Create: `tools/generate-unicode-case-folding.mjs`
 - Modify: `tests/RunAll.js`
 - Create: `tests/ProfileRepository.test.js`
 - Create: `tests/RunNodeTests.js`
@@ -137,6 +143,8 @@ Expected: FAIL in `legacy profiles without tags deserialize with an empty tag li
 Add this function after `GENDERS` in `src/core/models/Profile.js`:
 
 ```js
+const unicodeDefaultCaseFold = require('../util/UnicodeCaseFold');
+
 function normalizeTags(tags) {
   if (!Array.isArray(tags)) return Object.freeze([]);
   const seen = new Set();
@@ -144,8 +152,7 @@ function normalizeTags(tags) {
   for (const value of tags) {
     if (typeof value !== 'string') continue;
     const tag = value.normalize('NFC').trim();
-    // Uppercase first captures Unicode casing expansions such as ß -> SS.
-    const key = tag.toUpperCase().toLowerCase();
+    const key = unicodeDefaultCaseFold(tag);
     if (!tag || Array.from(tag).length > 32 || seen.has(key)) continue;
     seen.add(key);
     normalized.push(tag);

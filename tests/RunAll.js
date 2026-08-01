@@ -104,6 +104,14 @@ test('profile tag case deduplication uses deterministic I/i folding', () => {
   const profile = Profile.fromJSON({ ...subjectA, tags: ['I', 'i'] });
   assert.deepStrictEqual(profile.tags, ['I']);
 });
+test('profile default case folding keeps ASCII i and dotless i distinct', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['i', 'ı'] });
+  assert.deepStrictEqual(profile.tags, ['i', 'ı']);
+});
+test('profile default case folding handles dotted capital I without Turkic folding', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['İ', 'i\u0307', 'i'] });
+  assert.deepStrictEqual(profile.tags, ['İ', 'i']);
+});
 test('profile tag case folding deduplicates Greek final sigma variants', () => {
   const profile = Profile.fromJSON({ ...subjectA, tags: ['ΟΣ', 'οσ'] });
   assert.deepStrictEqual(profile.tags, ['ΟΣ']);
@@ -111,6 +119,18 @@ test('profile tag case folding deduplicates Greek final sigma variants', () => {
 test('profile tag case folding deduplicates German sharp-s and ss', () => {
   const profile = Profile.fromJSON({ ...subjectA, tags: ['Straße', 'STRASSE'] });
   assert.deepStrictEqual(profile.tags, ['Straße']);
+});
+test('profile default case folding applies full ligature mappings', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['ﬃ', 'ffi', 'և', 'եւ'] });
+  assert.deepStrictEqual(profile.tags, ['ﬃ', 'և']);
+});
+test('profile default case folding applies special symbol and long-s mappings', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['µ', 'μ', 'ſ', 's'] });
+  assert.deepStrictEqual(profile.tags, ['µ', 'ſ']);
+});
+test('profile default case folding follows Cherokee uppercase mappings', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['Ꭰ', 'ꭰ'] });
+  assert.deepStrictEqual(profile.tags, ['Ꭰ']);
 });
 test('profile tags ignore empty, non-string, and overlong entries', () => {
   const profile = Profile.fromJSON({
