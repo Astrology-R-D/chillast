@@ -236,16 +236,36 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
   const isNarrow = useNarrowLayout();
   const [isAiOpen, setIsAiOpen] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
+  const narrowToolbarRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const restoreOpenerOnCloseRef = useRef(true);
+  const previousIsNarrowRef = useRef(isNarrow);
+  const activeBeforeLayoutRef = useRef<Element | null>(null);
 
   useLayoutEffect(() => {
-    if (!isNarrow && isAiOpen) {
-      restoreOpenerOnCloseRef.current = false;
-      setIsAiOpen(false);
-      dialogRef.current?.focus();
+    const wasNarrow = previousIsNarrowRef.current;
+    const activeBeforeChange = activeBeforeLayoutRef.current ?? document.activeElement;
+
+    if (wasNarrow !== isNarrow) {
+      if (!wasNarrow && isNarrow && !isAiOpen && dialogRef.current?.contains(activeBeforeChange)) {
+        openerRef.current?.focus();
+      } else if (wasNarrow && !isNarrow) {
+        if (isAiOpen) {
+          restoreOpenerOnCloseRef.current = false;
+          setIsAiOpen(false);
+          dialogRef.current?.focus();
+        } else if (narrowToolbarRef.current?.contains(activeBeforeChange)) {
+          dialogRef.current?.focus();
+        }
+      }
     }
+
+    previousIsNarrowRef.current = isNarrow;
+    activeBeforeLayoutRef.current = null;
+    return () => {
+      activeBeforeLayoutRef.current = document.activeElement;
+    };
   }, [isAiOpen, isNarrow]);
 
   useEffect(() => {
@@ -358,7 +378,7 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
           aria-hidden={isNarrow && isAiOpen ? true : undefined}
           inert={isNarrow && isAiOpen}
         >
-          <div className="shell__main-toolbar" hidden={!isNarrow}>
+          <div ref={narrowToolbarRef} className="shell__main-toolbar" hidden={!isNarrow}>
             <button
               ref={openerRef}
               className="shell__icon-button"

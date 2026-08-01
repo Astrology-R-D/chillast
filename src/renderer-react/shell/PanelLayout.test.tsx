@@ -387,6 +387,59 @@ test('switching an open narrow AI dialog to desktop focuses the desktop AI panel
   expect(screen.queryByRole('dialog', { name: 'AI 助手' })).not.toBeInTheDocument();
 });
 
+test('moves desktop AI focus to the narrow opener without opening the dialog', () => {
+  const media = createMatchMediaController(false);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  render(<PanelLayout {...content} ai={<button type="button">桌面 AI 操作</button>} />);
+  const desktopAiAction = screen.getByRole('button', { name: '桌面 AI 操作' });
+  desktopAiAction.focus();
+
+  act(() => media.setMatches(true));
+
+  const opener = screen.getByRole('button', { name: '打开 AI 助手' });
+  expect(opener).toHaveFocus();
+  expect(screen.queryByRole('dialog', { name: 'AI 助手' })).not.toBeInTheDocument();
+  expect(document.activeElement).not.toHaveAttribute('hidden');
+  expect(document.activeElement).not.toHaveAttribute('inert');
+});
+
+test('moves narrow opener focus to desktop AI when the dialog is closed', () => {
+  const media = createMatchMediaController(true);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  render(<PanelLayout {...content} />);
+  screen.getByRole('button', { name: '打开 AI 助手' }).focus();
+
+  act(() => media.setMatches(false));
+
+  const desktopAi = screen.getByRole('complementary', { name: 'AI 助手' });
+  expect(desktopAi).toHaveFocus();
+  expect(desktopAi).not.toHaveAttribute('hidden');
+  expect(desktopAi).not.toHaveAttribute('inert');
+});
+
+test('does not steal focus from navigation or main across closed breakpoint transitions', () => {
+  const media = createMatchMediaController(false);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  render(
+    <PanelLayout
+      navigation={<button type="button">导航焦点</button>}
+      ai={<button type="button">AI 焦点</button>}
+    >
+      <button type="button">主区焦点</button>
+    </PanelLayout>,
+  );
+  const navigationAction = screen.getByRole('button', { name: '导航焦点' });
+  navigationAction.focus();
+
+  act(() => media.setMatches(true));
+  expect(navigationAction).toHaveFocus();
+
+  const mainAction = screen.getByRole('button', { name: '主区焦点' });
+  mainAction.focus();
+  act(() => media.setMatches(false));
+  expect(mainAction).toHaveFocus();
+});
+
 test('clamps stale persisted sizes and ignores the legacy AI width key', () => {
   localStorage.setItem('ai.sidebarWidth', '1');
   localStorage.setItem(
