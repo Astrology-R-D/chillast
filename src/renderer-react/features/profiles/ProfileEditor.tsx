@@ -153,7 +153,7 @@ export function ProfileForm({ profile, onSave, onCancel, onDraftStateChange, onD
       </div>
       <fieldset className="profile-form__datetime"><legend>{t('form.birthDateTime')}</legend><div className="profile-form__segments">
         {numericFields.map(([field, label, minimum, maximum]) => <div className="profile-field profile-segment" key={field}><label htmlFor={`${id}-${field}`}>{t(label)}</label>
-          <div className="profile-segment__control"><input id={`${id}-${field}`} name={field} data-profile-control type="number" inputMode="numeric" min={minimum} max={maximum} placeholder={t(label)} value={draft[field]} aria-valuetext={draft[field]} aria-invalid={Boolean(errors[field])} aria-describedby={describedBy(field)} onChange={(event) => patch({ [field]: event.target.value })} onBlur={() => normalizeSegment(field)} />
+          <div className="profile-segment__control"><input id={`${id}-${field}`} name={field} data-profile-control type="number" inputMode="numeric" min={minimum} max={maximum} placeholder={t(label)} value={draft[field]} aria-valuetext={draft[field]} aria-invalid={Boolean(errors[field])} aria-describedby={describedBy(field)} onChange={(event) => patch({ [field]: event.target.value })} />
             <span className="profile-segment__steppers"><button type="button" aria-label={t('form.increment', { field: t(label) })} onClick={() => normalizeSegment(field, 1)}><ChevronUp aria-hidden="true" size={13} /></button><button type="button" aria-label={t('form.decrement', { field: t(label) })} onClick={() => normalizeSegment(field, -1)}><ChevronDown aria-hidden="true" size={13} /></button></span>
           </div>{fieldError(field)}</div>)}
       </div></fieldset>

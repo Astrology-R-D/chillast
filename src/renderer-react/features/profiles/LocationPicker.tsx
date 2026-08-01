@@ -43,6 +43,7 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
   const searchSequence = useRef(0);
   const resolveSequence = useRef(0);
   const skipSearch = useRef(false);
+  const searchWidgetRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (skipSearch.current) { skipSearch.current = false; return undefined; }
@@ -108,13 +109,17 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
 
   return <fieldset className="location-picker" disabled={disabled}>
     <legend>{t('form.birthPlace')}</legend>
-    <div className="profile-field location-picker__search">
+    <div ref={searchWidgetRef} className="profile-field location-picker__search" onBlurCapture={(event) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && searchWidgetRef.current?.contains(next)) return;
+      setOpen(false); setActive(-1);
+    }}>
       <label htmlFor={`${listId}-search`}>{t('form.locationSearch')}</label>
       <input id={`${listId}-search`} data-profile-control role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={listId}
         aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined} value={query} placeholder={t('form.citySearch')}
-        onChange={(event) => changeQuery(event.target.value)} onFocus={() => results.length && setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 0)} onKeyDown={keyDown} />
+        onChange={(event) => changeQuery(event.target.value)} onFocus={() => results.length && setOpen(true)} onKeyDown={keyDown} />
       {open && <div id={listId} role="listbox" className="location-picker__results">
-        {results.map((city, index) => <button id={`${listId}-${index}`} key={city.key} type="button" role="option" aria-selected={active === index}
+        {results.map((city, index) => <button id={`${listId}-${index}`} key={city.key} type="button" role="option" tabIndex={-1} aria-selected={active === index}
           onMouseDown={(event) => event.preventDefault()} onClick={() => select(city)}>{city.label}</button>)}
         {searchState === 'loading' && <span role="status">{t('form.locationSearching')}</span>}
         {searchState === 'error' && <span role="alert">{t('form.locationSearchFailed', { message: searchError })}</span>}

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import locale from '../../../../locale/zh.json';
@@ -57,15 +58,36 @@ test('supports keyboard and click selection while manual location fields remain 
   fireEvent.change(search, { target: { value: '北京' } });
   await act(() => vi.advanceTimersByTimeAsync(200));
   await act(async () => Promise.resolve());
+  const option = screen.getByRole('option', { name: /北京/ });
+  expect(option).toHaveAttribute('tabindex', '-1');
   fireEvent.keyDown(search, { key: 'ArrowDown' });
+  expect(search).toHaveAttribute('aria-activedescendant', option.id);
+  fireEvent.blur(search, { relatedTarget: option });
+  expect(screen.getByRole('listbox')).toBeInTheDocument();
   fireEvent.keyDown(search, { key: 'Escape' });
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   fireEvent.focus(search);
+  fireEvent.mouseDown(screen.getByRole('option', { name: /北京/ }));
   fireEvent.click(screen.getByRole('option', { name: /北京/ }));
   expect(screen.getByRole('textbox', { name: '地点名称' })).toHaveValue('北京 / Beijing');
   expect(screen.getByRole('spinbutton', { name: '纬度' })).toHaveValue(39.9);
   fireEvent.change(screen.getByRole('textbox', { name: '地点名称' }), { target: { value: '手动地点' } });
   expect(screen.getByRole('textbox', { name: '地点名称' })).toHaveValue('手动地点');
+});
+
+test('tabs from search to the first manual field without focusing an option or body', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.spyOn(apiClient, 'searchCities').mockResolvedValue([beijing]);
+  render(<Wrapper />);
+  const search = screen.getByRole('combobox', { name: '搜索出生地' });
+  fireEvent.change(search, { target: { value: '北京' } });
+  await act(() => vi.advanceTimersByTimeAsync(200));
+  await act(async () => Promise.resolve());
+  search.focus();
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  await user.tab();
+  expect(screen.getByRole('textbox', { name: '地点名称' })).toHaveFocus();
+  expect(document.body).not.toHaveFocus();
 });
 
 test('emits a complete location value for every manual change', () => {

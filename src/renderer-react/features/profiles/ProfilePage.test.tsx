@@ -390,14 +390,23 @@ test('keeps focus trapped on dialog status while delete and refresh are unresolv
 test('opens create and edit modes inside the page while keeping the directory visible', async () => {
   setup();
   await screen.findByRole('heading', { name: '王晓明' });
-  await userEvent.click(screen.getByRole('button', { name: '新建档案' }));
+  const create = screen.getByRole('button', { name: '新建档案' });
+  create.focus();
+  await userEvent.click(create);
   expect(screen.getByRole('form', { name: '新建档案' })).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: '中文名字' })).toHaveFocus();
   expect(screen.getByRole('complementary', { name: '档案目录' })).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '取消' }));
   expect(screen.getByRole('heading', { name: '王晓明' })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  expect(create).toHaveFocus();
+  const edit = screen.getByRole('button', { name: '编辑档案' });
+  edit.focus();
+  await userEvent.click(edit);
   expect(screen.getByRole('form', { name: '编辑档案' })).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: '中文名字' })).toHaveValue('王晓明');
+  expect(screen.getByRole('textbox', { name: '中文名字' })).toHaveFocus();
+  await userEvent.click(screen.getByRole('button', { name: '取消' }));
+  expect(screen.getByRole('button', { name: /^选择档案：王晓明/ })).toHaveFocus();
 });
 
 test('retains the authoritative saved edit after refresh failure and retries refresh without saving twice', async () => {
@@ -418,4 +427,58 @@ test('retains the authoritative saved edit after refresh failure and retries ref
   expect(await screen.findByRole('heading', { name: '王晓明更新' })).toBeInTheDocument();
   expect(api.profiles.save).toHaveBeenCalledTimes(1);
   expect(list).toHaveBeenCalledTimes(3);
+});
+
+test('saves changed draft content again after a committed save has a refresh failure', async () => {
+  const firstSaved = { ...alpha, nameZh: '王晓明更新', updatedAt: '2026-08-02T13:00:00.000Z' };
+  const secondSaved = { ...firstSaved, notes: '刷新失败后的新备注', updatedAt: '2026-08-02T13:05:00.000Z' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: false, error: '刷新断开' }).mockResolvedValueOnce({ ok: true, data: [secondSaved] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValueOnce({ ok: true, data: firstSaved }).mockResolvedValueOnce({ ok: true, data: secondSaved });
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  const name = screen.getByRole('textbox', { name: '中文名字' });
+  await userEvent.clear(name); await userEvent.type(name, '王晓明更新');
+  await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('刷新断开');
+  const notes = screen.getByRole('textbox', { name: '备注' });
+  await userEvent.clear(notes); await userEvent.type(notes, '刷新失败后的新备注');
+  await userEvent.click(screen.getByRole('button', { name: '重试保存' }));
+  expect(await screen.findByRole('heading', { name: '王晓明更新' })).toBeInTheDocument();
+  expect(api.profiles.save).toHaveBeenCalledTimes(2);
+  expect(api.profiles.save.mock.calls[1][0].notes).toBe('刷新失败后的新备注');
+});
+
+test('cancel after committed save failure displays overlay until equivalent canonical data arrives', async () => {
+  const committed = { ...alpha, nameZh: '已提交姓名', notes: '已提交备注', updatedAt: '2026-08-02T13:10:00.000Z' };
+  const canonical = { ...committed, updatedAt: '2026-08-02T13:15:00.000Z' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: false, error: '刷新断开' }).mockResolvedValueOnce({ ok: true, data: [canonical] });
+  const { api, client } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: committed });
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  fireEvent.change(screen.getByRole('textbox', { name: '中文名字' }), { target: { value: '已提交姓名' } });
+  fireEvent.change(screen.getByRole('textbox', { name: '备注' }), { target: { value: '已提交备注' } });
+  await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
+  await screen.findByRole('alert');
+  await userEvent.click(screen.getByRole('button', { name: '取消' }));
+  expect(screen.getByRole('heading', { name: '已提交姓名' })).toBeInTheDocument();
+  expect(screen.getByText('已提交备注')).toBeInTheDocument();
+  expect(client.getQueryData<Profile[]>(['profiles'])?.[0]).toEqual(alpha);
+  await client.refetchQueries({ queryKey: ['profiles'] });
+  expect(await screen.findByText('2026-08-02T13:15:00.000Z')).toBeInTheDocument();
+  expect(screen.queryByText('2026-08-02T13:10:00.000Z')).not.toBeInTheDocument();
+});
+
+test('ignores a save completion after selecting out of the editor', async () => {
+  const pending = deferred<{ ok: true; data: Profile }>();
+  const { api } = setup();
+  api.profiles.save.mockReturnValue(pending.promise);
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
+  await userEvent.click(screen.getByRole('button', { name: /^选择档案：Beatrice Longname/ }));
+  await act(async () => pending.resolve({ ok: true, data: { ...alpha, nameZh: '迟到结果' } }));
+  expect(await screen.findByRole('heading', { name: 'Beatrice Longname' })).toBeInTheDocument();
+  expect(screen.queryByRole('form', { name: '编辑档案' })).not.toBeInTheDocument();
 });

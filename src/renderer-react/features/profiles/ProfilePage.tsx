@@ -21,6 +21,22 @@ interface ProfilePageProps {
 }
 
 type DuplicatePhase = 'idle' | 'saving' | 'refreshing';
+type EditorCommit = { profile: Profile; fingerprint: string };
+
+function editableProfile(value: Profile | ProfileSaveInput, fallbackId = ''): unknown {
+  return {
+    id: value.id ?? fallbackId,
+    nameZh: value.nameZh.trim(),
+    nameEn: value.nameEn.trim(),
+    gender: value.gender,
+    birthData: value.birthData,
+    notes: value.notes,
+    tags: value.tags.map((tag) => tag.normalize('NFC').trim()),
+  };
+}
+
+const profileFingerprint = (value: Profile | ProfileSaveInput, fallbackId = '') => JSON.stringify(editableProfile(value, fallbackId));
+const profilesEquivalent = (left: Profile, right: Profile) => profileFingerprint(left) === profileFingerprint(right);
 
 export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate, onCreate, onEdit, onFormRegistration }: ProfilePageProps) {
   const { t } = useI18n();
@@ -32,7 +48,9 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   const recents = useStore(workspaceStore, (state) => state.recentUses);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; profile?: Profile } | null>(null);
-  const [editorSaved, setEditorSaved] = useState<Profile | null>(null);
+  const [editorCommit, setEditorCommit] = useState<EditorCommit | null>(null);
+  const [committedOverlays, setCommittedOverlays] = useState<Record<string, Profile>>({});
+  const [editorFocusReturn, setEditorFocusReturn] = useState<{ origin: HTMLElement | null; selectedId: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const [duplicateError, setDuplicateError] = useState('');
@@ -45,20 +63,48 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   const pageRef = useRef<HTMLDivElement | null>(null);
   const duplicateBusyRef = useRef(false);
   const duplicateTokenRef = useRef(0);
+  const editorCommitRef = useRef<EditorCommit | null>(null);
+  const editorGenerationRef = useRef(0);
+  const editorTriggerRef = useRef<HTMLElement | null>(null);
   const deleteTrigger = useRef<HTMLElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
   const deleteStatusRef = useRef<HTMLParagraphElement | null>(null);
   const deletePending = remove.isPending || deleteRefreshing;
 
+  const visibleProfiles = profiles.data && [
+    ...profiles.data.map((profile) => committedOverlays[profile.id] ?? profile),
+    ...Object.values(committedOverlays).filter((overlay) => !profiles.data.some(({ id }) => id === overlay.id)),
+  ];
+
   useEffect(() => {
     if (!profiles.data) return;
-    const ids = profiles.data.map(({ id }) => id);
+    setCommittedOverlays((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const canonical of profiles.data) {
+        if (next[canonical.id] && profilesEquivalent(next[canonical.id], canonical)) { delete next[canonical.id]; changed = true; }
+      }
+      return changed ? next : current;
+    });
+    const ids = visibleProfiles?.map(({ id }) => id) ?? [];
     workspaceStore.getState().reconcileProfiles(ids);
     setSelectedId((current) => current && ids.includes(current)
       ? current
       : workspaceStore.getState().primaryProfileId ?? ids[0] ?? null);
   }, [profiles.data, workspaceStore]);
+
+  useLayoutEffect(() => {
+    if (editor) {
+      pageRef.current?.querySelector<HTMLElement>('.profile-form [name="nameZh"]')?.focus();
+      return;
+    }
+    if (!editorFocusReturn) return;
+    const { origin, selectedId: returnId } = editorFocusReturn;
+    const selectedRow = returnId ? [...(pageRef.current?.querySelectorAll<HTMLElement>('[data-profile-id]') ?? [])].find((element) => element.dataset.profileId === returnId) : undefined;
+    (origin?.isConnected ? origin : selectedRow ?? pageRef.current?.querySelector<HTMLElement>('[data-profile-create]'))?.focus();
+    setEditorFocusReturn(null);
+  }, [editor, editorFocusReturn]);
 
   useLayoutEffect(() => {
     if (!deleteTarget) return;
@@ -81,31 +127,54 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   }, [deleteTarget, focusAfterDelete]);
 
   const select = (id: string) => {
+    editorGenerationRef.current += 1;
     setSelectedId(id);
-    setEditor(null); setEditorSaved(null);
+    setEditor(null); setEditorCommit(null); editorCommitRef.current = null;
     workspaceStore.getState().recordRecentUse(id);
   };
-  const selected = profiles.data?.find(({ id }) => id === selectedId) ?? null;
-  const openCreate = () => { setEditor({ mode: 'create' }); setEditorSaved(null); onCreate?.(); };
-  const openEdit = (profile: Profile) => { setEditor({ mode: 'edit', profile }); setEditorSaved(null); onEdit?.(profile); };
+  const selected = visibleProfiles?.find(({ id }) => id === selectedId) ?? null;
+  const beginEditor = () => {
+    editorGenerationRef.current += 1;
+    editorTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    editorCommitRef.current = null; setEditorCommit(null); setEditorFocusReturn(null);
+  };
+  const openCreate = () => { beginEditor(); setEditor({ mode: 'create' }); onCreate?.(); };
+  const openEdit = (profile: Profile) => { beginEditor(); setEditor({ mode: 'edit', profile }); onEdit?.(profile); };
+  const closeEditor = () => {
+    editorGenerationRef.current += 1;
+    const committed = editorCommitRef.current;
+    if (committed) setCommittedOverlays((current) => ({ ...current, [committed.profile.id]: committed.profile }));
+    setEditorFocusReturn({ origin: editorTriggerRef.current, selectedId });
+    setEditor(null); setEditorCommit(null); editorCommitRef.current = null;
+  };
   const saveEditor = async (payload: ProfileSaveInput): Promise<void> => {
-    let authoritative = editorSaved;
-    if (!authoritative) {
-      authoritative = await save.mutateAsync(payload);
-      setEditorSaved(authoritative);
+    const generation = editorGenerationRef.current;
+    let committed = editorCommitRef.current;
+    const fingerprint = profileFingerprint(payload, committed?.profile.id);
+    if (!committed || committed.fingerprint !== fingerprint) {
+      const authoritative = await save.mutateAsync(payload);
+      if (generation !== editorGenerationRef.current) return;
+      committed = { profile: authoritative, fingerprint: profileFingerprint(payload, authoritative.id) };
+      editorCommitRef.current = committed; setEditorCommit(committed);
+      setCommittedOverlays((current) => ({ ...current, [authoritative.id]: authoritative }));
+      setSelectedId(authoritative.id);
       setEditor({ mode: 'edit', profile: authoritative });
     }
     try {
       await refreshProfiles(queryClient);
     } catch (error) {
+      if (generation !== editorGenerationRef.current) return;
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(t('profiles.savedRefreshFailed', { message }));
     }
+    if (generation !== editorGenerationRef.current) return;
     const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
-    if (!refreshed.some(({ id }) => id === authoritative.id)) throw new Error(t('profiles.savedProfileMissing'));
-    setSelectedId(authoritative.id);
-    workspaceStore.getState().recordRecentUse(authoritative.id);
-    setEditor(null); setEditorSaved(null);
+    const canonical = refreshed.find(({ id }) => id === committed.profile.id);
+    if (!canonical || !profilesEquivalent(canonical, committed.profile)) throw new Error(t('profiles.savedProfileMissing'));
+    setCommittedOverlays((current) => { const next = { ...current }; delete next[committed.profile.id]; return next; });
+    setSelectedId(committed.profile.id);
+    workspaceStore.getState().recordRecentUse(committed.profile.id);
+    setEditor(null); setEditorCommit(null); editorCommitRef.current = null;
   };
   const beginDuplicate = (phase: Exclude<DuplicatePhase, 'idle'>): number | null => {
     if (duplicateBusyRef.current) return null;
@@ -244,9 +313,9 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   if (profiles.isPending) return <div className="profile-state" role="status">{t('profiles.loading')}</div>;
   if (profiles.isError && !profiles.data) return <div className="profile-state" role="alert"><p>{t('profiles.loadFailed', { message: profiles.error.message })}</p><button data-profile-control type="button" onClick={() => profiles.refetch()}>{t('profiles.retry')}</button></div>;
   return <div ref={pageRef} className="profile-page">
-    <ProfileDirectory profiles={profiles.data} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
+    <ProfileDirectory profiles={visibleProfiles ?? []} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
     <section className="profile-page__surface">
-      {editor ? <ProfileForm key="profile-editor" profile={editorSaved ?? editor.profile ?? null} onSave={saveEditor} onCancel={() => { setEditor(null); setEditorSaved(null); }} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
+      {editor ? <ProfileForm key="profile-editor" profile={editorCommit?.profile ?? editor.profile ?? null} onSave={saveEditor} onCancel={closeEditor} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
         : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => void duplicate(selected)}
         onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />

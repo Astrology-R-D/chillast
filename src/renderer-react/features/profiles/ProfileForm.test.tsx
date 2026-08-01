@@ -101,12 +101,26 @@ test('disables all editable controls while save is pending', async () => {
   await act(async () => pending.resolve()); await saving;
 });
 
-test('clamps segmented hour steppers and preserves empty numeric blur', async () => {
+test('preserves typed invalid segments through blur and validates without coercion', async () => {
+  let registration!: DraftRegistration;
+  view({ onDraftStateChange: (value) => { registration = value; } });
+  const hour = screen.getByRole('spinbutton', { name: '时' });
+  fireEvent.change(hour, { target: { value: '24' } }); fireEvent.blur(hour);
+  expect(hour).toHaveValue(24);
+  await act(async () => { expect(await registration.save()).toBe(false); });
+  expect(await screen.findByText('小时须为 0 至 23 的整数')).toBeInTheDocument();
+  fireEvent.change(hour, { target: { value: '1.9' } }); fireEvent.blur(hour);
+  expect(hour).toHaveValue(1.9);
+  await act(async () => { expect(await registration.save()).toBe(false); });
+  expect(await screen.findByText('小时须为 0 至 23 的整数')).toBeInTheDocument();
+});
+
+test('clamps and normalizes segments only through Chevron steppers', async () => {
   view();
   const hour = screen.getByRole('spinbutton', { name: '时' });
-  await userEvent.clear(hour); await userEvent.type(hour, '0'); fireEvent.blur(hour);
+  fireEvent.change(hour, { target: { value: '0' } });
   await userEvent.click(screen.getByRole('button', { name: '时增加' })); expect(hour).toHaveAttribute('aria-valuetext', '01');
-  await userEvent.clear(hour); await userEvent.type(hour, '23'); fireEvent.blur(hour);
+  fireEvent.change(hour, { target: { value: '24' } });
   await userEvent.click(screen.getByRole('button', { name: '时增加' })); expect(hour).toHaveAttribute('aria-valuetext', '23');
   const minute = screen.getByRole('spinbutton', { name: '分' }); await userEvent.clear(minute); fireEvent.blur(minute); expect(minute).toHaveAttribute('aria-valuetext', '');
 });
