@@ -21,6 +21,21 @@ const AstrologyService = require('../src/core/astrology/AstrologyService');
 
 const consoleErrors = [];
 
+async function poll(win, description, probe, timeout = 10000) {
+  const deadline = Date.now() + timeout;
+  let last;
+  while (Date.now() < deadline) {
+    try {
+      last = await win.webContents.executeJavaScript(`(${probe})()`);
+      if (last && last.ready) return last.value;
+    } catch (error) {
+      last = error && error.message ? error.message : String(error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`${description} timed out; last result: ${JSON.stringify(last)}`);
+}
+
 function fail(message) {
   console.error(`\n✗ SMOKE FAILED: ${message}\n`);
   app.exit(1);
@@ -40,7 +55,19 @@ app.whenReady().then(async () => {
   // Isolated temp store.
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'myst-smoke-'));
   const repo = new ProfileRepository(tmpDir).init();
-  new IpcRouter({ ipcMain, profileRepository: repo, astrologyService: new AstrologyService() }).register();
+  const aiService = {
+    status: () => ({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
+    getInitStatus: () => null,
+    setContext: () => {},
+  };
+  const aiSessionStore = { list: () => [] };
+  new IpcRouter({
+    ipcMain,
+    profileRepository: repo,
+    astrologyService: new AstrologyService(),
+    aiService,
+    aiSessionStore,
+  }).register();
 
   const win = new BrowserWindow({
     show: false,
@@ -64,8 +91,13 @@ app.whenReady().then(async () => {
 
   try {
     await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'Index.html'));
-    // Allow the app's async start() and a render frame to complete.
-    await new Promise((r) => setTimeout(r, 1500));
+    await poll(win, 'legacy shell startup', () => ({
+      ready: Boolean(
+        window.mystApi
+        && document.querySelector('.sidebar')
+        && document.querySelectorAll('.nav-item').length >= 3
+      ),
+    }));
 
     const report = await win.webContents.executeJavaScript(`(async () => {
       const out = { hasApi: !!window.mystApi };

@@ -120,13 +120,17 @@
 
 .shell__main-toolbar,
 .shell__ai-toolbar {
-  display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
   padding: var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.shell__main-toolbar:not([hidden]),
+.shell__ai-toolbar:not([hidden]) {
+  display: flex;
 }
 
 .shell__main-content,
@@ -181,11 +185,14 @@
   top: 0;
   right: 0;
   bottom: 0;
-  display: flex;
   width: min(420px, calc(100vw - 56px));
   flex-direction: column;
   border-left: 1px solid var(--border-strong);
   box-shadow: var(--shadow-float);
+}
+
+.shell__ai-overlay:not([hidden]) {
+  display: flex;
 }
 
 .shell__ai-content {

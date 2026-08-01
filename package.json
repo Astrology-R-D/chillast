@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node tests/RunAll.js && node --test tests/AiServiceConfiguration.test.js",
-    "smoke": "node tests/SmokeRenderer.js",
+    "smoke": "electron tests/SmokeRenderer.js",
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:react": "concurrently -k \"npm:dev:renderer\" \"wait-on tcp:5173 && cross-env CHILLAST_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
     "build:ui-fonts": "node tools/build-ui-fonts.mjs",
@@ -18,6 +18,9 @@
     "test:renderer": "vitest run",
     "test:renderer:watch": "vitest",
     "test:loader": "node --test tests/RendererLoader.test.js",
+    "test:preload": "node --test tests/PreloadSubscriptions.test.js",
+    "typecheck": "tsc --noEmit",
+    "verify:renderer": "npm run test:loader && npm run test:preload && npm run test:renderer && npm run typecheck && npm run build:renderer",
     "smoke:react": "npm run build:renderer && electron tests/SmokeReactRenderer.js",
     "rebuild": "electron-rebuild -f --only swisseph-v2",
     "rebuild:node": "npm rebuild swisseph-v2",
