@@ -4,6 +4,8 @@ import type {
   CloseDecision,
   IpcResult,
   LocaleDictionary,
+  LocationResolution,
+  Profile,
   ProfileSaveInput,
   ResolveLocationInput,
 } from '../api/contracts';
@@ -20,21 +22,21 @@ declare global {
     getConfig(): Promise<IpcResult<AppConfig>>;
     getLocale(): Promise<IpcResult<LocaleDictionary>>;
     profiles: {
-      list(): Promise<IpcResult<unknown>>;
-      get(id: string): Promise<IpcResult<unknown>>;
-      save(profile: ProfileSaveInput): Promise<IpcResult<unknown>>;
-      remove(id: string): Promise<IpcResult<unknown>>;
+      list(): Promise<IpcResult<Profile[]>>;
+      get(id: string): Promise<IpcResult<Profile | null>>;
+      save(profile: ProfileSaveInput): Promise<IpcResult<Profile>>;
+      remove(id: string): Promise<IpcResult<boolean>>;
     };
-    searchCities(query: string): Promise<IpcResult<unknown>>;
+    searchCities(query: string): Promise<IpcResult<unknown[]>>;
     chinese: {
-      searchCities(query: string): Promise<IpcResult<unknown>>;
+      searchCities(query: string): Promise<IpcResult<unknown[]>>;
     };
     locations: {
-      resolve(input: ResolveLocationInput): Promise<IpcResult<unknown>>;
+      resolve(input: ResolveLocationInput): Promise<IpcResult<LocationResolution>>;
     };
     app: {
       onCloseRequested(callback: () => void): () => void;
-      decideClose(decision: CloseDecision): Promise<IpcResult<unknown>>;
+      decideClose(decision: CloseDecision): Promise<IpcResult<boolean>>;
     };
     ai: MystAiApi;
   }

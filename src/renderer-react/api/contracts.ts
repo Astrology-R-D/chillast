@@ -30,15 +30,8 @@ export interface Profile {
   updatedAt: string;
 }
 
-export interface ProfileSaveInput {
-  id?: string;
-  nameZh?: string;
-  nameEn?: string;
-  gender: Gender;
-  birthData: BirthData;
-  notes?: string;
-  tags?: string[];
-}
+export type ProfileSaveInput = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
+  & Partial<Pick<Profile, 'id' | 'createdAt' | 'updatedAt'>>;
 
 export interface WesternCityRaw {
   nameZh?: string;
@@ -56,8 +49,12 @@ export interface ChineseCityRaw {
 }
 
 export interface CitySearchResult {
+  key: string;
   label: string;
-  name: string;
+  nameZh: string;
+  nameEn: string;
+  region: string;
+  country: string;
   latitude: number;
   longitude: number;
   source: 'western' | 'chinese';
@@ -75,8 +72,8 @@ export interface ResolveLocationInput {
 
 export interface LocationResolution {
   timeZone: string;
-  offsetMinutes: number;
-  utcOffset: string;
+  utcOffsetMinutes: number;
+  utcOffsetLabel: string;
   instantUtc: string;
 }
 

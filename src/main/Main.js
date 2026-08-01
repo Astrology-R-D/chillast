@@ -15,7 +15,7 @@ try {
 const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
 const AiSessionStore = require('./AiSessionStore');
-const LocationResolver = require('../core/location/LocationResolver');
+const LocationResolver = require('../core/astrology/LocationResolver');
 const { installExternalUrlHandler, resolveSmokeReportPath } = require('./MainPolicy');
 const {
   isNavigationAllowed,
@@ -157,9 +157,13 @@ class Main {
       aiService: this.aiService,
       aiSessionStore: this.aiSessionStore,
       locationResolver: new LocationResolver(),
-      // Task 7 replaces this inert sink with the guarded window-close lifecycle.
-      closeDecision: () => {},
+      closeDecision: this._handleCloseDecision.bind(this),
     }).register();
+  }
+
+  _handleCloseDecision(decision) {
+    if (decision !== 'proceed' && decision !== 'cancel') throw new Error('Invalid close decision');
+    return false;
   }
 
   createWindow() {
@@ -344,4 +348,6 @@ class Main {
   }
 }
 
-new Main().start();
+if (require.main === module) new Main().start();
+
+module.exports = Main;

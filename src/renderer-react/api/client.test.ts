@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { apiClient, parseAiStatus, parseLocationResolution, parseProfile, unwrap } from './client';
-import type { IpcResult } from './contracts';
+import type {
+  ChineseCityRaw, IpcResult, LocationResolution, Profile, ProfileSaveInput, ResolveLocationInput, WesternCityRaw,
+} from './contracts';
 
 const birthData = {
   year: 1990, month: 1, day: 15, hour: 14, minute: 30,
@@ -25,8 +27,8 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
     },
     searchCities: () => ok([]),
     chinese: { searchCities: () => ok([]) },
-    locations: { resolve: () => ok({ timeZone: 'UTC', offsetMinutes: 0, utcOffset: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' }) },
-    app: { onCloseRequested: () => () => {}, decideClose: () => ok(undefined) },
+    locations: { resolve: () => ok({ timeZone: 'UTC', utcOffsetMinutes: 0, utcOffsetLabel: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' }) },
+    app: { onCloseRequested: () => () => {}, decideClose: () => ok(false) },
     ai: {
       status: () => ok({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
       initStatus: () => ok(null), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
@@ -36,6 +38,29 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
   window.mystApi = api;
   return api;
 }
+
+function assertAmbientContract(api: MystApi, input: ProfileSaveInput, location: ResolveLocationInput) {
+  const list: Promise<IpcResult<Profile[]>> = api.profiles.list();
+  const get: Promise<IpcResult<Profile | null>> = api.profiles.get('id');
+  const save: Promise<IpcResult<Profile>> = api.profiles.save(input);
+  const remove: Promise<IpcResult<boolean>> = api.profiles.remove('id');
+  const western: Promise<IpcResult<unknown[]>> = api.searchCities('x');
+  const chinese: Promise<IpcResult<unknown[]>> = api.chinese.searchCities('x');
+  const resolution: Promise<IpcResult<LocationResolution>> = api.locations.resolve(location);
+  const close: Promise<IpcResult<boolean>> = api.app.decideClose('cancel');
+  return { list, get, save, remove, western, chinese, resolution, close };
+}
+void assertAmbientContract;
+
+const createInput: ProfileSaveInput = {
+  nameZh: profile.nameZh, nameEn: profile.nameEn, gender: profile.gender,
+  birthData: profile.birthData, notes: profile.notes, tags: profile.tags,
+};
+const editInput: ProfileSaveInput = profile;
+const profileInputs = [createInput, editInput] satisfies ProfileSaveInput[];
+const westernCity: WesternCityRaw = { nameZh: '北京', nameEn: 'Beijing', country: 'CN', latitude: 39.9, longitude: 116.4 };
+const chineseCity: ChineseCityRaw = { nameZh: '北京', province: '北京', latitude: 39.9, longitude: 116.4 };
+void [profileInputs, westernCity, chineseCity];
 
 afterEach(() => {
   Reflect.deleteProperty(window, 'mystApi');
@@ -59,7 +84,7 @@ describe('unwrap', () => {
 });
 
 test('accesses mystApi when a request is made rather than at module load', async () => {
-  window.mystApi = {
+  installApi({
     getConfig: async () => ({ ok: true, data: { locale: 'zh' } }),
     getLocale: async () => ({ ok: true, data: { common: { save: '保存' } } }),
     ai: {
@@ -77,7 +102,7 @@ test('accesses mystApi when a request is made rather than at module load', async
       onStatusChanged: () => () => {},
       onInitProgress: () => () => {},
     },
-  };
+  });
 
   await expect(apiClient.getConfig()).resolves.toMatchObject({ locale: 'zh' });
   await expect(apiClient.getLocale()).resolves.toEqual({ common: { save: '保存' } });
@@ -104,10 +129,10 @@ describe('profile boundary', () => {
     const remove = vi.fn(() => ok(true));
     installApi({ profiles: { list, get, save, remove } });
 
-    await expect(apiClient.profiles.list()).resolves.toEqual([profile]);
-    await expect(apiClient.profiles.get('profile-1')).resolves.toEqual(profile);
-    await expect(apiClient.profiles.save(profile)).resolves.toEqual(profile);
-    await expect(apiClient.profiles.remove('profile-1')).resolves.toBe(true);
+    await expect(apiClient.listProfiles()).resolves.toEqual([profile]);
+    await expect(apiClient.getProfile('profile-1')).resolves.toEqual(profile);
+    await expect(apiClient.saveProfile(profile)).resolves.toEqual(profile);
+    await expect(apiClient.removeProfile('profile-1')).resolves.toBe(true);
     expect(get).toHaveBeenCalledWith('profile-1');
     expect(save).toHaveBeenCalledWith(profile);
     expect(remove).toHaveBeenCalledWith('profile-1');
@@ -117,19 +142,27 @@ describe('profile boundary', () => {
     [{ ...profile, tags: ['ok', 2] }],
     [{ ...profile, createdAt: 'yesterday' }],
     [{ ...profile, createdAt: '2025-02-30T00:00:00.000Z' }],
-    [{ ...profile, gender: { toString: () => 'other' } }],
+    [{ ...profile, gender: { toString: (): string => 'other' } }],
     [{ ...profile, birthData: { ...birthData, day: 32 } }],
+    [{ ...profile, birthData: { ...birthData, year: 3001 } }],
     [{ ...profile, birthData: { ...birthData, location: { ...birthData.location, latitude: 100 } } }],
+    [{ ...profile, tags: [' friend'] }],
+    [{ ...profile, tags: ['Friend', 'friend'] }],
+    [{ ...profile, tags: Array.from({ length: 21 }, (_, index) => `tag-${index}`) }],
   ])('rejects malformed successful profile payload %#', (value) => {
     expect(() => parseProfile(value)).toThrow('档案数据无效');
   });
 
+  test('accepts normalized tags that Unicode default folding keeps distinct', () => {
+    expect(parseProfile({ ...profile, tags: ['i', 'ı'] }).tags).toEqual(['i', 'ı']);
+  });
+
   test('rejects malformed successful profile lists and nullable get payloads correctly', async () => {
     const api = installApi();
-    api.profiles.list = () => ok([{ ...profile, tags: 'friend' }]);
-    await expect(apiClient.profiles.list()).rejects.toThrow('档案数据无效');
+    api.profiles.list = () => ok([{ ...profile, tags: 'friend' } as unknown as Profile]);
+    await expect(apiClient.listProfiles()).rejects.toThrow('档案数据无效');
     api.profiles.get = () => ok(null);
-    await expect(apiClient.profiles.get('missing')).resolves.toBeNull();
+    await expect(apiClient.getProfile('missing')).resolves.toBeNull();
   });
 });
 
@@ -146,9 +179,9 @@ describe('city search', () => {
     installApi({ searchCities: western, chinese: { searchCities: chinese } });
 
     await expect(apiClient.searchCities('  纽约  ')).resolves.toEqual([
-      { label: 'Near New York / 近纽约 (US)', name: 'Near New York', latitude: 40.7133, longitude: -74.006, source: 'western' },
-      { label: 'New York / 纽约 (US)', name: 'New York', latitude: 40.7128, longitude: -74.006, source: 'western' },
-      { label: '阿尔巴尼 (纽约州)', name: '阿尔巴尼', latitude: 42.6526, longitude: -73.7562, source: 'chinese' },
+      { key: '40.7128:-74.0060', label: '纽约 / New York', nameZh: '纽约', nameEn: 'New York', region: '', country: 'US', latitude: 40.7128, longitude: -74.006, source: 'western' },
+      { key: '40.7133:-74.0060', label: '近纽约 / Near New York', nameZh: '近纽约', nameEn: 'Near New York', region: '', country: 'US', latitude: 40.7133, longitude: -74.006, source: 'western' },
+      { key: '42.6526:-73.7562', label: '阿尔巴尼, 纽约州', nameZh: '阿尔巴尼', nameEn: '', region: '纽约州', country: 'CN', latitude: 42.6526, longitude: -73.7562, source: 'chinese' },
     ]);
     expect(western).toHaveBeenCalledWith('纽约');
     expect(chinese).toHaveBeenCalledWith('纽约');
@@ -193,26 +226,26 @@ describe('city search', () => {
 
 describe('location and close lifecycle', () => {
   test('validates location resolutions and forwards requests', async () => {
-    const resolve = vi.fn(() => ok({ timeZone: 'Asia/Shanghai', offsetMinutes: 480, utcOffset: 'UTC+08:00', instantUtc: '1990-01-15T06:30:00.000Z' }));
+    const resolve = vi.fn(() => ok({ timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1990-01-15T06:30:00.000Z' }));
     installApi({ locations: { resolve } });
     const input = { ...birthData, latitude: birthData.location.latitude, longitude: birthData.location.longitude };
     Reflect.deleteProperty(input, 'location');
-    await expect(apiClient.locations.resolve(input)).resolves.toMatchObject({ timeZone: 'Asia/Shanghai', offsetMinutes: 480 });
+    await expect(apiClient.resolveLocation(input)).resolves.toMatchObject({ timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480 });
     expect(resolve).toHaveBeenCalledWith(input);
-    expect(() => parseLocationResolution({ timeZone: 'UTC', offsetMinutes: Infinity, utcOffset: 'UTC+00:00', instantUtc: 'bad' }))
+    expect(() => parseLocationResolution({ timeZone: 'UTC', utcOffsetMinutes: Infinity, utcOffsetLabel: 'UTC+00:00', instantUtc: 'bad' }))
       .toThrow('时区解析数据无效');
-    expect(() => parseLocationResolution({ timeZone: 'UTC', offsetMinutes: 60, utcOffset: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' }))
+    expect(() => parseLocationResolution({ timeZone: 'UTC', utcOffsetMinutes: 60, utcOffsetLabel: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' }))
       .toThrow('时区解析数据无效');
   });
 
   test('forwards close subscription cleanup and strict decisions', async () => {
     const cleanup = vi.fn();
     const onCloseRequested = vi.fn(() => cleanup);
-    const decideClose = vi.fn(() => ok(undefined));
+    const decideClose = vi.fn(() => ok(false));
     installApi({ app: { onCloseRequested, decideClose } });
     const callback = vi.fn();
-    expect(apiClient.app.onCloseRequested(callback)).toBe(cleanup);
-    await apiClient.app.decideClose('cancel');
+    expect(apiClient.onCloseRequested(callback)).toBe(cleanup);
+    await expect(apiClient.decideClose('cancel')).resolves.toBe(false);
     expect(onCloseRequested).toHaveBeenCalledWith(callback);
     expect(decideClose).toHaveBeenCalledWith('cancel');
   });
@@ -232,7 +265,7 @@ test.each([
 });
 
 test('getAiStatus rejects malformed successful IPC data', async () => {
-  window.mystApi = {
+  installApi({
     getConfig: async () => ({ ok: true, data: {} }),
     getLocale: async () => ({ ok: true, data: {} }),
     ai: {
@@ -241,7 +274,7 @@ test('getAiStatus rejects malformed successful IPC data', async () => {
       onStatusChanged: () => () => {},
       onInitProgress: () => () => {},
     },
-  };
+  });
 
   await expect(apiClient.getAiStatus()).rejects.toThrow('AI 状态数据无效');
 });

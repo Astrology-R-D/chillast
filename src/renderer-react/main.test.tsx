@@ -25,6 +25,24 @@ test('loads locale and renders the localized application shell', async () => {
   vi.stubGlobal('mystApi', {
     getLocale,
     getConfig: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+    profiles: {
+      list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      get: vi.fn().mockResolvedValue({ ok: true, data: null }),
+      save: vi.fn().mockRejectedValue(new Error('unused')),
+      remove: vi.fn().mockResolvedValue({ ok: true, data: false }),
+    },
+    searchCities: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+    chinese: { searchCities: vi.fn().mockResolvedValue({ ok: true, data: [] }) },
+    locations: {
+      resolve: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { timeZone: 'UTC', utcOffsetMinutes: 0, utcOffsetLabel: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' },
+      }),
+    },
+    app: {
+      onCloseRequested: vi.fn(() => () => {}),
+      decideClose: vi.fn().mockResolvedValue({ ok: true, data: false }),
+    },
     ai: {
       status: vi.fn().mockResolvedValue({ ok: true, data: { configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 } }),
       onStatusChanged: vi.fn(() => vi.fn()), initStatus: vi.fn(), onInitProgress: vi.fn(),

@@ -64,7 +64,7 @@ test('location and close-decision handlers are dependency-gated and trust protec
   const router = new IpcRouter({
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     locationResolver: { resolve: (input) => { resolutions.push(input); return { timeZone: 'UTC' }; } },
-    closeDecision: (decision) => decisions.push(decision),
+    closeDecision: (decision) => { decisions.push(decision); return false; },
   }).register();
   const mainFrame = {};
   const trusted = { mainFrame };
@@ -85,8 +85,9 @@ test('location and close-decision handlers are dependency-gated and trust protec
   assert.deepEqual(decisions, []);
   assert.equal((await handlers.get('app:closeDecision')({ sender: trusted, senderFrame: mainFrame }, 'invalid')).ok, false);
   assert.deepEqual(decisions, []);
-  assert.equal((await handlers.get('app:closeDecision')({ sender: trusted, senderFrame: mainFrame }, 'cancel')).ok, true);
-  assert.deepEqual(decisions, ['cancel']);
+  assert.deepEqual(await handlers.get('app:closeDecision')({ sender: trusted, senderFrame: mainFrame }, 'cancel'), { ok: true, data: false });
+  assert.deepEqual(await handlers.get('app:closeDecision')({ sender: trusted, senderFrame: mainFrame }, 'proceed'), { ok: true, data: false });
+  assert.deepEqual(decisions, ['cancel', 'proceed']);
 });
 
 test('optional bridge handlers are absent without injected dependencies', () => {

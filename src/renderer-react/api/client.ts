@@ -28,12 +28,17 @@ function isCanonicalIsoInstant(value: unknown): value is string {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value;
 }
 
+function foldProfileTag(value: string): string {
+  return Array.from(value, (character) =>
+    character === '\u0131' ? character : character.toUpperCase().toLowerCase()).join('');
+}
+
 function validBirthData(value: unknown): value is BirthData {
   if (!isRecord(value) || !isRecord(value.location)) return false;
   const { year, month, day, hour, minute } = value;
   const integerInRange = (candidate: unknown, minimum: number, maximum: number) =>
     Number.isInteger(candidate) && Number(candidate) >= minimum && Number(candidate) <= maximum;
-  if (!integerInRange(year, 1, 9999) || !integerInRange(month, 1, 12)
+  if (!integerInRange(year, 1, 3000) || !integerInRange(month, 1, 12)
     || !integerInRange(day, 1, 31) || !integerInRange(hour, 0, 23)
     || !integerInRange(minute, 0, 59)) return false;
   const leap = Number(year) % 4 === 0 && (Number(year) % 100 !== 0 || Number(year) % 400 === 0);
@@ -46,6 +51,14 @@ function validBirthData(value: unknown): value is BirthData {
 }
 
 export function parseProfile(value: unknown): Profile {
+  const validTags = isRecord(value) && Array.isArray(value.tags)
+    && value.tags.length <= 20
+    && value.tags.every((tag) => typeof tag === 'string'
+      && tag.length > 0
+      && tag === tag.trim()
+      && tag === tag.normalize('NFC')
+      && Array.from(tag).length <= 32)
+    && new Set(value.tags.map((tag) => foldProfileTag(String(tag)))).size === value.tags.length;
   if (!isRecord(value)
     || typeof value.id !== 'string' || !value.id
     || typeof value.nameZh !== 'string'
@@ -53,7 +66,7 @@ export function parseProfile(value: unknown): Profile {
     || typeof value.gender !== 'string' || !['male', 'female', 'other'].includes(value.gender)
     || !validBirthData(value.birthData)
     || typeof value.notes !== 'string'
-    || !Array.isArray(value.tags) || !value.tags.every((tag) => typeof tag === 'string')
+    || !validTags
     || !isCanonicalIsoInstant(value.createdAt)
     || !isCanonicalIsoInstant(value.updatedAt)) {
     throw new Error('档案数据无效');
@@ -62,16 +75,16 @@ export function parseProfile(value: unknown): Profile {
 }
 
 export function parseLocationResolution(value: unknown): LocationResolution {
-  const offsetMatch = isRecord(value) && typeof value.utcOffset === 'string'
-    ? /^UTC([+-])(\d{2}):(\d{2})$/.exec(value.utcOffset)
+  const offsetMatch = isRecord(value) && typeof value.utcOffsetLabel === 'string'
+    ? /^UTC([+-])(\d{2}):(\d{2})$/.exec(value.utcOffsetLabel)
     : null;
   const parsedOffset = offsetMatch
     ? (offsetMatch[1] === '+' ? 1 : -1) * (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3]))
     : Number.NaN;
   if (!isRecord(value)
     || typeof value.timeZone !== 'string' || !value.timeZone
-    || !Number.isInteger(value.offsetMinutes) || Math.abs(Number(value.offsetMinutes)) > 24 * 60
-    || !offsetMatch || Number(offsetMatch[3]) > 59 || parsedOffset !== value.offsetMinutes
+    || !Number.isInteger(value.utcOffsetMinutes) || Math.abs(Number(value.utcOffsetMinutes)) > 24 * 60
+    || !offsetMatch || Number(offsetMatch[3]) > 59 || parsedOffset !== value.utcOffsetMinutes
     || !isCanonicalIsoInstant(value.instantUtc)) {
     throw new Error('时区解析数据无效');
   }
@@ -150,17 +163,35 @@ function parseCityArray(value: unknown, source: 'western' | 'chinese'): CitySear
       const nameEn = raw.nameEn?.trim() || '';
       const nameZh = raw.nameZh?.trim() || '';
       if (!nameEn && !nameZh) throw new Error('城市数据无效');
-      const names = nameEn && nameZh && nameEn !== nameZh ? `${nameEn} / ${nameZh}` : nameEn || nameZh;
-      const suffix = raw.country?.trim() ? ` (${raw.country.trim()})` : '';
-      return [{ label: `${names}${suffix}`, name: nameEn || nameZh, latitude: raw.latitude, longitude: raw.longitude, source }];
+      return [{
+        key: `${raw.latitude.toFixed(4)}:${raw.longitude.toFixed(4)}`,
+        label: [nameZh, nameEn].filter(Boolean).join(' / '),
+        nameZh,
+        nameEn,
+        region: '',
+        country: raw.country?.trim() || '',
+        latitude: raw.latitude,
+        longitude: raw.longitude,
+        source,
+      }];
     }
 
     const raw = entry as unknown as ChineseCityRaw;
     if (typeof raw.nameZh !== 'string' || !raw.nameZh.trim()
       || (raw.province !== undefined && typeof raw.province !== 'string')) throw new Error('城市数据无效');
     const province = raw.province?.trim();
-    const name = raw.nameZh.trim();
-    return [{ label: province ? `${name} (${province})` : name, name, latitude: raw.latitude, longitude: raw.longitude, source }];
+    const nameZh = raw.nameZh.trim();
+    return [{
+      key: `${raw.latitude.toFixed(4)}:${raw.longitude.toFixed(4)}`,
+      label: province ? `${nameZh}, ${province}` : nameZh,
+      nameZh,
+      nameEn: '',
+      region: province || '',
+      country: 'CN',
+      latitude: raw.latitude,
+      longitude: raw.longitude,
+      source,
+    }];
   });
 }
 
@@ -168,8 +199,8 @@ async function searchCities(query: string): Promise<CitySearchResult[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
   const [western, chinese] = await Promise.allSettled([
-    invoke<unknown>((api) => api.searchCities(trimmed)).then((value) => parseCityArray(value, 'western')),
-    invoke<unknown>((api) => api.chinese.searchCities(trimmed)).then((value) => parseCityArray(value, 'chinese')),
+    invoke<unknown[]>((api) => api.searchCities(trimmed)).then((value) => parseCityArray(value, 'western')),
+    invoke<unknown[]>((api) => api.chinese.searchCities(trimmed)).then((value) => parseCityArray(value, 'chinese')),
   ]);
   if (western.status === 'rejected' && chinese.status === 'rejected') {
     const message = (reason: unknown) => reason instanceof Error ? reason.message : String(reason);
@@ -181,9 +212,8 @@ async function searchCities(query: string): Promise<CitySearchResult[]> {
   ];
   const seen = new Set<string>();
   return combined.filter((city) => {
-    const key = `${city.latitude.toFixed(4)},${city.longitude.toFixed(4)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
+    if (seen.has(city.key)) return false;
+    seen.add(city.key);
     return true;
   }).sort((left, right) => (left.source === right.source ? 0 : left.source === 'western' ? -1 : 1)
     || left.label.localeCompare(right.label, 'en')
@@ -196,33 +226,29 @@ export const apiClient = {
   getLocale: (): Promise<LocaleDictionary> => invoke((api) => api.getLocale()),
   getAiStatus: async (): Promise<AiStatus> =>
     parseAiStatus(await invoke<unknown>((api) => api.ai.status())),
-  profiles: {
-    list: async (): Promise<Profile[]> => {
-      const value = await invoke<unknown>((api) => api.profiles.list());
-      if (!Array.isArray(value)) throw new Error('档案数据无效');
-      return value.map(parseProfile);
-    },
-    get: async (id: string): Promise<Profile | null> => {
-      const value = await invoke<unknown>((api) => api.profiles.get(id));
-      return value === null ? null : parseProfile(value);
-    },
-    save: async (profile: ProfileSaveInput): Promise<Profile> =>
-      parseProfile(await invoke<unknown>((api) => api.profiles.save(profile))),
-    remove: async (id: string): Promise<boolean> => {
-      const value = await invoke<unknown>((api) => api.profiles.remove(id));
-      if (typeof value !== 'boolean') throw new Error('档案删除结果无效');
-      return value;
-    },
+  listProfiles: async (): Promise<Profile[]> => {
+    const value = await invoke<Profile[]>((api) => api.profiles.list());
+    if (!Array.isArray(value)) throw new Error('档案数据无效');
+    return value.map(parseProfile);
+  },
+  getProfile: async (id: string): Promise<Profile | null> => {
+    const value = await invoke<Profile | null>((api) => api.profiles.get(id));
+    return value === null ? null : parseProfile(value);
+  },
+  saveProfile: async (profile: ProfileSaveInput): Promise<Profile> =>
+    parseProfile(await invoke<Profile>((api) => api.profiles.save(profile))),
+  removeProfile: async (id: string): Promise<boolean> => {
+    const value = await invoke<boolean>((api) => api.profiles.remove(id));
+    if (typeof value !== 'boolean') throw new Error('档案删除结果无效');
+    return value;
   },
   searchCities,
-  locations: {
-    resolve: async (input: ResolveLocationInput): Promise<LocationResolution> =>
-      parseLocationResolution(await invoke<unknown>((api) => api.locations.resolve(input))),
-  },
-  app: {
-    onCloseRequested: (callback: () => void): (() => void) => window.mystApi.app.onCloseRequested(callback),
-    decideClose: async (decision: CloseDecision): Promise<void> => {
-      await invoke<unknown>((api) => api.app.decideClose(decision));
-    },
+  resolveLocation: async (input: ResolveLocationInput): Promise<LocationResolution> =>
+    parseLocationResolution(await invoke<LocationResolution>((api) => api.locations.resolve(input))),
+  onCloseRequested: (callback: () => void): (() => void) => window.mystApi.app.onCloseRequested(callback),
+  decideClose: async (decision: CloseDecision): Promise<boolean> => {
+    const value = await invoke<boolean>((api) => api.app.decideClose(decision));
+    if (typeof value !== 'boolean') throw new Error('关闭决策结果无效');
+    return value;
   },
 };

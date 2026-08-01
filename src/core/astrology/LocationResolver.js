@@ -15,7 +15,7 @@ class LocationResolver {
         throw new Error(`${field} must be a finite integer`);
       }
     }
-    const ranges = { year: [1, 9999], month: [1, 12], day: [1, 31], hour: [0, 23], minute: [0, 59] };
+    const ranges = { year: [1, 3000], month: [1, 12], day: [1, 31], hour: [0, 23], minute: [0, 59] };
     for (const [field, [minimum, maximum]] of Object.entries(ranges)) {
       if (input[field] < minimum || input[field] > maximum) {
         throw new Error(`${field} is outside its valid range`);
@@ -29,8 +29,7 @@ class LocationResolver {
     }
 
     const civil = Object.fromEntries(fields.map((field) => [field, input[field]]));
-    const calendarProbe = DateTime.fromObject(civil, { zone: 'utc' });
-    if (!calendarProbe.isValid) {
+    if (!DateTime.fromObject(civil, { zone: 'utc' }).isValid) {
       throw new Error('The civil date does not exist');
     }
 
@@ -47,8 +46,8 @@ class LocationResolver {
     const minutes = String(absoluteOffset % 60).padStart(2, '0');
     return {
       timeZone,
-      offsetMinutes: local.offset,
-      utcOffset: `UTC${sign}${hours}:${minutes}`,
+      utcOffsetMinutes: local.offset,
+      utcOffsetLabel: `UTC${sign}${hours}:${minutes}`,
       instantUtc: local.toUTC().toISO(),
     };
   }
