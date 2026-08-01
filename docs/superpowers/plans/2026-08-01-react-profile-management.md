@@ -20,7 +20,7 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 
 ## Design Decisions
 
-- Normalize tags to Unicode NFC in the domain model, accept only strings, trim and remove empty values, limit each tag to 32 Unicode code points and each profile to 20 tags, and deduplicate with locale-independent lowercase keys while retaining the first spelling. Missing or malformed legacy `tags` becomes a frozen `[]`.
+- Normalize tags to Unicode NFC in the domain model, accept only strings, trim and remove empty values, limit each tag to 32 Unicode code points and each profile to 20 tags, and deduplicate with locale-independent Unicode-compatible case-fold keys while retaining the first spelling. Missing or malformed legacy `tags` becomes a frozen `[]`.
 - Do not persist primary profile, recents, timezone, or UTC offset. Primary and recents use `localStorage`; timezone and offset are derived for the entered local birth moment.
 - Keep at most 50 recent profile uses and prune entries older than 90 days. The directory exposes 7-day and 30-day filters from that bounded map.
 - Resolve the primary profile to the persisted ID when it still exists, otherwise the first profile in the current sorted server response, otherwise `null`.
@@ -144,7 +144,8 @@ function normalizeTags(tags) {
   for (const value of tags) {
     if (typeof value !== 'string') continue;
     const tag = value.normalize('NFC').trim();
-    const key = tag.toLowerCase();
+    // Uppercase first captures Unicode casing expansions such as ß -> SS.
+    const key = tag.toUpperCase().toLowerCase();
     if (!tag || Array.from(tag).length > 32 || seen.has(key)) continue;
     seen.add(key);
     normalized.push(tag);
@@ -219,7 +220,7 @@ test('repository upgrades legacy records and round-trips normalized tags', (t) =
 
 - [ ] **Step 6: Register and run the repository test**
 
-Create `tests/RunNodeTests.js` to sort and run every root `tests/*.test.js` file with `child_process.spawnSync`, propagating the child exit status. Change the `test` script in `package.json` to:
+Create `tests/RunNodeTests.js` to sort and run every root `tests/*.test.js` file with `child_process.spawnSync`, insert `--` before absolute file paths so option-shaped names stay positional across Node's per-file child processes, and propagate the child exit status. Change the `test` script in `package.json` to:
 
 ```json
 "test": "node tests/RunAll.js && node tests/RunNodeTests.js"

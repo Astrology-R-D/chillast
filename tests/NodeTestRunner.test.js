@@ -43,6 +43,18 @@ test('runner discovers root .test.js files in deterministic order', () => {
   });
 });
 
+test('runner executes option-shaped test filenames as paths', () => {
+  withFixtures({
+    '--option-shaped.test.js': "require('node:test')('option-shaped executed', () => {});",
+    'normal.test.js': "require('node:test')('normal executed', () => {});",
+  }, (directory) => {
+    const result = run(directory);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /option-shaped executed/);
+    assert.match(result.stdout, /normal executed/);
+  });
+});
+
 test('runner propagates a discovered test process failure', () => {
   withFixtures({
     'failure.test.js': "require('node:test')('failure', () => { throw new Error('expected failure'); });",

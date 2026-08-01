@@ -104,6 +104,14 @@ test('profile tag case deduplication uses deterministic I/i folding', () => {
   const profile = Profile.fromJSON({ ...subjectA, tags: ['I', 'i'] });
   assert.deepStrictEqual(profile.tags, ['I']);
 });
+test('profile tag case folding deduplicates Greek final sigma variants', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['ΟΣ', 'οσ'] });
+  assert.deepStrictEqual(profile.tags, ['ΟΣ']);
+});
+test('profile tag case folding deduplicates German sharp-s and ss', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['Straße', 'STRASSE'] });
+  assert.deepStrictEqual(profile.tags, ['Straße']);
+});
 test('profile tags ignore empty, non-string, and overlong entries', () => {
   const profile = Profile.fromJSON({
     ...subjectA,

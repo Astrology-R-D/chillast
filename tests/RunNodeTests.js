@@ -13,7 +13,8 @@ const testFiles = fs.readdirSync(directory, { withFileTypes: true })
 console.log(`Node tests: ${testFiles.join(', ')}`);
 
 if (testFiles.length > 0) {
-  const result = spawnSync(process.execPath, ['--test', ...testFiles], {
+  const testPaths = testFiles.map((file) => path.join(directory, file));
+  const result = spawnSync(process.execPath, ['--test', '--', ...testPaths], {
     cwd: directory,
     stdio: 'inherit',
     windowsHide: true,
