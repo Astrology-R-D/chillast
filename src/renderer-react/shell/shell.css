@@ -18,13 +18,14 @@
   min-width: 0;
   overflow: auto;
   background: var(--surface-raised);
-  background: var(--surface-panel);
 }
 
-@supports (backdrop-filter: blur(8px)) {
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .shell__navigation,
   .shell__ai,
   .shell__ai-overlay {
+    background: var(--surface-panel);
+    -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
   }
 }
