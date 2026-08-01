@@ -57,7 +57,7 @@ test('selects a persisted valid primary initially and after refetch while retain
   await client.refetchQueries({ queryKey: ['profiles'] });
   expect(screen.getByRole('heading', { name: '王晓明' })).toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole('button', { name: '选择档案：Beatrice Longname' }));
+  await userEvent.click(screen.getByRole('button', { name: /^选择档案：Beatrice Longname，主档案/ }));
   await client.refetchQueries({ queryKey: ['profiles'] });
   expect(screen.getByRole('heading', { name: 'Beatrice Longname' })).toBeInTheDocument();
 });
@@ -89,6 +89,21 @@ test('keeps marked controls density-aware and row text inside its scroll contain
   for (const field of document.querySelectorAll('.profile-row__name, .profile-row__secondary, .profile-row__location')) {
     expect(field.clientWidth === 0 || field.scrollWidth <= field.clientWidth).toBe(true);
   }
+});
+
+test('keeps the primary marker separate and accessible for a very long bilingual name', async () => {
+  const longName = '司马'.repeat(30);
+  const longProfile = { ...alpha, nameZh: longName, nameEn: 'Extremely Long English Profile Name '.repeat(5) };
+  setup(vi.fn().mockResolvedValue({ ok: true, data: [longProfile] }));
+
+  const row = await screen.findByRole('button', { name: new RegExp(`选择档案：${longName}.*主档案.*1987-02-03 04:05.*北京`) });
+  const name = row.querySelector('.profile-row__name');
+  const marker = row.querySelector('.profile-row__marker');
+  expect(name).toBeInTheDocument();
+  expect(marker).toBeInTheDocument();
+  expect(name).not.toContainElement(marker as HTMLElement);
+  expect(name?.parentElement).toHaveClass('profile-row__identity');
+  expect(marker?.parentElement).toBe(name?.parentElement);
 });
 
 test('supports directory search, sorting, selection, recent filtering, and primary state', async () => {

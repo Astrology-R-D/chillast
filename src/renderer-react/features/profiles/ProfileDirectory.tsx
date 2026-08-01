@@ -54,8 +54,12 @@ export function ProfileDirectory({ profiles, selectedId, primaryId, recents, onS
           const secondary = profile.nameZh.trim() ? profile.nameEn.trim() : '';
           const selected = profile.id === selectedId;
           const primary = profile.id === primaryId;
-          return <button key={profile.id} type="button" className="profile-row" data-selected={selected} aria-pressed={selected} aria-label={t('profiles.selectProfile', { name: preferred })} onClick={() => onSelect(profile.id)}>
-              <span className="profile-row__name" title={preferred}>{preferred}{primary && <span className="profile-row__marker">{t('profiles.primary')}</span>}</span>
+          const selectLabel = t('profiles.selectProfile', { name: preferred });
+          const accessibleLabel = primary
+            ? `${selectLabel}，${t('profiles.primary')}，${birth(profile)}，${profile.birthData.location.label}`
+            : selectLabel;
+          return <button key={profile.id} type="button" className="profile-row" data-selected={selected} aria-pressed={selected} aria-label={accessibleLabel} onClick={() => onSelect(profile.id)}>
+            <span className="profile-row__identity"><span className="profile-row__name" title={preferred}>{preferred}</span>{primary && <span className="profile-row__marker">{t('profiles.primary')}</span>}</span>
             {secondary && <span className="profile-row__secondary" title={secondary}>{secondary}</span>}
             <span className="profile-row__meta"><span>{birth(profile)}</span><span className="profile-row__location" title={profile.birthData.location.label}>{profile.birthData.location.label}</span></span>
           </button>;

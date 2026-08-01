@@ -18,3 +18,10 @@ test('clamps row names, secondary names, and locations to two wrapping lines wit
   }
   expect(css).toMatch(/\.profile-row\s*\{[^}]*min-height:[^;}]+;[^}]*max-height:/s);
 });
+
+test('places the primary marker in a stable nonshrinking cell outside clamped overflow', () => {
+  expect(css).toMatch(/\.profile-row__identity\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/s);
+  const marker = [...css.matchAll(/\.profile-row__marker[^\{]*\{([^}]*)\}/g)].map((match) => match[1]).join(' ');
+  expect(marker).toContain('flex-shrink: 0');
+  expect(marker).toContain('overflow: visible');
+});

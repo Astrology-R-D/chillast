@@ -14,10 +14,12 @@
 .profile-row { display: grid; width: 100%; min-height: 84px; max-height: 112px; gap: 2px; padding: 8px 12px; overflow: hidden; color: var(--text-primary); background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); border-radius: 0; cursor: pointer; text-align: left; }
 .profile-row:hover { background: var(--surface-hover); }
 .profile-row[data-selected='true'] { background: var(--surface-selected); box-shadow: inset 3px 0 var(--focus); }
+.profile-row__identity { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px; min-width: 0; overflow: visible; }
 .profile-row__name, .profile-row__secondary, .profile-row__location { display: -webkit-box; min-width: 0; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .profile-row__name { font-weight: var(--font-weight-semibold); }
 .profile-row__secondary, .profile-row__meta span { min-width: 0; overflow: hidden; color: var(--text-muted); font-size: var(--font-size-xs); }
 .profile-row__marker, .profile-detail__primary { flex: 0 0 auto; padding: 1px 5px; color: var(--text-primary); border: 1px solid var(--border-strong); border-radius: 4px; font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); }
+.profile-row__marker { flex-shrink: 0; overflow: visible; white-space: nowrap; }
 .profile-row__meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
 .profile-directory__empty, .profile-page__blank, .profile-state { margin: 0; padding: 24px; color: var(--text-muted); overflow-wrap: anywhere; text-align: center; }
 .profile-state button, .profile-dialog button { padding-inline: 12px; border: 1px solid var(--border-strong); border-radius: 4px; cursor: pointer; }
