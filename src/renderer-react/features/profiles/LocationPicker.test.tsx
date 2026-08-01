@@ -94,10 +94,36 @@ test('resolves immediately and synchronously excludes a result for old dependenc
 
 test('ignores a stale immediate resolution promise after dependencies change', async () => {
   const stale = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
-  const current = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
-  vi.spyOn(apiClient, 'resolveLocation').mockReturnValueOnce(stale.promise).mockReturnValueOnce(current.promise);
+  const resolve = vi.spyOn(apiClient, 'resolveLocation').mockReturnValueOnce(stale.promise);
   const { rerender } = render(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '39.9', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>);
-  rerender(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '40', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>);
+  rerender(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>);
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
   await act(async () => stale.resolve({ timeZone: 'Stale/Zone', utcOffsetMinutes: 0, utcOffsetLabel: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' }));
   expect(screen.queryByText(/Stale\/Zone/)).not.toBeInTheDocument();
+  expect(resolve).toHaveBeenCalledTimes(1);
+});
+
+test('does not reuse an old A result when dependencies revisit A through B', async () => {
+  const firstA = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
+  const staleB = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
+  const secondA = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
+  const resolve = vi.spyOn(apiClient, 'resolveLocation').mockReturnValueOnce(firstA.promise).mockReturnValueOnce(staleB.promise).mockReturnValueOnce(secondA.promise);
+  const renderPicker = (latitude: string) => <I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude, longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>;
+  const { rerender } = render(renderPicker('39.9'));
+  await waitFor(() => expect(resolve).toHaveBeenCalledTimes(1));
+  await act(async () => firstA.resolve({ timeZone: 'First/A', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '2000-01-01T19:04:00.000Z' }));
+  expect(screen.getByText('First/A · UTC+08:00')).toBeInTheDocument();
+
+  rerender(renderPicker('40'));
+  expect(screen.queryByText(/First\/A/)).not.toBeInTheDocument();
+  expect(resolve).toHaveBeenCalledTimes(2);
+  rerender(renderPicker('39.9'));
+  expect(screen.queryByText(/First\/A/)).not.toBeInTheDocument();
+  expect(resolve).toHaveBeenCalledTimes(3);
+
+  await act(async () => staleB.reject(new Error('stale B failure')));
+  expect(screen.queryByText(/stale B failure/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/First\/A/)).not.toBeInTheDocument();
+  await act(async () => secondA.resolve({ timeZone: 'Second/A', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '2000-01-01T19:04:00.000Z' }));
+  expect(screen.getByText('Second/A · UTC+08:00')).toBeInTheDocument();
 });

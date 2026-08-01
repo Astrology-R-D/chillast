@@ -37,8 +37,8 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
   const [active, setActive] = useState(-1);
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [searchError, setSearchError] = useState('');
-  const [resolution, setResolution] = useState<{ key: string; value: LocationResolution } | null>(null);
-  const [resolveStatus, setResolveStatus] = useState<{ key: string; state: 'loading' | 'error'; error?: string } | null>(null);
+  const [resolution, setResolution] = useState<{ key: string; generation: number; value: LocationResolution } | null>(null);
+  const [resolveStatus, setResolveStatus] = useState<{ key: string; generation: number; state: 'loading' | 'error'; error?: string } | null>(null);
   const [retry, setRetry] = useState(0);
   const searchSequence = useRef(0);
   const resolveSequence = useRef(0);
@@ -66,18 +66,24 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
 
   const resolveInput = resolutionInput(value, birthMoment);
   const dependency = resolveInput ? JSON.stringify(resolveInput) : '';
+  const resolutionRequestRef = useRef({ key: dependency, generation: 1 });
+  if (resolutionRequestRef.current.key !== dependency) {
+    resolutionRequestRef.current = { key: dependency, generation: resolutionRequestRef.current.generation + 1 };
+  }
+  const resolutionRequest = resolutionRequestRef.current;
   useEffect(() => {
     const sequence = ++resolveSequence.current;
     if (!resolveInput) return;
-    setResolveStatus({ key: dependency, state: 'loading' });
+    const { key, generation } = resolutionRequest;
+    setResolveStatus({ key, generation, state: 'loading' });
     void (async () => {
       try {
         const next = await apiClient.resolveLocation(resolveInput);
-        if (sequence !== resolveSequence.current) return;
-        setResolution({ key: dependency, value: next }); setResolveStatus(null);
+        if (sequence !== resolveSequence.current || generation !== resolutionRequestRef.current.generation) return;
+        setResolution({ key, generation, value: next }); setResolveStatus(null);
       } catch (error) {
-        if (sequence !== resolveSequence.current) return;
-        setResolveStatus({ key: dependency, state: 'error', error: error instanceof Error ? error.message : String(error) });
+        if (sequence !== resolveSequence.current || generation !== resolutionRequestRef.current.generation) return;
+        setResolveStatus({ key, generation, state: 'error', error: error instanceof Error ? error.message : String(error) });
       }
     })();
   }, [dependency, retry]);
@@ -128,9 +134,9 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
       </div>
     </div>
     <div className="location-picker__timezone" aria-live="polite">
-      {resolveStatus?.key === dependency && resolveStatus.state === 'loading' && <span role="status">{t('form.timezoneResolving')}</span>}
-      {resolution?.key === dependency && <span>{resolution.value.timeZone} · {resolution.value.utcOffsetLabel}</span>}
-      {resolveStatus?.key === dependency && resolveStatus.state === 'error' && <span role="alert">{t('form.timezoneFailed', { message: resolveStatus.error ?? '' })} <button type="button" disabled={disabled} onClick={() => setRetry((current) => current + 1)}>{t('form.retryTimezone')}</button></span>}
+      {resolveStatus?.key === resolutionRequest.key && resolveStatus.generation === resolutionRequest.generation && resolveStatus.state === 'loading' && <span role="status">{t('form.timezoneResolving')}</span>}
+      {resolution?.key === resolutionRequest.key && resolution.generation === resolutionRequest.generation && <span>{resolution.value.timeZone} · {resolution.value.utcOffsetLabel}</span>}
+      {resolveStatus?.key === resolutionRequest.key && resolveStatus.generation === resolutionRequest.generation && resolveStatus.state === 'error' && <span role="alert">{t('form.timezoneFailed', { message: resolveStatus.error ?? '' })} <button type="button" disabled={disabled} onClick={() => { resolutionRequestRef.current = { key: dependency, generation: resolutionRequestRef.current.generation + 1 }; setRetry((current) => current + 1); }}>{t('form.retryTimezone')}</button></span>}
     </div>
   </fieldset>;
 }
