@@ -110,10 +110,31 @@ test.each([
     expected: [22, 51, 27],
   },
   {
-    name: 'respects main minimum while expanding AI',
+    name: 'grows AI by shrinking navigation after main reaches its minimum',
     layout: [22, 42, 36],
     handle: 1,
     key: 'ArrowLeft',
+    expected: [18, 42, 40],
+  },
+  {
+    name: 'grows navigation by shrinking AI after main reaches its minimum',
+    layout: [18, 42, 40],
+    handle: 0,
+    key: 'ArrowRight',
+    expected: [22, 42, 36],
+  },
+  {
+    name: 'stays unchanged when the expanding side has no aggregate capacity',
+    layout: [18, 42, 40],
+    handle: 1,
+    key: 'ArrowLeft',
+    expected: [18, 42, 40],
+  },
+  {
+    name: 'stays unchanged when navigation is already at maximum',
+    layout: [22, 42, 36],
+    handle: 0,
+    key: 'ArrowRight',
     expected: [22, 42, 36],
   },
   {

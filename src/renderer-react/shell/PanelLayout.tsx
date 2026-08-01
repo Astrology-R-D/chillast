@@ -101,6 +101,22 @@ export const PANEL_STORAGE = Object.freeze({
   },
 });
 
+function redistributeAcrossSide(
+  layout: number[],
+  indices: readonly number[],
+  amount: number,
+  capacityAt: (index: number) => number,
+  direction: 1 | -1,
+): void {
+  let remaining = amount;
+  for (const index of indices) {
+    if (remaining <= 0) break;
+    const applied = Math.min(remaining, capacityAt(index));
+    layout[index] = Number((layout[index]! + direction * applied).toFixed(10));
+    remaining = Number((remaining - applied).toFixed(10));
+  }
+}
+
 export function resizePanelSizesByKeyboard(
   layout: readonly number[],
   handleIndex: number,
@@ -144,15 +160,42 @@ export function resizePanelSizesByKeyboard(
     requestedDelta = direction * (expandingConstraints.minSize - expandingCollapsedSize);
   }
 
-  const leftMax = 'maxSize' in leftConstraints ? leftConstraints.maxSize : 100;
-  const rightMax = 'maxSize' in rightConstraints ? rightConstraints.maxSize : 100;
-  const delta =
+  const expandingIndices =
     direction > 0
-      ? Math.max(0, Math.min(requestedDelta, leftMax - left, right - shrinkingMinimum))
-      : -Math.max(0, Math.min(Math.abs(requestedDelta), left - shrinkingMinimum, rightMax - right));
+      ? Array.from({ length: handleIndex + 1 }, (_, offset) => handleIndex - offset)
+      : Array.from(
+          { length: PANEL_CONSTRAINTS.length - handleIndex - 1 },
+          (_, offset) => handleIndex + 1 + offset,
+        );
+  const shrinkingIndices =
+    direction > 0
+      ? Array.from(
+          { length: PANEL_CONSTRAINTS.length - handleIndex - 1 },
+          (_, offset) => handleIndex + 1 + offset,
+        )
+      : Array.from({ length: handleIndex + 1 }, (_, offset) => handleIndex - offset);
+  const shrinkingPivot = shrinkingIndices[0];
+  const expansionCapacityAt = (index: number) => {
+    const constraints = PANEL_CONSTRAINTS[index]!;
+    const maximum = 'maxSize' in constraints ? constraints.maxSize : 100;
+    return Math.max(0, maximum - next[index]!);
+  };
+  const shrinkCapacityAt = (index: number) => {
+    const minimum = index === shrinkingPivot ? shrinkingMinimum : PANEL_CONSTRAINTS[index]!.minSize;
+    return Math.max(0, next[index]! - minimum);
+  };
+  const expansionCapacity = expandingIndices.reduce(
+    (total, index) => total + expansionCapacityAt(index),
+    0,
+  );
+  const shrinkCapacity = shrinkingIndices.reduce(
+    (total, index) => total + shrinkCapacityAt(index),
+    0,
+  );
+  const amount = Math.min(Math.abs(requestedDelta), expansionCapacity, shrinkCapacity);
 
-  next[handleIndex] = left + delta;
-  next[handleIndex + 1] = right - delta;
+  redistributeAcrossSide(next, shrinkingIndices, amount, shrinkCapacityAt, -1);
+  redistributeAcrossSide(next, expandingIndices, amount, expansionCapacityAt, 1);
   return next;
 }
 
