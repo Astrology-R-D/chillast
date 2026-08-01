@@ -4,7 +4,7 @@ import {
   profileDisplayName,
   selectDirectoryProfiles,
   type DirectoryQuery,
-  type RecentUses,
+  type ProfileRecents,
 } from './directory';
 
 const NOW = Date.parse('2026-08-02T12:00:00.000Z');
@@ -120,7 +120,7 @@ describe('selectDirectoryProfiles search', () => {
 describe('selectDirectoryProfiles recent filters', () => {
   const DAY = 24 * 60 * 60 * 1000;
   const profiles = ['seven', 'thirty', 'inside', 'old', 'future', 'nan', 'unused'].map((id) => profile(id));
-  const recents: RecentUses = {
+  const recents: ProfileRecents = {
     seven: NOW - 7 * DAY,
     thirty: NOW - 30 * DAY,
     inside: NOW - DAY,

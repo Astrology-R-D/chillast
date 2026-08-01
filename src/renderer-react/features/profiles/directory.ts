@@ -9,7 +9,7 @@ export interface DirectoryQuery {
   sort: ProfileSort;
 }
 
-export type RecentUses = Record<string, number>;
+export type ProfileRecents = Record<string, number>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NAME_COLLATOR = new Intl.Collator('zh-Hans-CN', {
@@ -91,7 +91,7 @@ export function profileDisplayName(profile: Profile): string {
 export function selectDirectoryProfiles(
   profiles: readonly Profile[],
   query: DirectoryQuery,
-  recents: RecentUses,
+  recents: ProfileRecents,
   now = Date.now(),
 ): Profile[] {
   const tokens = normalized(query.search).split(' ').filter(Boolean);
