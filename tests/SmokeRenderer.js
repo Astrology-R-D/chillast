@@ -72,6 +72,9 @@ app.whenReady().then(async () => {
       out.hasSidebar = !!document.querySelector('.sidebar');
       out.brand = (document.querySelector('.brand-title')||{}).textContent || '';
       out.navItems = document.querySelectorAll('.nav-item').length;
+      const mapleFaces = await document.fonts.load('400 13px "Maple Mono NF CN"', 'CHILLAST');
+      out.mapleFontLoaded = mapleFaces.some((face) => face.status === 'loaded') &&
+        document.fonts.check('400 13px "Maple Mono NF CN"', 'CHILLAST');
 
       // Save a profile + compute a natal chart over the real IPC bridge.
       const save = await window.mystApi.profiles.save({
@@ -102,6 +105,7 @@ app.whenReady().then(async () => {
     if (!report.hasApi) problems.push('window.mystApi missing');
     if (!report.hasSidebar) problems.push('shell did not render (.sidebar missing)');
     if (report.navItems < 3) problems.push('navigation incomplete');
+    if (!report.mapleFontLoaded) problems.push('Maple Mono regular font did not load');
     if (!report.saveOk) problems.push('profile save failed');
     if (!report.chartOk) problems.push('chart compute failed');
     if (report.ringPoints < 10) problems.push('chart has too few points');

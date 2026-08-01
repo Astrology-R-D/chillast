@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { expect, test } from 'vitest';
 
 const repositoryRoot = process.cwd();
@@ -49,16 +49,18 @@ test('packages only legacy-referenced upright fonts within the payload budgets',
     selectedRootFonts.reduce((total, entry) => total + statSync(resolve(repositoryRoot, entry)).size, 0),
   ).toBeLessThan(90 * 1024 * 1024);
 
-  const legacyTheme = readFileSync(
-    resolve(repositoryRoot, 'src/renderer/styles/Theme.css'),
-    'utf8',
-  );
-  const legacyFontNames = [...legacyTheme.matchAll(/url\(['"]?[^'")]*\/([^/'")]+\.ttf)/g)].map(
+  const legacyThemePath = resolve(repositoryRoot, 'src/renderer/styles/Theme.css');
+  const legacyTheme = readFileSync(legacyThemePath, 'utf8');
+  const legacyFontUrls = [...legacyTheme.matchAll(/url\(['"]?([^'")]+\.ttf)/g)].map(
     (match) => match[1],
   );
-  expect(legacyFontNames).toHaveLength(4);
-  expect(legacyFontNames.every((fileName) => selectedRootFonts.some((entry) => basename(entry) === fileName)))
-    .toBe(true);
+  expect(legacyFontUrls).toHaveLength(4);
+  for (const fontUrl of legacyFontUrls) {
+    const resolvedFontPath = resolve(dirname(legacyThemePath), fontUrl);
+    const repositoryPath = relative(repositoryRoot, resolvedFontPath).replaceAll('\\', '/');
+    expect(existsSync(resolvedFontPath), fontUrl).toBe(true);
+    expect(selectedRootFonts, fontUrl).toContain(repositoryPath);
+  }
 
   expect(packageJson.build.files).toContain('dist/renderer-react/**/*');
   expect(packageJson.build.files).toContain('!src/renderer-react/assets/fonts/**/*');
