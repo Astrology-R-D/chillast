@@ -29,7 +29,7 @@ export function ProfileDetail({ profile, primary, pending, onEdit, onCopy, onDel
       </div>
       <div className="profile-detail__actions" role="group" aria-label={t('profiles.actions')}>
         {iconAction(t('profiles.edit'), onEdit, <Edit3 size={17} aria-hidden="true" />)}
-        {iconAction(t('profiles.copy'), onCopy, <Copy size={17} aria-hidden="true" />, pending)}
+        {iconAction(t('profiles.duplicate'), onCopy, <Copy size={17} aria-hidden="true" />, pending)}
         {!primary && iconAction(t('profiles.setPrimary'), onSetPrimary, <Star size={17} aria-hidden="true" />)}
         {iconAction(t('profiles.deleteTitle'), onDelete, <Trash2 size={17} aria-hidden="true" />)}
       </div>
@@ -46,7 +46,7 @@ export function ProfileDetail({ profile, primary, pending, onEdit, onCopy, onDel
     <div className="profile-detail__commands" role="group" aria-label={t('profiles.chartCommands')}>
       <button data-profile-control type="button" onClick={() => onChart('natal')}><Orbit size={16} aria-hidden="true" />{t('profiles.openNatal')}</button>
       <button data-profile-control type="button" onClick={() => onChart('transit')}><Orbit size={16} aria-hidden="true" />{t('profiles.openTransit')}</button>
-      <button data-profile-control type="button" onClick={() => onChart('synastry')}><UsersRound size={16} aria-hidden="true" />{t('profiles.openSynastry')}</button>
+      <button data-profile-control type="button" onClick={() => onChart('synastry')}><UsersRound size={16} aria-hidden="true" />{t('profiles.openRelationship')}</button>
     </div>
   </article>;
 }

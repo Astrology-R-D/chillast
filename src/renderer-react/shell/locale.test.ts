@@ -99,6 +99,54 @@ test('contains the exact profile management localization contract', () => {
   for (const key of keys) expect(resolveKey(key), key).toEqual(expect.any(String));
 });
 
+test('contains exact canonical Task 5 profile strings', () => {
+  expect(Object.fromEntries([
+    'profiles.directory', 'profiles.search', 'profiles.recentFilter', 'profiles.allProfiles',
+    'profiles.used7d', 'profiles.used30d', 'profiles.sort', 'profiles.sortUpdated',
+    'profiles.sortName', 'profiles.sortBirth', 'profiles.sortRecent', 'profiles.primary',
+    'profiles.setPrimary', 'profiles.duplicate', 'profiles.deleteTitle', 'profiles.confirmDelete',
+    'profiles.openNatal', 'profiles.openTransit', 'profiles.openRelationship',
+    'profiles.loadFailed', 'profiles.retry', 'profiles.noResults', 'profiles.tags',
+    'profiles.coordinates', 'profiles.createdAt', 'profiles.updatedAt',
+  ].map((key) => [key, resolveKey(key)]))).toEqual({
+    'profiles.directory': '档案目录',
+    'profiles.search': '搜索档案',
+    'profiles.recentFilter': '最近使用',
+    'profiles.allProfiles': '全部档案',
+    'profiles.used7d': '最近 7 天',
+    'profiles.used30d': '最近 30 天',
+    'profiles.sort': '排序方式',
+    'profiles.sortUpdated': '最近更新',
+    'profiles.sortName': '姓名',
+    'profiles.sortBirth': '出生时间',
+    'profiles.sortRecent': '最近使用',
+    'profiles.primary': '主档案',
+    'profiles.setPrimary': '设为主档案',
+    'profiles.duplicate': '复制档案',
+    'profiles.deleteTitle': '删除档案',
+    'profiles.confirmDelete': '确认删除',
+    'profiles.openNatal': '打开本命盘',
+    'profiles.openTransit': '打开行运盘',
+    'profiles.openRelationship': '打开比较盘',
+    'profiles.loadFailed': '档案加载失败：{{message}}',
+    'profiles.retry': '重试',
+    'profiles.noResults': '没有符合筛选条件的档案',
+    'profiles.tags': '标签',
+    'profiles.coordinates': '坐标',
+    'profiles.createdAt': '创建时间',
+    'profiles.updatedAt': '更新时间',
+  });
+});
+
+test('resolves every profile translation referenced by Task 5 components', () => {
+  for (const file of ['ProfileDirectory.tsx', 'ProfileDetail.tsx', 'ProfilePage.tsx']) {
+    const component = readFileSync(resolve(process.cwd(), `src/renderer-react/features/profiles/${file}`), 'utf8');
+    for (const [, key] of component.matchAll(/t\(['`]((?:profiles|form)\.[A-Za-z0-9]+)['`]/g)) {
+      expect(resolveKey(key), `${file}: ${key}`).toEqual(expect.any(String));
+    }
+  }
+});
+
 test('profile React source never uses the native confirm dialog', () => {
   const source = readFileSync(resolve(process.cwd(), 'src/renderer-react/features/profiles/ProfilePage.tsx'), 'utf8');
   expect(source).not.toMatch(/window\.confirm|\bconfirm\s*\(/);

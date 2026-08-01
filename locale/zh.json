@@ -107,7 +107,15 @@
     "noNotes": "无备注",
     "coordinates": "坐标",
     "createdAt": "创建时间",
-    "updatedAt": "更新时间"
+    "updatedAt": "更新时间",
+    "recentFilter": "最近使用",
+    "allProfiles": "全部档案",
+    "used7d": "最近 7 天",
+    "used30d": "最近 30 天",
+    "duplicate": "复制档案",
+    "openRelationship": "打开比较盘",
+    "loadFailed": "档案加载失败：{{message}}",
+    "retry": "重试"
   },
   "form": {
     "nameZh": "中文名字",

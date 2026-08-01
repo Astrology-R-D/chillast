@@ -29,6 +29,8 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleteError, setDeleteError] = useState('');
+  const [duplicateError, setDuplicateError] = useState('');
+  const [duplicatePayload, setDuplicatePayload] = useState<ProfileSaveInput | null>(null);
   const deleteTrigger = useRef<HTMLElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
@@ -37,7 +39,9 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     if (!profiles.data) return;
     const ids = profiles.data.map(({ id }) => id);
     workspaceStore.getState().reconcileProfiles(ids);
-    setSelectedId((current) => current && ids.includes(current) ? current : ids[0] ?? null);
+    setSelectedId((current) => current && ids.includes(current)
+      ? current
+      : workspaceStore.getState().primaryProfileId ?? ids[0] ?? null);
   }, [profiles.data, workspaceStore]);
 
   useEffect(() => {
@@ -49,7 +53,31 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     workspaceStore.getState().recordRecentUse(id);
   };
   const selected = profiles.data?.find(({ id }) => id === selectedId) ?? null;
-  const duplicate = async (profile: Profile) => {
+  const runDuplicate = async (payload: ProfileSaveInput) => {
+    setDuplicateError('');
+    try {
+      const result = await save.mutateAsync(payload);
+      const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
+      const canonical = refreshed.find(({ id }) => id === result.id)
+        ?? refreshed.find((candidate) => candidate.nameZh === payload.nameZh
+          && candidate.nameEn === payload.nameEn
+          && candidate.birthData.year === payload.birthData.year
+          && candidate.birthData.month === payload.birthData.month
+          && candidate.birthData.day === payload.birthData.day
+          && candidate.birthData.hour === payload.birthData.hour
+          && candidate.birthData.minute === payload.birthData.minute
+          && candidate.birthData.location.latitude === payload.birthData.location.latitude
+          && candidate.birthData.location.longitude === payload.birthData.location.longitude);
+      if (canonical) {
+        setSelectedId(canonical.id);
+        workspaceStore.getState().recordRecentUse(canonical.id);
+      }
+      setDuplicatePayload(null);
+    } catch (error) {
+      setDuplicateError(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const duplicate = (profile: Profile) => {
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...input } = profile;
     const suffix = t('profiles.copySuffix');
     const payload: ProfileSaveInput = {
@@ -58,22 +86,8 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
       nameEn: input.nameEn.trim() ? `${input.nameEn}${suffix}` : '',
     };
     if (!payload.nameZh && !payload.nameEn) payload.nameZh = t('profiles.unnamedCopy');
-    const result = await save.mutateAsync(payload);
-    const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
-    const canonical = refreshed.find(({ id }) => id === result.id)
-      ?? refreshed.find((candidate) => candidate.nameZh === payload.nameZh
-        && candidate.nameEn === payload.nameEn
-        && candidate.birthData.year === payload.birthData.year
-        && candidate.birthData.month === payload.birthData.month
-        && candidate.birthData.day === payload.birthData.day
-        && candidate.birthData.hour === payload.birthData.hour
-        && candidate.birthData.minute === payload.birthData.minute
-        && candidate.birthData.location.latitude === payload.birthData.location.latitude
-        && candidate.birthData.location.longitude === payload.birthData.location.longitude);
-    if (canonical) {
-      setSelectedId(canonical.id);
-      workspaceStore.getState().recordRecentUse(canonical.id);
-    }
+    setDuplicatePayload(payload);
+    void runDuplicate(payload);
   };
   const openChart = (profile: Profile, chartType: 'natal' | 'transit' | 'synastry') => {
     const intent = chartType === 'synastry'
@@ -107,7 +121,7 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   };
 
   if (profiles.isPending) return <div className="profile-state" role="status">{t('profiles.loading')}</div>;
-  if (profiles.isError) return <div className="profile-state" role="alert"><p>{t('profiles.loadError', { message: profiles.error.message })}</p><button data-profile-control type="button" onClick={() => profiles.refetch()}>{t('profiles.retryLoad')}</button></div>;
+  if (profiles.isError) return <div className="profile-state" role="alert"><p>{t('profiles.loadFailed', { message: profiles.error.message })}</p><button data-profile-control type="button" onClick={() => profiles.refetch()}>{t('profiles.retry')}</button></div>;
   return <div className="profile-page">
     <ProfileDirectory profiles={profiles.data} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={() => onCreate?.()} />
     <main className="profile-page__surface">
@@ -115,11 +129,12 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
         onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />
         : <div className="profile-page__blank">{t('profiles.selectPrompt')}</div>}
+      {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={save.isPending} onClick={() => duplicatePayload && void runDuplicate(duplicatePayload)}>{t('profiles.retry')}</button></div>}
     </main>
     {deleteTarget && <div className="profile-dialog-backdrop"><div className="profile-dialog" role="alertdialog" aria-modal="true" aria-labelledby="profile-delete-title" aria-describedby="profile-delete-description" onKeyDown={trapFocus}>
       <h2 id="profile-delete-title">{t('profiles.deleteTitle')}</h2><p id="profile-delete-description">{t('profiles.deleteConfirm', { name: deleteTarget.nameZh || deleteTarget.nameEn })}</p>
       {deleteError && <p role="alert">{deleteError}</p>}
-      <div className="profile-dialog__actions"><button data-profile-control ref={cancelRef} type="button" onClick={closeDelete} disabled={remove.isPending}>{t('profiles.cancelDelete')}</button><button data-profile-control ref={confirmRef} type="button" onClick={() => void confirmDelete()} disabled={remove.isPending}>{deleteError ? t('profiles.retryDelete') : t('profiles.confirmDelete')}</button></div>
+      <div className="profile-dialog__actions"><button data-profile-control ref={cancelRef} type="button" onClick={closeDelete} disabled={remove.isPending}>{t('form.cancel')}</button><button data-profile-control ref={confirmRef} type="button" onClick={() => void confirmDelete()} disabled={remove.isPending}>{deleteError ? t('profiles.retryDelete') : t('profiles.confirmDelete')}</button></div>
     </div></div>}
   </div>;
 }

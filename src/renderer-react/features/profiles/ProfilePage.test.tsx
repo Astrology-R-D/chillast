@@ -5,8 +5,9 @@ import locale from '../../../../locale/zh.json';
 import { expect, test, vi } from 'vitest';
 import type { Profile } from '../../api/contracts';
 import { I18nProvider } from '../../i18n/I18nProvider';
-import { createProfileWorkspaceStore } from '../../stores/profileWorkspace';
+import { createProfileWorkspaceStore, PROFILE_WORKSPACE_KEY } from '../../stores/profileWorkspace';
 import { ProfilePage } from './ProfilePage';
+import '../../styles/density.css';
 
 const alpha: Profile = {
   id: 'a', nameZh: '王晓明', nameEn: 'Alex Wang', gender: 'male',
@@ -25,10 +26,13 @@ function memoryStorage(): Storage {
     key: (index) => [...values.keys()][index] ?? null, removeItem: (key) => values.delete(key), setItem: (key, value) => values.set(key, value) };
 }
 
-function setup(list = vi.fn().mockResolvedValue({ ok: true, data: [alpha, beta] })) {
+function setup(
+  list = vi.fn().mockResolvedValue({ ok: true, data: [alpha, beta] }),
+  storage = memoryStorage(),
+) {
   const api = { profiles: { list, save: vi.fn(), remove: vi.fn() } };
   vi.stubGlobal('mystApi', api);
-  const store = createProfileWorkspaceStore(memoryStorage(), Date.now);
+  const store = createProfileWorkspaceStore(storage, Date.now);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const onNavigate = vi.fn();
   const view = render(
@@ -39,12 +43,31 @@ function setup(list = vi.fn().mockResolvedValue({ ok: true, data: [alpha, beta] 
   return { ...view, api, store, client, onNavigate };
 }
 
+test('selects a persisted valid primary initially and after refetch while retaining valid selection', async () => {
+  const storage = memoryStorage();
+  storage.setItem(PROFILE_WORKSPACE_KEY, JSON.stringify({ primaryProfileId: 'b', recentUses: {} }));
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [alpha, beta] })
+    .mockResolvedValueOnce({ ok: true, data: [alpha, beta] })
+    .mockResolvedValueOnce({ ok: true, data: [beta, alpha] });
+  const { client } = setup(list, storage);
+
+  expect(await screen.findByRole('heading', { name: 'Beatrice Longname' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '选择档案：王晓明' }));
+  await client.refetchQueries({ queryKey: ['profiles'] });
+  expect(screen.getByRole('heading', { name: '王晓明' })).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: '选择档案：Beatrice Longname' }));
+  await client.refetchQueries({ queryKey: ['profiles'] });
+  expect(screen.getByRole('heading', { name: 'Beatrice Longname' })).toBeInTheDocument();
+});
+
 test('loads, retries errors, and distinguishes an empty library from filtered results', async () => {
   const list = vi.fn().mockResolvedValueOnce({ ok: false, error: '网络中断' }).mockResolvedValueOnce({ ok: true, data: [] });
   const failedView = setup(list);
   expect(screen.getByRole('status')).toHaveTextContent('正在加载档案');
   expect(await screen.findByRole('alert')).toHaveTextContent('网络中断');
-  await userEvent.click(screen.getByRole('button', { name: '重试加载档案' }));
+  await userEvent.click(screen.getByRole('button', { name: '重试' }));
   expect(await screen.findByText('档案库为空')).toBeInTheDocument();
   failedView.unmount();
 
@@ -53,6 +76,19 @@ test('loads, retries errors, and distinguishes an empty library from filtered re
   const search = await screen.findByRole('searchbox', { name: '搜索档案' });
   await userEvent.type(search, '不存在');
   expect(screen.getByText('没有符合筛选条件的档案')).toBeInTheDocument();
+});
+
+test('keeps marked controls density-aware and row text inside its scroll container contract', async () => {
+  setup();
+  await screen.findByRole('heading', { name: '王晓明' });
+  for (const [density, height] of [['compact', '32px'], ['comfortable', '36px']] as const) {
+    document.documentElement.dataset.density = density;
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--control-height').trim()).toBe(height);
+    expect(document.querySelectorAll('[data-profile-control]').length).toBeGreaterThan(0);
+  }
+  for (const field of document.querySelectorAll('.profile-row__name, .profile-row__secondary, .profile-row__location')) {
+    expect(field.clientWidth === 0 || field.scrollWidth <= field.clientWidth).toBe(true);
+  }
 });
 
 test('supports directory search, sorting, selection, recent filtering, and primary state', async () => {
@@ -105,6 +141,28 @@ test('duplicates with a clean payload, mandatory refetch, localized nonblank nam
   expect(await screen.findByRole('heading', { name: 'Beatrice Longname（副本）' })).toBeInTheDocument();
 });
 
+test('keeps duplicate failure inline without an unhandled rejection and retries the same payload', async () => {
+  const copied = { ...alpha, id: 'copy', nameZh: '王晓明（副本）' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: true, data: [alpha, copied] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValueOnce({ ok: false, error: '磁盘繁忙' }).mockResolvedValueOnce({ ok: true, data: copied });
+  const unhandled = vi.fn();
+  window.addEventListener('unhandledrejection', unhandled);
+
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('磁盘繁忙');
+  expect(screen.getByRole('heading', { name: '王晓明' })).toBeInTheDocument();
+  expect(unhandled).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: '重试' }));
+
+  expect(await screen.findByRole('heading', { name: '王晓明（副本）' })).toBeInTheDocument();
+  expect(api.profiles.save).toHaveBeenCalledTimes(2);
+  expect(api.profiles.save.mock.calls[1][0]).toEqual(api.profiles.save.mock.calls[0][0]);
+  expect(list).toHaveBeenCalledTimes(2);
+  window.removeEventListener('unhandledrejection', unhandled);
+});
+
 test('uses an accessible delete dialog with cancel, trapped focus, failure, and retry', async () => {
   const { api, store } = setup();
   api.profiles.remove.mockResolvedValueOnce({ ok: false, error: '占用中' }).mockResolvedValueOnce({ ok: true, data: true });
@@ -112,10 +170,10 @@ test('uses an accessible delete dialog with cancel, trapped focus, failure, and 
   const trigger = screen.getByRole('button', { name: '删除档案' });
   await userEvent.click(trigger);
   let dialog = screen.getByRole('alertdialog', { name: '删除档案' });
-  expect(within(dialog).getByRole('button', { name: '取消删除' })).toHaveFocus();
+  expect(within(dialog).getByRole('button', { name: '取消' })).toHaveFocus();
   fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
   expect(within(dialog).getByRole('button', { name: '确认删除' })).toHaveFocus();
-  await userEvent.click(within(dialog).getByRole('button', { name: '取消删除' }));
+  await userEvent.click(within(dialog).getByRole('button', { name: '取消' }));
   expect(trigger).toHaveFocus();
   await userEvent.click(trigger);
   dialog = screen.getByRole('alertdialog', { name: '删除档案' });

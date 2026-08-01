@@ -9,12 +9,33 @@ runElectronSmokeController('chillast-react-smoke-', app);
 
 const root = path.join(__dirname, '..');
 const errors = [];
+const seededProfile = {
+  id: 'smoke-profile',
+  nameZh: '烟测档案',
+  nameEn: 'Smoke Profile',
+  gender: 'other',
+  birthData: {
+    year: 1990, month: 1, day: 2, hour: 3, minute: 4,
+    location: { label: '北京 / Beijing', latitude: 39.9042, longitude: 116.4074 },
+  },
+  notes: 'React smoke profile',
+  tags: ['Smoke'],
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+let smokeProfiles = [seededProfile];
 const userDataDir = process.env.CHILLAST_SMOKE_USER_DATA;
 let win = null;
 let finished = false;
 
 app.disableHardwareAcceleration();
 app.setPath('userData', userDataDir);
+process.on('unhandledRejection', (reason) => {
+  errors.push(`main unhandledRejection: ${reason && (reason.stack || reason.message) || String(reason)}`);
+});
+process.on('uncaughtException', (error) => {
+  errors.push(`main uncaughtException: ${error && (error.stack || error.message) || String(error)}`);
+});
 
 function finish(code, reason) {
   if (finished) return;
@@ -48,7 +69,9 @@ function registerEnvelope(channel, handler) {
     try {
       return { ok: true, data: await handler(...args) };
     } catch (error) {
-      return { ok: false, error: error && error.message ? error.message : String(error) };
+      const message = error && error.message ? error.message : String(error);
+      errors.push(`handler failure ${channel}: ${message}`);
+      return { ok: false, error: message };
     }
   });
 }
@@ -67,6 +90,30 @@ app.whenReady().then(async () => {
   }));
   registerEnvelope('ai:initStatus', () => null);
   registerEnvelope('ai:setContext', () => ({ ok: true }));
+  registerEnvelope('profiles:list', () => smokeProfiles);
+  registerEnvelope('profiles:get', (id) => smokeProfiles.find((profile) => profile.id === id) ?? null);
+  registerEnvelope('profiles:save', (input) => {
+    const now = new Date().toISOString();
+    const existing = input.id && smokeProfiles.find((profile) => profile.id === input.id);
+    const saved = {
+      ...input,
+      id: existing ? existing.id : `smoke-copy-${smokeProfiles.length}`,
+      createdAt: existing ? existing.createdAt : now,
+      updatedAt: now,
+    };
+    smokeProfiles = [...smokeProfiles.filter((profile) => profile.id !== saved.id), saved];
+    return saved;
+  });
+  registerEnvelope('profiles:remove', (id) => {
+    const found = smokeProfiles.some((profile) => profile.id === id);
+    smokeProfiles = smokeProfiles.filter((profile) => profile.id !== id);
+    return found;
+  });
+  registerEnvelope('cities:search', () => []);
+  registerEnvelope('chinese:searchCities', () => []);
+  registerEnvelope('locations:resolve', () => ({
+    timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1990-01-01T16:00:00.000Z',
+  }));
 
   win = new BrowserWindow({
     show: false,
@@ -118,7 +165,10 @@ app.whenReady().then(async () => {
       const nav = document.querySelector('.shell__navigation');
       const main = document.querySelector('.shell__main');
       const ai = document.querySelector('.shell__ai');
-      if (!window.mystApi || heading?.textContent !== '档案管理' || !nav || !main || !ai) return { ready: false };
+      const profileHeading = document.querySelector('.profile-detail h2');
+      const profileRows = document.querySelectorAll('.profile-row');
+      if (!window.mystApi || heading?.textContent !== '档案管理' || !nav || !main || !ai
+        || profileHeading?.textContent !== '烟测档案' || profileRows.length < 1) return { ready: false };
       const fontFaces = await document.fonts.load('400 13px "Maple Mono NF CN"', 'CHILLAST');
       const rect = (element) => {
         const value = element.getBoundingClientRect();
@@ -128,6 +178,8 @@ app.whenReady().then(async () => {
         hasApi: Boolean(window.mystApi),
         routeButtons: document.querySelectorAll('.shell-nav__button').length,
         heading: heading.textContent,
+        profileHeading: profileHeading.textContent,
+        profileRows: profileRows.length,
         theme: document.documentElement.dataset.theme,
         density: document.documentElement.dataset.density,
         mapleFontLoaded: fontFaces.some((face) => face.status === 'loaded') && document.fonts.check('400 13px "Maple Mono NF CN"', 'CHILLAST'),
@@ -140,6 +192,7 @@ app.whenReady().then(async () => {
 
     if (!desktop.hasApi) throw new Error('window.mystApi is missing');
     if (desktop.routeButtons !== 6) throw new Error(`expected 6 routes, got ${desktop.routeButtons}`);
+    if (desktop.profileHeading !== '烟测档案' || desktop.profileRows < 1) throw new Error('seeded profile content did not load');
     if (!['light', 'dark'].includes(desktop.theme)) throw new Error(`unresolved theme: ${desktop.theme}`);
     if (desktop.density !== 'compact') throw new Error(`unexpected density: ${desktop.density}`);
     if (!desktop.mapleFontLoaded) throw new Error('Maple regular font did not load');

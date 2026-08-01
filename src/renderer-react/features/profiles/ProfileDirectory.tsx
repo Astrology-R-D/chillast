@@ -40,8 +40,8 @@ export function ProfileDirectory({ profiles, selectedId, primaryId, recents, onS
           <span className="profile-search__input"><Search size={15} aria-hidden="true" /><input data-profile-control type="search" value={search} onChange={(event) => setSearch(event.target.value)} /></span>
         </label>
         <div className="profile-directory__selects">
-          <label><span>{t('profiles.recent')}</span><select data-profile-control value={recent} onChange={(event) => setRecent(event.target.value as RecentFilter)}>
-            <option value="all">{t('profiles.recentAll')}</option><option value="7d">{t('profiles.recent7d')}</option><option value="30d">{t('profiles.recent30d')}</option>
+          <label><span>{t('profiles.recentFilter')}</span><select data-profile-control value={recent} onChange={(event) => setRecent(event.target.value as RecentFilter)}>
+            <option value="all">{t('profiles.allProfiles')}</option><option value="7d">{t('profiles.used7d')}</option><option value="30d">{t('profiles.used30d')}</option>
           </select></label>
           <label><span>{t('profiles.sort')}</span><select data-profile-control value={sort} onChange={(event) => setSort(event.target.value as ProfileSort)}>
             <option value="updated-desc">{t('profiles.sortUpdated')}</option><option value="name-asc">{t('profiles.sortName')}</option><option value="birth-asc">{t('profiles.sortBirth')}</option><option value="recent-desc">{t('profiles.sortRecent')}</option>
@@ -55,9 +55,9 @@ export function ProfileDirectory({ profiles, selectedId, primaryId, recents, onS
           const selected = profile.id === selectedId;
           const primary = profile.id === primaryId;
           return <button key={profile.id} type="button" className="profile-row" data-selected={selected} aria-pressed={selected} aria-label={t('profiles.selectProfile', { name: preferred })} onClick={() => onSelect(profile.id)}>
-            <span className="profile-row__name" title={preferred}>{preferred}{primary && <span className="profile-row__marker">{t('profiles.primary')}</span>}</span>
+              <span className="profile-row__name" title={preferred}>{preferred}{primary && <span className="profile-row__marker">{t('profiles.primary')}</span>}</span>
             {secondary && <span className="profile-row__secondary" title={secondary}>{secondary}</span>}
-            <span className="profile-row__meta"><span>{birth(profile)}</span><span title={profile.birthData.location.label}>{profile.birthData.location.label}</span></span>
+            <span className="profile-row__meta"><span>{birth(profile)}</span><span className="profile-row__location" title={profile.birthData.location.label}>{profile.birthData.location.label}</span></span>
           </button>;
         })}
         {profiles.length === 0 && <p className="profile-directory__empty">{t('profiles.emptyLibrary')}</p>}
