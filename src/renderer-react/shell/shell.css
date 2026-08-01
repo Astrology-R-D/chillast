@@ -1,0 +1,159 @@
+.shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-base);
+}
+
+.shell--desktop {
+  display: flex;
+}
+
+.shell__navigation,
+.shell__ai,
+.shell__ai-overlay {
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+  background: var(--surface-raised);
+  background: var(--surface-panel);
+}
+
+@supports (backdrop-filter: blur(8px)) {
+  .shell__navigation,
+  .shell__ai,
+  .shell__ai-overlay {
+    backdrop-filter: blur(8px);
+  }
+}
+
+.shell__navigation {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.shell__ai {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.shell__main {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface-work);
+}
+
+.shell__resize-handle {
+  position: relative;
+  z-index: 1;
+  width: 9px;
+  margin-inline: -4px;
+  background: transparent;
+  outline: none;
+}
+
+.shell__resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  content: '';
+  background: var(--border-subtle);
+  transition: background-color var(--motion-fast);
+}
+
+.shell__resize-handle:hover::after,
+.shell__resize-handle:focus-visible::after,
+.shell__resize-handle[data-resize-handle-active]::after {
+  background: var(--focus);
+}
+
+.shell__resize-handle:focus-visible {
+  outline: none;
+}
+
+.shell--narrow {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.shell__navigation--rail {
+  grid-column: 1;
+  min-width: 56px;
+}
+
+.shell__main--narrow {
+  display: grid;
+  grid-column: 2;
+  grid-template-rows: calc(var(--control-height) + (2 * var(--space-2))) minmax(0, 1fr);
+}
+
+.shell__main-toolbar,
+.shell__ai-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shell__main-content,
+.shell__ai-content {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.shell__icon-button {
+  display: inline-grid;
+  width: var(--control-height);
+  height: var(--control-height);
+  flex: 0 0 var(--control-height);
+  padding: 0;
+  place-items: center;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.shell__icon-button:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.shell__icon-button:active {
+  background: var(--surface-selected);
+}
+
+.shell__scrim {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  background: rgba(0, 0, 0, .32);
+}
+
+.shell__ai-overlay {
+  position: fixed;
+  z-index: 21;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: min(420px, calc(100vw - 56px));
+  flex-direction: column;
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-float);
+}
+
+.shell__ai-content {
+  flex: 1 1 auto;
+}

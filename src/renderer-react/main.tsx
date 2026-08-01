@@ -5,6 +5,7 @@ import './styles/tokens.css';
 import './styles/themes.css';
 import './styles/density.css';
 import './styles/global.css';
+import './shell/shell.css';
 
 const stopPreferenceSync = startPreferenceSync();
 window.addEventListener('beforeunload', stopPreferenceSync, { once: true });
