@@ -120,7 +120,8 @@
     "deletedRefreshFailed": "档案已删除，但刷新失败：{{message}}",
     "savedProfileMissing": "刷新后未找到已保存的档案，请重试刷新。",
     "deletedProfilePresent": "刷新后仍包含已删除的档案，请重试刷新。",
-    "retryRefresh": "重试刷新档案"
+    "retryRefresh": "重试刷新档案",
+    "deletePending": "正在删除并同步档案…"
   },
   "form": {
     "nameZh": "中文名字",

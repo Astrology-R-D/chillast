@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import locale from '../../../../locale/zh.json';
 import { expect, test, vi } from 'vitest';
@@ -19,6 +19,16 @@ const beta: Profile = {
   birthData: { ...alpha.birthData, year: 1992, month: 11, location: { label: 'London', latitude: 51.5074, longitude: -0.1278 } },
   tags: [], notes: '', updatedAt: '2026-07-07T08:09:10.000Z',
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -192,6 +202,81 @@ test('does not select an identical profile when the authoritative saved ID is ab
   expect(api.profiles.save).toHaveBeenCalledTimes(1);
 });
 
+test('serializes duplicate save and canonical refresh across double clicks', async () => {
+  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）' };
+  const saveResult = deferred<{ ok: true; data: Profile }>();
+  const refreshResult = deferred<{ ok: true; data: Profile[] }>();
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [beta] })
+    .mockReturnValueOnce(refreshResult.promise);
+  const { api } = setup(list);
+  api.profiles.save.mockReturnValue(saveResult.promise);
+  await screen.findByRole('heading', { name: 'Beatrice Longname' });
+  const copy = screen.getByRole('button', { name: '复制档案' });
+
+  fireEvent.click(copy);
+  fireEvent.click(copy);
+  expect(copy).toBeDisabled();
+  await waitFor(() => expect(api.profiles.save).toHaveBeenCalledTimes(1));
+  await act(async () => saveResult.resolve({ ok: true, data: copied }));
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  expect(copy).toBeDisabled();
+  fireEvent.click(copy);
+  expect(api.profiles.save).toHaveBeenCalledTimes(1);
+
+  await act(async () => refreshResult.resolve({ ok: true, data: [beta, copied] }));
+  expect(await screen.findByRole('heading', { name: copied.nameEn })).toBeInTheDocument();
+});
+
+test('serializes refresh retry and ignores a stale first retry completion', async () => {
+  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）' };
+  const retryResult = deferred<{ ok: true; data: Profile[] }>();
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [beta] })
+    .mockResolvedValueOnce({ ok: false, error: '刷新断开' })
+    .mockReturnValueOnce(retryResult.promise);
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: copied });
+  await screen.findByRole('heading', { name: 'Beatrice Longname' });
+  await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
+  const retry = await screen.findByRole('button', { name: '重试刷新档案' });
+
+  fireEvent.click(retry);
+  fireEvent.click(retry);
+  expect(retry).toBeDisabled();
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(3));
+  expect(api.profiles.save).toHaveBeenCalledTimes(1);
+  await act(async () => retryResult.resolve({ ok: true, data: [beta, copied] }));
+
+  expect(await screen.findByRole('heading', { name: copied.nameEn })).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+test('a new duplicate save clears a prior saved ID before its own failure retry', async () => {
+  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）' };
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [beta] })
+    .mockResolvedValueOnce({ ok: false, error: '刷新断开' })
+    .mockResolvedValueOnce({ ok: true, data: [beta, copied] });
+  const { api } = setup(list);
+  api.profiles.save
+    .mockResolvedValueOnce({ ok: true, data: copied })
+    .mockResolvedValueOnce({ ok: false, error: '第二次保存失败' })
+    .mockResolvedValueOnce({ ok: true, data: copied });
+  await screen.findByRole('heading', { name: 'Beatrice Longname' });
+  await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
+  expect(await screen.findByRole('button', { name: '重试刷新档案' })).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('第二次保存失败');
+  const retrySave = screen.getByRole('button', { name: '重试' });
+  expect(screen.queryByRole('button', { name: '重试刷新档案' })).not.toBeInTheDocument();
+  await userEvent.click(retrySave);
+
+  expect(api.profiles.save).toHaveBeenCalledTimes(3);
+  expect(list).toHaveBeenCalledTimes(3);
+});
+
 test('keeps duplicate failure inline without an unhandled rejection and retries the same payload', async () => {
   const copied = { ...alpha, id: 'copy', nameZh: '王晓明（副本）' };
   const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: true, data: [alpha, copied] });
@@ -268,4 +353,36 @@ test('restores delete focus to create when the canonical library becomes empty',
   await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
 
   await waitFor(() => expect(screen.getByRole('button', { name: '新建档案' })).toHaveFocus());
+});
+
+test('keeps focus trapped on dialog status while delete and refresh are unresolved', async () => {
+  const removeResult = deferred<{ ok: true; data: true }>();
+  const refreshResult = deferred<{ ok: false; error: string }>();
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [alpha, beta] })
+    .mockReturnValueOnce(refreshResult.promise);
+  const { api } = setup(list);
+  api.profiles.remove.mockReturnValue(removeResult.promise);
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '删除档案' }));
+  const dialog = screen.getByRole('alertdialog', { name: '删除档案' });
+  await userEvent.click(within(dialog).getByRole('button', { name: '确认删除' }));
+  const status = within(dialog).getByRole('status');
+
+  expect(status).toHaveFocus();
+  expect(status).toHaveAttribute('aria-busy', 'true');
+  fireEvent.keyDown(status, { key: 'Tab' });
+  expect(status).toHaveFocus();
+  fireEvent.keyDown(status, { key: 'Tab', shiftKey: true });
+  expect(status).toHaveFocus();
+
+  await act(async () => removeResult.resolve({ ok: true, data: true }));
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  expect(status).toHaveFocus();
+  fireEvent.keyDown(status, { key: 'Tab' });
+  expect(status).toHaveFocus();
+
+  await act(async () => refreshResult.resolve({ ok: false, error: '刷新断开' }));
+  const retry = await within(dialog).findByRole('button', { name: '重试刷新档案' });
+  await waitFor(() => expect(retry).toHaveFocus());
 });

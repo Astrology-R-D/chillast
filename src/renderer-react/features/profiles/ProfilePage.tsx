@@ -1,7 +1,7 @@
 import { useStore } from 'zustand';
 import { useQueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Profile, ProfileSaveInput } from '../../api/contracts';
 import { useI18n } from '../../i18n/I18nProvider';
 import { profileWorkspaceStore, type ProfileWorkspaceState } from '../../stores/profileWorkspace';
@@ -18,6 +18,8 @@ interface ProfilePageProps {
   onEdit?: (profile: Profile) => void;
 }
 
+type DuplicatePhase = 'idle' | 'saving' | 'refreshing';
+
 export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate, onCreate, onEdit }: ProfilePageProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -32,13 +34,18 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   const [duplicateError, setDuplicateError] = useState('');
   const [duplicatePayload, setDuplicatePayload] = useState<ProfileSaveInput | null>(null);
   const [duplicateSavedId, setDuplicateSavedId] = useState<string | null>(null);
+  const [duplicatePhase, setDuplicatePhase] = useState<DuplicatePhase>('idle');
   const [deleteSyncId, setDeleteSyncId] = useState<string | null>(null);
   const [deleteRefreshing, setDeleteRefreshing] = useState(false);
   const [focusAfterDelete, setFocusAfterDelete] = useState<string | 'create' | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
+  const duplicateBusyRef = useRef(false);
+  const duplicateTokenRef = useRef(0);
   const deleteTrigger = useRef<HTMLElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const deleteStatusRef = useRef<HTMLParagraphElement | null>(null);
+  const deletePending = remove.isPending || deleteRefreshing;
 
   useEffect(() => {
     if (!profiles.data) return;
@@ -49,9 +56,12 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
       : workspaceStore.getState().primaryProfileId ?? ids[0] ?? null);
   }, [profiles.data, workspaceStore]);
 
-  useEffect(() => {
-    if (deleteTarget) cancelRef.current?.focus();
-  }, [deleteTarget]);
+  useLayoutEffect(() => {
+    if (!deleteTarget) return;
+    if (deletePending) deleteStatusRef.current?.focus();
+    else if (deleteError) confirmRef.current?.focus();
+    else cancelRef.current?.focus();
+  }, [deleteError, deletePending, deleteTarget]);
 
   useEffect(() => {
     if (!focusAfterDelete || deleteTarget) return undefined;
@@ -71,10 +81,22 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     workspaceStore.getState().recordRecentUse(id);
   };
   const selected = profiles.data?.find(({ id }) => id === selectedId) ?? null;
-  const refreshDuplicate = async (savedId: string) => {
-    setDuplicateError('');
+  const beginDuplicate = (phase: Exclude<DuplicatePhase, 'idle'>): number | null => {
+    if (duplicateBusyRef.current) return null;
+    duplicateBusyRef.current = true;
+    const token = ++duplicateTokenRef.current;
+    setDuplicatePhase(phase);
+    return token;
+  };
+  const finishDuplicate = (token: number) => {
+    if (token !== duplicateTokenRef.current) return;
+    duplicateBusyRef.current = false;
+    setDuplicatePhase('idle');
+  };
+  const runDuplicateRefresh = async (savedId: string, token: number) => {
     try {
       await refreshProfiles(queryClient);
+      if (token !== duplicateTokenRef.current) return;
       const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
       if (!refreshed.some(({ id }) => id === savedId)) {
         setDuplicateError(t('profiles.savedProfileMissing'));
@@ -82,21 +104,38 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
       }
       setSelectedId(savedId);
       workspaceStore.getState().recordRecentUse(savedId);
+      setDuplicateError('');
       setDuplicatePayload(null);
       setDuplicateSavedId(null);
     } catch (error) {
+      if (token !== duplicateTokenRef.current) return;
       const message = error instanceof Error ? error.message : String(error);
       setDuplicateError(t('profiles.savedRefreshFailed', { message }));
+    } finally {
+      finishDuplicate(token);
     }
   };
+  const refreshDuplicate = (savedId: string) => {
+    const token = beginDuplicate('refreshing');
+    if (token === null) return;
+    void runDuplicateRefresh(savedId, token);
+  };
   const runDuplicate = async (payload: ProfileSaveInput) => {
+    const token = beginDuplicate('saving');
+    if (token === null) return;
     setDuplicateError('');
+    setDuplicatePayload(payload);
+    setDuplicateSavedId(null);
     try {
       const result = await save.mutateAsync(payload);
+      if (token !== duplicateTokenRef.current) return;
       setDuplicateSavedId(result.id);
-      await refreshDuplicate(result.id);
+      setDuplicatePhase('refreshing');
+      await runDuplicateRefresh(result.id, token);
     } catch (error) {
+      if (token !== duplicateTokenRef.current) return;
       setDuplicateError(error instanceof Error ? error.message : String(error));
+      finishDuplicate(token);
     }
   };
   const duplicate = (profile: Profile) => {
@@ -108,7 +147,6 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
       nameEn: input.nameEn.trim() ? `${input.nameEn}${suffix}` : '',
     };
     if (!payload.nameZh && !payload.nameEn) payload.nameZh = t('profiles.unnamedCopy');
-    setDuplicatePayload(payload);
     void runDuplicate(payload);
   };
   const openChart = (profile: Profile, chartType: 'natal' | 'transit' | 'synastry') => {
@@ -159,13 +197,20 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     }
   };
   const closeDelete = () => {
-    if (remove.isPending || deleteRefreshing || deleteSyncId) return;
+    if (deletePending || deleteSyncId) return;
     setDeleteTarget(null); setDeleteError(''); deleteTrigger.current?.focus();
   };
   const trapFocus = (event: React.KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); closeDelete(); return; }
     if (event.key !== 'Tab') return;
-    const first = cancelRef.current; const last = confirmRef.current;
+    if (deletePending) {
+      event.preventDefault();
+      deleteStatusRef.current?.focus();
+      return;
+    }
+    const first = cancelRef.current?.disabled ? confirmRef.current : cancelRef.current;
+    const last = confirmRef.current;
+    if (first && first === last) { event.preventDefault(); first.focus(); return; }
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   };
@@ -175,16 +220,17 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   return <div ref={pageRef} className="profile-page">
     <ProfileDirectory profiles={profiles.data} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={() => onCreate?.()} />
     <section className="profile-page__surface">
-      {selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={save.isPending} onEdit={() => onEdit?.(selected)} onCopy={() => void duplicate(selected)}
+      {selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => onEdit?.(selected)} onCopy={() => void duplicate(selected)}
         onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />
         : <div className="profile-page__blank">{t('profiles.selectPrompt')}</div>}
-      {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={save.isPending} onClick={() => duplicateSavedId ? void refreshDuplicate(duplicateSavedId) : duplicatePayload && void runDuplicate(duplicatePayload)}>{t(duplicateSavedId ? 'profiles.retryRefresh' : 'profiles.retry')}</button></div>}
+      {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={duplicatePhase !== 'idle'} onClick={() => duplicateSavedId ? refreshDuplicate(duplicateSavedId) : duplicatePayload && void runDuplicate(duplicatePayload)}>{t(duplicateSavedId ? 'profiles.retryRefresh' : 'profiles.retry')}</button></div>}
     </section>
     {deleteTarget && <div className="profile-dialog-backdrop"><div className="profile-dialog" role="alertdialog" aria-modal="true" aria-labelledby="profile-delete-title" aria-describedby="profile-delete-description" onKeyDown={trapFocus}>
       <h2 id="profile-delete-title">{t('profiles.deleteTitle')}</h2><p id="profile-delete-description">{t('profiles.deleteConfirm', { name: deleteTarget.nameZh || deleteTarget.nameEn })}</p>
+      {deletePending && <p ref={deleteStatusRef} role="status" tabIndex={-1} aria-busy="true">{t('profiles.deletePending')}</p>}
       {deleteError && <p role="alert">{deleteError}</p>}
-      <div className="profile-dialog__actions"><button data-profile-control ref={cancelRef} type="button" onClick={closeDelete} disabled={remove.isPending || deleteRefreshing || Boolean(deleteSyncId)}>{t('form.cancel')}</button><button data-profile-control ref={confirmRef} type="button" onClick={() => void confirmDelete()} disabled={remove.isPending || deleteRefreshing}>{deleteSyncId ? t('profiles.retryRefresh') : deleteError ? t('profiles.retryDelete') : t('profiles.confirmDelete')}</button></div>
+      <div className="profile-dialog__actions"><button data-profile-control ref={cancelRef} type="button" onClick={closeDelete} disabled={deletePending || Boolean(deleteSyncId)}>{t('form.cancel')}</button><button data-profile-control ref={confirmRef} type="button" onClick={() => void confirmDelete()} disabled={deletePending}>{deleteSyncId ? t('profiles.retryRefresh') : deleteError ? t('profiles.retryDelete') : t('profiles.confirmDelete')}</button></div>
     </div></div>}
   </div>;
 }

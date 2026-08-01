@@ -110,6 +110,7 @@ test('contains exact canonical Task 5 profile strings', () => {
     'profiles.coordinates', 'profiles.createdAt', 'profiles.updatedAt',
     'profiles.savedRefreshFailed', 'profiles.deletedRefreshFailed',
     'profiles.savedProfileMissing', 'profiles.deletedProfilePresent', 'profiles.retryRefresh',
+    'profiles.deletePending',
   ].map((key) => [key, resolveKey(key)]))).toEqual({
     'profiles.directory': '档案目录',
     'profiles.search': '搜索档案',
@@ -142,6 +143,7 @@ test('contains exact canonical Task 5 profile strings', () => {
     'profiles.savedProfileMissing': '刷新后未找到已保存的档案，请重试刷新。',
     'profiles.deletedProfilePresent': '刷新后仍包含已删除的档案，请重试刷新。',
     'profiles.retryRefresh': '重试刷新档案',
+    'profiles.deletePending': '正在删除并同步档案…',
   });
 });
 
