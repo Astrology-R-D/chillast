@@ -15,6 +15,7 @@ try {
 const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
 const AiSessionStore = require('./AiSessionStore');
+const { installExternalUrlHandler, resolveSmokeReportPath } = require('./MainPolicy');
 const {
   isNavigationAllowed,
   loadRenderer,
@@ -136,7 +137,8 @@ class Main {
     this.aiService.setInitProgressHandler((p) => {
       if (this.router && this.router.webContents) this.router.webContents.send('ai:initProgress', p);
     });
-    this.aiService.configure(aiSettings).then(() => {
+    this.aiService.configure(aiSettings).then((result) => {
+      if (!result.accepted) console.error('[AiService] startup configuration rejected:', result.error);
       if (this.router && this.router.webContents) {
         this.router.webContents.send('ai:statusChanged', this.aiService.status());
       }
@@ -189,18 +191,25 @@ class Main {
     this.router.setWebContents(this.mainWindow.webContents);
 
     const rendererWindow = this.mainWindow;
-    const smokeReportPath = app.isPackaged ? process.env.CHILLAST_SMOKE_REPORT : null;
+    let smokeReportPath = null;
+    try {
+      smokeReportPath = resolveSmokeReportPath({
+        isPackaged: app.isPackaged,
+        argv: process.argv,
+        env: process.env,
+        userData: app.getPath('userData'),
+      });
+    } catch (error) {
+      console.error('[Main] smoke mode rejected:', error.message);
+    }
     if (smokeReportPath) this._captureSmokeErrors(rendererWindow.webContents);
     rendererWindow.webContents.on('will-navigate', (event, navigationUrl) => {
       const requestedUrl = typeof navigationUrl === 'string' ? navigationUrl : event.url;
       if (!isNavigationAllowed(rendererTarget, requestedUrl)) event.preventDefault();
     });
 
-    // Open external links in the OS browser, never inside the app shell.
-    rendererWindow.webContents.setWindowOpenHandler(({ url }) => {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    });
+    // Open approved external links in the OS browser, never inside the app shell.
+    installExternalUrlHandler({ webContents: rendererWindow.webContents, shell });
 
     loadRenderer(rendererWindow, rendererTarget).then(() => {
       if (smokeReportPath) void this._reportSmokeWhenReady(rendererTarget, smokeReportPath);

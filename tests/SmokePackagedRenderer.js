@@ -31,7 +31,7 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
   let stderr = '';
   try {
     const result = await new Promise((resolve, reject) => {
-      child = spawn(executable, [`--user-data-dir=${profile}`, '--disable-gpu'], {
+      child = spawn(executable, [`--user-data-dir=${profile}`, '--disable-gpu', '--chillast-smoke'], {
         env,
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],

@@ -8,7 +8,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/RunAll.js && node --test tests/AiServiceConfiguration.test.js tests/ModelProviderConfiguration.test.js",
+    "test": "node tests/RunAll.js && node --test tests/AiServiceConfiguration.test.js tests/ModelProviderConfiguration.test.js tests/PackageResources.test.js",
     "smoke": "electron tests/SmokeRenderer.js",
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:react": "concurrently -k \"npm:dev:renderer\" \"wait-on tcp:5173 && cross-env CHILLAST_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
@@ -18,7 +18,7 @@
     "test:renderer": "vitest run",
     "test:renderer:watch": "vitest",
     "test:loader": "node --test tests/RendererLoader.test.js",
-    "test:security": "node --test tests/RendererLoader.test.js tests/IpcRouterSecurity.test.js",
+    "test:security": "node --test tests/RendererLoader.test.js tests/IpcRouterSecurity.test.js tests/MainPolicy.test.js",
     "test:preload": "node --test tests/PreloadSubscriptions.test.js",
     "typecheck": "tsc --noEmit",
     "verify:renderer": "npm run test:security && npm run test:preload && npm run test:renderer && npm run typecheck && npm run build:renderer",
