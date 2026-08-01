@@ -8,6 +8,7 @@ const asar = require('@electron/asar');
 
 const root = path.join(__dirname, '..');
 const archive = path.join(root, 'release', 'win-unpacked', 'resources', 'app.asar');
+const optionalResourceSources = new Set(['resources/models', 'resources/vector-index']);
 
 function hash(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -23,6 +24,14 @@ function assertMatchesSource(archiveName, sourceName = archiveName) {
 }
 
 assert.ok(fs.existsSync(archive), `package archive missing: ${archive}`);
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const missingOptionalResources = [];
+for (const resource of packageJson.build.extraResources || []) {
+  const source = String(resource.from || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  if (fs.existsSync(path.join(root, source))) continue;
+  assert.ok(optionalResourceSources.has(source), `required configured resource is missing: ${source}`);
+  missingOptionalResources.push(source);
+}
 const files = asar.listPackage(archive, { isPack: false })
   .map((name) => name.replace(/^[/\\]/, '').replace(/\\/g, '/'));
 const fileSet = new Set(files);
@@ -77,4 +86,6 @@ console.log(JSON.stringify({
   script: scriptMatch[1],
   style: styleMatch[1],
   sourceHashesVerified: 4 + rootTtf.length + reactWoff2.length + 2,
+  optionalResourceSources: [...optionalResourceSources],
+  missingOptionalResources,
 }, null, 2));

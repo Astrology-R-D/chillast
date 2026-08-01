@@ -36,6 +36,7 @@ class Main {
     this.mainWindow = null;
     this.profileRepository = null;
     this.astrologyService = null;
+    this.smokeErrors = [];
   }
 
   /** Compose services that do not depend on Electron being ready. */
@@ -188,6 +189,8 @@ class Main {
     this.router.setWebContents(this.mainWindow.webContents);
 
     const rendererWindow = this.mainWindow;
+    const smokeReportPath = app.isPackaged ? process.env.CHILLAST_SMOKE_REPORT : null;
+    if (smokeReportPath) this._captureSmokeErrors(rendererWindow.webContents);
     rendererWindow.webContents.on('will-navigate', (event, navigationUrl) => {
       const requestedUrl = typeof navigationUrl === 'string' ? navigationUrl : event.url;
       if (!isNavigationAllowed(rendererTarget, requestedUrl)) event.preventDefault();
@@ -199,13 +202,100 @@ class Main {
       return { action: 'deny' };
     });
 
-    loadRenderer(rendererWindow, rendererTarget).catch((error) => {
+    loadRenderer(rendererWindow, rendererTarget).then(() => {
+      if (smokeReportPath) void this._reportSmokeWhenReady(rendererTarget, smokeReportPath);
+    }).catch((error) => {
       console.error('[Main] Renderer load failed:', error);
-      reportRendererFailure({ app, dialog, error, win: rendererWindow });
+      if (smokeReportPath) {
+        this.smokeErrors.push(`load: ${error && error.message ? error.message : String(error)}`);
+        this._writeSmokeReport(smokeReportPath, {
+          targetKind: rendererTarget.kind,
+          hasApi: false,
+          marker: '',
+          routes: 0,
+          title: '',
+          errors: this.smokeErrors,
+        }, 1);
+      } else {
+        reportRendererFailure({ app, dialog, error, win: rendererWindow });
+      }
     });
     this.mainWindow.once('ready-to-show', () => this.mainWindow.show());
 
     this.mainWindow.on('closed', () => { this.mainWindow = null; });
+  }
+
+  _captureSmokeErrors(webContents) {
+    webContents.on('console-message', (...args) => {
+      const details = args.at(-1);
+      const level = typeof args[1] === 'number' ? args[1] : details && details.level;
+      const message = typeof args[2] === 'string' ? args[2] : details && details.message;
+      if (level === 'error' || level >= 3) this.smokeErrors.push(`console: ${message}`);
+    });
+    webContents.on('preload-error', (_event, file, error) => {
+      this.smokeErrors.push(`preload ${file}: ${error && error.message ? error.message : error}`);
+    });
+    webContents.on('did-fail-load', (_event, code, description) => {
+      this.smokeErrors.push(`did-fail-load ${code}: ${description}`);
+    });
+    webContents.on('render-process-gone', (_event, details) => {
+      this.smokeErrors.push(`render-process-gone: ${JSON.stringify(details)}`);
+    });
+  }
+
+  async _reportSmokeWhenReady(rendererTarget, reportPath) {
+    const deadline = Date.now() + 15000;
+    let state = null;
+    while (Date.now() < deadline && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      try {
+        state = await this.mainWindow.webContents.executeJavaScript(`(() => {
+          const legacy = document.querySelector('.sidebar');
+          const react = document.querySelector('.shell');
+          return {
+            hasApi: Boolean(window.mystApi),
+            marker: legacy ? 'legacy-shell' : react ? 'react-shell' : '',
+            routes: legacy
+              ? document.querySelectorAll('.nav-item').length
+              : document.querySelectorAll('.shell-nav__button').length,
+            title: document.title,
+          };
+        })()`);
+        if (state.hasApi && state.marker && state.routes === 6 && state.title) {
+          this._writeSmokeReport(reportPath, {
+            targetKind: rendererTarget.kind,
+            ...state,
+            errors: [...this.smokeErrors],
+          }, this.smokeErrors.length ? 1 : 0);
+          return;
+        }
+      } catch (error) {
+        state = { probeError: error && error.message ? error.message : String(error) };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    this.smokeErrors.push(`shell readiness timed out: ${JSON.stringify(state)}`);
+    this._writeSmokeReport(reportPath, {
+      targetKind: rendererTarget.kind,
+      hasApi: Boolean(state && state.hasApi),
+      marker: (state && state.marker) || '',
+      routes: (state && state.routes) || 0,
+      title: (state && state.title) || '',
+      errors: [...this.smokeErrors],
+    }, 1);
+  }
+
+  _writeSmokeReport(reportPath, report, exitCode) {
+    try {
+      fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+      const temporaryPath = `${reportPath}.tmp-${process.pid}`;
+      fs.writeFileSync(temporaryPath, JSON.stringify(report, null, 2), 'utf8');
+      fs.renameSync(temporaryPath, reportPath);
+    } catch (error) {
+      console.error('[Main] smoke report failed:', error);
+      exitCode = 1;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.destroy();
+    app.exit(exitCode);
   }
 
   /** Wire the full app lifecycle. */
