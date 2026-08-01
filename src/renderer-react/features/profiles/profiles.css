@@ -1,0 +1,53 @@
+.profile-page { display: grid; grid-template-columns: minmax(280px, 34%) minmax(0, 1fr); height: calc(100vh - var(--header-height)); min-height: 0; overflow: hidden; }
+.profile-directory { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid var(--border-subtle); background: var(--surface-raised); }
+.profile-directory__heading { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border-subtle); }
+.profile-icon-button { display: inline-grid; width: 32px; height: 32px; flex: 0 0 32px; padding: 0; place-items: center; color: var(--text-secondary); background: transparent; border: 1px solid var(--border-strong); border-radius: 4px; cursor: pointer; }
+.profile-icon-button:hover { color: var(--text-primary); background: var(--surface-hover); }
+.profile-directory__controls { display: grid; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
+.profile-directory__controls label { display: grid; min-width: 0; gap: 4px; color: var(--text-muted); font-size: var(--font-size-xs); }
+.profile-search__input { display: flex; height: 36px; align-items: center; gap: 6px; min-width: 0; padding-inline: 8px; background: var(--surface-base); border: 1px solid var(--border-strong); border-radius: 4px; }
+.profile-search__input input { width: 100%; min-width: 0; height: 32px; padding: 0; color: var(--text-primary); background: transparent; border: 0; outline: 0; }
+.profile-directory__selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.profile-directory__selects select { width: 100%; height: 32px; min-width: 0; padding-inline: 6px; color: var(--text-primary); background: var(--surface-base); border: 1px solid var(--border-strong); border-radius: 4px; }
+.profile-directory__rows { min-height: 0; overflow-y: auto; }
+.profile-row { display: grid; width: 100%; min-height: 76px; gap: 2px; padding: 8px 12px; color: var(--text-primary); background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); border-radius: 0; cursor: pointer; text-align: left; }
+.profile-row:hover { background: var(--surface-hover); }
+.profile-row[data-selected='true'] { background: var(--surface-selected); box-shadow: inset 3px 0 var(--focus); }
+.profile-row__name { display: flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
+.profile-row__secondary, .profile-row__meta span { min-width: 0; overflow: hidden; color: var(--text-muted); font-size: var(--font-size-xs); text-overflow: ellipsis; white-space: nowrap; }
+.profile-row__marker, .profile-detail__primary { flex: 0 0 auto; padding: 1px 5px; color: var(--text-primary); border: 1px solid var(--border-strong); border-radius: 4px; font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); }
+.profile-row__meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.profile-directory__empty, .profile-page__blank, .profile-state { margin: 0; padding: 24px; color: var(--text-muted); overflow-wrap: anywhere; text-align: center; }
+.profile-state button, .profile-dialog button { min-height: 32px; padding-inline: 12px; border: 1px solid var(--border-strong); border-radius: 4px; cursor: pointer; }
+.profile-page__surface { min-width: 0; min-height: 0; overflow-y: auto; background: var(--surface-work); }
+.profile-detail { min-width: 0; padding: clamp(16px, 3vw, 32px); overflow-wrap: anywhere; }
+.profile-detail__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 16px; }
+.profile-detail__title-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.profile-detail h2 { margin: 0; font-size: 20px; letter-spacing: 0; overflow-wrap: anywhere; }
+.profile-detail__secondary { margin: 4px 0 0; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-detail__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.profile-detail__facts, .profile-detail__timestamps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; margin: 20px 0; }
+.profile-detail__facts div, .profile-detail__timestamps div { min-width: 0; }
+.profile-detail dt { color: var(--text-muted); font-size: var(--font-size-xs); }
+.profile-detail dd { min-width: 0; margin: 3px 0 0; overflow-wrap: anywhere; }
+.profile-detail__section { padding-block: 12px; border-top: 1px solid var(--border-subtle); }
+.profile-detail__section h3 { margin: 0 0 8px; font-size: var(--font-size-base); }
+.profile-detail__section ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.profile-detail__section li { max-width: 100%; padding: 3px 7px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 4px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-detail__section p { margin: 0; color: var(--text-secondary); }
+.profile-detail__notes { white-space: pre-wrap; }
+.profile-detail__timestamps { padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.profile-detail__commands { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.profile-detail__commands button { display: inline-flex; min-height: 36px; align-items: center; gap: 6px; padding-inline: 12px; color: var(--text-primary); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 4px; cursor: pointer; }
+.profile-dialog-backdrop { position: fixed; z-index: 40; inset: 0; display: grid; padding: 16px; place-items: center; background: rgba(0, 0, 0, .42); }
+.profile-dialog { width: min(420px, 100%); padding: 20px; color: var(--text-primary); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-float); }
+.profile-dialog h2 { margin: 0 0 8px; font-size: var(--font-size-lg); }
+.profile-dialog p { overflow-wrap: anywhere; }
+.profile-dialog [role='alert'] { color: var(--danger); }
+.profile-dialog__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+@media (max-width: 760px) {
+  .profile-page { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; overflow: visible; }
+  .profile-directory { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+  .profile-page__surface { overflow: visible; }
+  .profile-detail__facts, .profile-detail__timestamps { grid-template-columns: minmax(0, 1fr); }
+}

@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18nProvider';
+import { AppProviders } from '../AppProviders';
 import { preferencesStore, startPreferenceSync } from '../preferences/preferences';
 import { createMatchMediaController } from '../test/matchMedia';
 import { AppShell } from './AppShell';
@@ -13,7 +14,7 @@ const dictionary = {
     solarTerms: '节气年历', settings: '设置', groupProfiles: '档案', groupCharts: '星盘',
     groupChinese: '命理', groupTools: '工具',
   },
-  profiles: { title: '档案管理' },
+  profiles: { title: '档案管理', directory: '测试档案目录', panelHeading: '档案库 ({{count}})', create: '新建档案', filters: '档案筛选', search: '搜索档案', recent: '最近使用', recentAll: '全部', recent7d: '7 天', recent30d: '30 天', sort: '排序方式', sortUpdated: '最近更新', sortName: '姓名', sortBirth: '出生', sortRecent: '最近使用', list: '档案列表', emptyLibrary: '档案库为空', noResults: '无结果', selectPrompt: '请选择' },
   chart: { personalTitle: '个人星盘', relationshipTitle: '合盘分析' },
   chinese: { title: '命理分析' }, tools: { solarTermTitle: '节气年历' },
   settings: { title: 'AI 设置', provider: '供应商', model: '模型' },
@@ -38,8 +39,13 @@ beforeEach(() => {
       status: vi.fn().mockResolvedValue({ ok: true, data: { configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 } }),
       onStatusChanged: vi.fn(() => vi.fn()), initStatus: vi.fn(), onInitProgress: vi.fn(),
     },
+    profiles: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), save: vi.fn(), remove: vi.fn() },
   });
 });
+
+function renderShell() {
+  return render(<AppProviders><I18nProvider dictionary={dictionary}><AppShell /></I18nProvider></AppProviders>);
+}
 
 afterEach(() => stopSync?.());
 
@@ -47,9 +53,10 @@ test('navigates localized placeholders and keeps route state across shell breakp
   const media = createMatchMediaController(false);
   vi.stubGlobal('matchMedia', media.matchMedia);
   const user = userEvent.setup();
-  render(<I18nProvider dictionary={dictionary}><AppShell /></I18nProvider>);
+  renderShell();
 
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('档案管理');
+  expect(await screen.findByRole('complementary', { name: '测试档案目录' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: '个人星盘' }));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
   expect(screen.getByText('个人星盘将在后续迁移阶段启用')).toBeInTheDocument();
@@ -64,7 +71,7 @@ test('passes locale-provided accessibility labels through the application shell'
   const media = createMatchMediaController(false);
   vi.stubGlobal('matchMedia', media.matchMedia);
   const user = userEvent.setup();
-  render(<I18nProvider dictionary={dictionary}><AppShell /></I18nProvider>);
+  renderShell();
 
   expect(screen.getByRole('navigation', { name: '本地化导航区域' })).toBeInTheDocument();
   expect(screen.getByRole('main', { name: '本地化工作区域' })).toBeInTheDocument();
@@ -83,7 +90,7 @@ test('persists theme and density selectors and updates the document', async () =
   vi.stubGlobal('matchMedia', media.matchMedia);
   stopSync = startPreferenceSync(preferencesStore, media.matchMedia('(prefers-color-scheme: dark)'));
   const user = userEvent.setup();
-  render(<I18nProvider dictionary={dictionary}><AppShell /></I18nProvider>);
+  renderShell();
 
   await user.selectOptions(screen.getByRole('combobox', { name: '主题' }), 'dark');
   await user.selectOptions(screen.getByRole('combobox', { name: '密度' }), 'comfortable');

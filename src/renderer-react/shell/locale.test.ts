@@ -84,3 +84,22 @@ test('detects duplicate keys structurally and keeps the locale duplicate-free', 
   expect(findDuplicateObjectKeys('{"outer":{"value":1,"value":2}}')).toEqual(['outer.value']);
   expect(findDuplicateObjectKeys(source)).toEqual([]);
 });
+
+test('contains the exact profile management localization contract', () => {
+  const keys = [
+    'profiles.directory', 'profiles.search', 'profiles.recent', 'profiles.recentAll',
+    'profiles.recent7d', 'profiles.recent30d', 'profiles.sort', 'profiles.sortUpdated',
+    'profiles.sortName', 'profiles.sortBirth', 'profiles.sortRecent', 'profiles.primary',
+    'profiles.setPrimary', 'profiles.copy', 'profiles.deleteTitle', 'profiles.deleteConfirm',
+    'profiles.openNatal', 'profiles.openTransit', 'profiles.openSynastry', 'profiles.loading',
+    'profiles.retryLoad', 'profiles.noResults', 'profiles.tags', 'profiles.coordinates',
+    'profiles.createdAt', 'profiles.updatedAt', 'profiles.genderMale', 'profiles.genderFemale',
+    'profiles.genderOther',
+  ];
+  for (const key of keys) expect(resolveKey(key), key).toEqual(expect.any(String));
+});
+
+test('profile React source never uses the native confirm dialog', () => {
+  const source = readFileSync(resolve(process.cwd(), 'src/renderer-react/features/profiles/ProfilePage.tsx'), 'utf8');
+  expect(source).not.toMatch(/window\.confirm|\bconfirm\s*\(/);
+});

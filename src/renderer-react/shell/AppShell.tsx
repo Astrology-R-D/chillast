@@ -6,6 +6,7 @@ import {
   usePreferences,
 } from '../preferences/preferences';
 import { AiStatusPanel } from './AiStatusPanel';
+import { ProfilePage } from '../features/profiles/ProfilePage';
 import { Navigation } from './Navigation';
 import { PanelLayout } from './PanelLayout';
 import { ROUTES, type RouteKey } from './routes';
@@ -62,10 +63,11 @@ export function AppShell() {
             </label>
           </div>
         </header>
-        <section className="workspace__placeholder" aria-labelledby="workspace-title">
-          <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
-          <p>{t('shell.placeholder', { title })}</p>
-        </section>
+        {activeRoute === 'profiles' ? <ProfilePage onNavigate={setActiveRoute} /> :
+          <section className="workspace__placeholder" aria-labelledby="workspace-title">
+            <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
+            <p>{t('shell.placeholder', { title })}</p>
+          </section>}
       </div>
     </PanelLayout>
   );
