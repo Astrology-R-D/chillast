@@ -59,13 +59,77 @@ test('exports the immutable desktop panel contract', () => {
   expect(Object.isFrozen(PANEL_SIZES.navigation)).toBe(true);
 });
 
-test('keyboard resize helper changes panel sizes and clamps to the exported constraints', () => {
-  const initial = [16, 57, 27] as const;
+test.each([
+  {
+    name: 'grows expanded navigation up to its maximum',
+    layout: [16, 57, 27],
+    handle: 0,
+    key: 'ArrowRight',
+    expected: [22, 51, 27],
+  },
+  {
+    name: 'collapses navigation from its minimum',
+    layout: [12, 61, 27],
+    handle: 0,
+    key: 'ArrowLeft',
+    expected: [5, 68, 27],
+  },
+  {
+    name: 'keeps navigation collapsed when shrinking again',
+    layout: [5, 68, 27],
+    handle: 0,
+    key: 'ArrowLeft',
+    expected: [5, 68, 27],
+  },
+  {
+    name: 'expands collapsed navigation to its minimum',
+    layout: [5, 68, 27],
+    handle: 0,
+    key: 'ArrowRight',
+    expected: [12, 61, 27],
+  },
+  {
+    name: 'collapses AI from its minimum',
+    layout: [16, 62, 22],
+    handle: 1,
+    key: 'ArrowRight',
+    expected: [16, 84, 0],
+  },
+  {
+    name: 'expands collapsed AI to its minimum',
+    layout: [16, 84, 0],
+    handle: 1,
+    key: 'ArrowLeft',
+    expected: [16, 62, 22],
+  },
+  {
+    name: 'respects navigation maximum',
+    layout: [22, 51, 27],
+    handle: 0,
+    key: 'ArrowRight',
+    expected: [22, 51, 27],
+  },
+  {
+    name: 'respects main minimum while expanding AI',
+    layout: [22, 42, 36],
+    handle: 1,
+    key: 'ArrowLeft',
+    expected: [22, 42, 36],
+  },
+  {
+    name: 'sanitizes stale input before resizing',
+    layout: [99, 0, 1],
+    handle: 0,
+    key: 'ArrowRight',
+    expected: [22, 56, 22],
+  },
+])('$name', ({ layout, handle, key, expected }) => {
+  const original = [...layout];
+  const result = resizePanelSizesByKeyboard(layout, handle, key);
 
-  expect(resizePanelSizesByKeyboard(initial, 0, 'ArrowRight')).toEqual([22, 51, 27]);
-  expect(resizePanelSizesByKeyboard([22, 51, 27], 0, 'ArrowRight')).toEqual([22, 51, 27]);
-  expect(resizePanelSizesByKeyboard([16, 57, 27], 1, 'ArrowRight')).toEqual([16, 62, 22]);
-  expect(initial).toEqual([16, 57, 27]);
+  expect(result).toEqual(expected);
+  expect(result.reduce((sum, size) => sum + size, 0)).toBe(100);
+  expect(layout).toEqual(original);
 });
 
 test('keeps AI absent on narrow screens until the opener is used', async () => {

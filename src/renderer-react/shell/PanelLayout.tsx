@@ -106,27 +106,50 @@ export function resizePanelSizesByKeyboard(
   handleIndex: number,
   key: string,
 ): number[] {
+  const sanitized = sanitizePersistedPanelLayout(layout) ?? [
+    PANEL_SIZES.navigation.defaultSize,
+    PANEL_SIZES.main.defaultSize,
+    PANEL_SIZES.ai.defaultSize,
+  ];
   if ((key !== 'ArrowLeft' && key !== 'ArrowRight') || handleIndex < 0 || handleIndex > 1) {
-    return [...layout];
+    return sanitized;
   }
 
-  const next = [...layout];
-  const left = layout[handleIndex];
-  const right = layout[handleIndex + 1];
+  const next = [...sanitized];
+  const left = sanitized[handleIndex];
+  const right = sanitized[handleIndex + 1];
   const leftConstraints = PANEL_CONSTRAINTS[handleIndex];
   const rightConstraints = PANEL_CONSTRAINTS[handleIndex + 1];
   if (left == null || right == null || leftConstraints == null || rightConstraints == null) return next;
 
-  const requestedDelta = key === 'ArrowRight' ? KEYBOARD_RESIZE_BY : -KEYBOARD_RESIZE_BY;
-  const leftMin = leftConstraints.minSize;
+  const direction = key === 'ArrowRight' ? 1 : -1;
+  const shrinkingConstraints = direction < 0 ? leftConstraints : rightConstraints;
+  const shrinkingSize = direction < 0 ? left : right;
+  const collapsedSize =
+    'collapsedSize' in shrinkingConstraints ? shrinkingConstraints.collapsedSize : undefined;
+  if (collapsedSize != null && shrinkingSize === collapsedSize) return next;
+
+  let requestedDelta = direction * KEYBOARD_RESIZE_BY;
+  let shrinkingMinimum: number = shrinkingConstraints.minSize;
+  if (collapsedSize != null && shrinkingSize === shrinkingConstraints.minSize) {
+    shrinkingMinimum = collapsedSize;
+    requestedDelta = direction * (shrinkingConstraints.minSize - collapsedSize);
+  }
+
+  const expandingConstraints = direction < 0 ? rightConstraints : leftConstraints;
+  const expandingSize = direction < 0 ? right : left;
+  const expandingCollapsedSize =
+    'collapsedSize' in expandingConstraints ? expandingConstraints.collapsedSize : undefined;
+  if (expandingCollapsedSize != null && expandingSize === expandingCollapsedSize) {
+    requestedDelta = direction * (expandingConstraints.minSize - expandingCollapsedSize);
+  }
+
   const leftMax = 'maxSize' in leftConstraints ? leftConstraints.maxSize : 100;
-  const rightMin = rightConstraints.minSize;
   const rightMax = 'maxSize' in rightConstraints ? rightConstraints.maxSize : 100;
-  const delta = Math.max(
-    leftMin - left,
-    right - rightMax,
-    Math.min(requestedDelta, leftMax - left, right - rightMin),
-  );
+  const delta =
+    direction > 0
+      ? Math.max(0, Math.min(requestedDelta, leftMax - left, right - shrinkingMinimum))
+      : -Math.max(0, Math.min(Math.abs(requestedDelta), left - shrinkingMinimum, rightMax - right));
 
   next[handleIndex] = left + delta;
   next[handleIndex + 1] = right - delta;
