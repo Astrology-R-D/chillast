@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AiStatus } from '../api/contracts';
-import { apiClient } from '../api/client';
+import { apiClient, parseAiStatus } from '../api/client';
 import { useI18n } from '../i18n/I18nProvider';
 
 export function AiStatusPanel() {
@@ -33,11 +33,15 @@ export function AiStatusPanel() {
 
   useEffect(() => {
     let active = true;
-    const unsubscribe = window.mystApi.ai.onStatusChanged((nextStatus) => {
+    const unsubscribe = window.mystApi.ai.onStatusChanged((payload) => {
       if (!active) return;
       statusEventVersion.current += 1;
-      setStatus(nextStatus);
-      setError('');
+      try {
+        setStatus(parseAiStatus(payload));
+        setError('');
+      } catch (reason: unknown) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
       setLoading(false);
     });
     return () => {

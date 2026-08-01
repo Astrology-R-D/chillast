@@ -17,6 +17,7 @@ test('loads locale and renders the localized application shell', async () => {
       loading: '正在读取状态…', placeholder: '{{title}}将在后续迁移阶段启用', theme: '主题', density: '密度',
       aiConfigured: 'AI 已配置', aiNotConfigured: 'AI 未配置', retry: '重试', knowledgeCount: '知识库：{{count}} 篇文档',
       openAi: '打开 AI 助手', closeAi: '关闭 AI 助手', resizeNavigation: '调整导航栏宽度', resizeAi: '调整 AI 栏宽度',
+      navigationRegion: '主导航', workspaceRegion: '工作区', aiRegion: 'AI 助手',
     },
     appearance: { system: '跟随系统', light: '亮色', dark: '深色', compact: '紧凑', comfortable: '均衡' },
   };

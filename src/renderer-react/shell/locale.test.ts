@@ -52,6 +52,7 @@ test('contains the exact shell localization contract', () => {
     'nav.settings', 'shell.loading', 'shell.placeholder', 'shell.theme', 'shell.density',
     'shell.aiConfigured', 'shell.aiNotConfigured', 'shell.retry', 'shell.knowledgeCount',
     'shell.openAi', 'shell.closeAi', 'shell.resizeNavigation', 'shell.resizeAi',
+    'shell.navigationRegion', 'shell.workspaceRegion', 'shell.aiRegion',
     'appearance.system', 'appearance.light', 'appearance.dark', 'appearance.compact',
     'appearance.comfortable',
   ].map((key) => [key, resolveKey(key)]))).toEqual({
@@ -68,6 +69,9 @@ test('contains the exact shell localization contract', () => {
     'shell.closeAi': '关闭 AI 助手',
     'shell.resizeNavigation': '调整导航栏宽度',
     'shell.resizeAi': '调整 AI 栏宽度',
+    'shell.navigationRegion': '主导航',
+    'shell.workspaceRegion': '工作区',
+    'shell.aiRegion': 'AI 助手',
     'appearance.system': '跟随系统',
     'appearance.light': '亮色',
     'appearance.dark': '深色',

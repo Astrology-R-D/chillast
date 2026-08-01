@@ -22,6 +22,7 @@ const dictionary = {
     aiConfigured: 'AI 已配置', aiNotConfigured: 'AI 未配置', retry: '重试', knowledgeCount: '知识库：{{count}} 篇文档',
     openAi: '本地化打开助手', closeAi: '本地化关闭助手',
     resizeNavigation: '本地化调整导航', resizeAi: '本地化调整 AI',
+    navigationRegion: '本地化导航区域', workspaceRegion: '本地化工作区域', aiRegion: '本地化 AI 区域',
   },
   appearance: { system: '跟随系统', light: '亮色', dark: '深色', compact: '紧凑', comfortable: '均衡' },
 };
@@ -65,12 +66,16 @@ test('passes locale-provided accessibility labels through the application shell'
   const user = userEvent.setup();
   render(<I18nProvider dictionary={dictionary}><AppShell /></I18nProvider>);
 
+  expect(screen.getByRole('navigation', { name: '本地化导航区域' })).toBeInTheDocument();
+  expect(screen.getByRole('main', { name: '本地化工作区域' })).toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: '本地化 AI 区域' })).toBeInTheDocument();
   expect(screen.getByRole('separator', { name: '本地化调整导航' })).toBeInTheDocument();
   expect(screen.getByRole('separator', { name: '本地化调整 AI' })).toBeInTheDocument();
 
   act(() => media.setMatches(true));
   await user.click(screen.getByRole('button', { name: '本地化打开助手' }));
   expect(screen.getByRole('button', { name: '本地化关闭助手' })).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: '本地化 AI 区域' })).toBeInTheDocument();
 });
 
 test('persists theme and density selectors and updates the document', async () => {

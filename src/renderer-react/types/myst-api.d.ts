@@ -1,6 +1,5 @@
 import type {
   AiInitProgress,
-  AiStatus,
   AppConfig,
   IpcResult,
   LocaleDictionary,
@@ -8,9 +7,9 @@ import type {
 
 declare global {
   interface MystAiApi {
-    status(): Promise<IpcResult<AiStatus>>;
+    status(): Promise<IpcResult<unknown>>;
     initStatus(): Promise<IpcResult<AiInitProgress | null>>;
-    onStatusChanged(callback: (status: AiStatus) => void): () => void;
+    onStatusChanged(callback: (status: unknown) => void): () => void;
     onInitProgress(callback: (progress: AiInitProgress) => void): () => void;
   }
 

@@ -134,7 +134,7 @@ class AiService {
     }
 
     this._chainFactory = new ChainFactory(this._mp, this._kb);
-    this._configured = true;
+    this._configured = this._mp.isConfigured();
   }
 
   /** Expose the tool registry (for the settings UI / introspection). */
@@ -160,7 +160,7 @@ class AiService {
 
   status() {
     return {
-      configured: this._configured,
+      configured: this._mp.isConfigured(),
       provider: (this._mp._settings && this._mp._settings.provider) || '',
       model: (this._mp._settings && this._mp._settings.model) || '',
       baseUrl: (this._mp._settings && this._mp._settings.baseUrl) || '',

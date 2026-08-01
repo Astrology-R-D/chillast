@@ -27,6 +27,9 @@ export interface PanelLayoutLabels {
   closeAi: string;
   resizeNavigation: string;
   resizeAi: string;
+  navigationRegion: string;
+  workspaceRegion: string;
+  aiRegion: string;
 }
 
 const DEFAULT_LABELS: PanelLayoutLabels = {
@@ -34,6 +37,9 @@ const DEFAULT_LABELS: PanelLayoutLabels = {
   closeAi: '关闭 AI 助手',
   resizeNavigation: '调整导航栏宽度',
   resizeAi: '调整 AI 助手宽度',
+  navigationRegion: '主导航',
+  workspaceRegion: '工作区',
+  aiRegion: 'AI 助手',
 };
 
 const FOCUSABLE_SELECTOR =
@@ -416,7 +422,7 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS 
       >
         <nav
           className={`shell__navigation${isNarrow ? ' shell__navigation--rail' : ''}`}
-          aria-label="主导航"
+          aria-label={labels.navigationRegion}
           aria-hidden={isNarrow && isAiOpen ? true : undefined}
           inert={isNarrow && isAiOpen}
         >
@@ -439,7 +445,7 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS 
         <main
           ref={mainRef}
           className={`shell__main${isNarrow ? ' shell__main--narrow' : ''}`}
-          aria-label="工作区"
+          aria-label={labels.workspaceRegion}
           aria-hidden={isNarrow && isAiOpen ? true : undefined}
           inert={isNarrow && isAiOpen}
           tabIndex={-1}
@@ -494,7 +500,7 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS 
           className={`shell__ai${isNarrow ? ' shell__ai-overlay' : ''}`}
           role={isNarrow ? 'dialog' : undefined}
           aria-modal={isNarrow && isAiOpen ? true : undefined}
-          aria-label="AI 助手"
+          aria-label={labels.aiRegion}
           aria-hidden={isAiHidden ? true : undefined}
           inert={isAiHidden}
           hidden={isAiHidden}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18nProvider';
@@ -27,6 +27,23 @@ test('renders grouped native route buttons and marks the active route', async ()
   expect(screen.getByRole('button', { name: '个人星盘' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('button', { name: '个人星盘' })).toHaveAttribute('data-active', 'true');
   expect(screen.getAllByText(/^(档案|星盘|命理|工具)$/)).toHaveLength(4);
+
+  const groups = screen.getAllByRole('group');
+  expect(groups).toHaveLength(4);
+  expect(within(screen.getByRole('group', { name: '档案' })).getAllByRole('button'))
+    .toEqual([screen.getByRole('button', { name: '档案管理' })]);
+  expect(within(screen.getByRole('group', { name: '星盘' })).getAllByRole('button'))
+    .toEqual([
+      screen.getByRole('button', { name: '个人星盘' }),
+      screen.getByRole('button', { name: '合盘分析' }),
+    ]);
+  expect(within(screen.getByRole('group', { name: '命理' })).getAllByRole('button'))
+    .toEqual([screen.getByRole('button', { name: '命理分析' })]);
+  expect(within(screen.getByRole('group', { name: '工具' })).getAllByRole('button'))
+    .toEqual([
+      screen.getByRole('button', { name: '节气年历' }),
+      screen.getByRole('button', { name: '设置' }),
+    ]);
 
   await user.click(screen.getByRole('button', { name: '合盘分析' }));
   screen.getByRole('button', { name: '设置' }).focus();

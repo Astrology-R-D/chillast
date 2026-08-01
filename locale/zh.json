@@ -32,7 +32,10 @@
     "openAi": "打开 AI 助手",
     "closeAi": "关闭 AI 助手",
     "resizeNavigation": "调整导航栏宽度",
-    "resizeAi": "调整 AI 栏宽度"
+    "resizeAi": "调整 AI 栏宽度",
+    "navigationRegion": "主导航",
+    "workspaceRegion": "工作区",
+    "aiRegion": "AI 助手"
   },
   "appearance": {
     "system": "跟随系统",

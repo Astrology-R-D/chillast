@@ -30,6 +30,9 @@ export function AppShell() {
         closeAi: t('shell.closeAi'),
         resizeNavigation: t('shell.resizeNavigation'),
         resizeAi: t('shell.resizeAi'),
+        navigationRegion: t('shell.navigationRegion'),
+        workspaceRegion: t('shell.workspaceRegion'),
+        aiRegion: t('shell.aiRegion'),
       }}
     >
       <div className="workspace">

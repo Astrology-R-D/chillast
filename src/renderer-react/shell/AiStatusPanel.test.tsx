@@ -16,7 +16,7 @@ const dictionary = {
 const configured: AiStatus = {
   configured: true, provider: 'OpenAI', model: 'gpt-test', baseUrl: '', knowledgeDocCount: 7,
 };
-let statusChanged: ((status: AiStatus) => void) | undefined;
+let statusChanged: ((status: unknown) => void) | undefined;
 let cleanup: ReturnType<typeof vi.fn>;
 let getStatus: ReturnType<typeof vi.fn>;
 let subscribe: ReturnType<typeof vi.fn>;
@@ -28,7 +28,7 @@ function renderPanel() {
 beforeEach(() => {
   cleanup = vi.fn();
   getStatus = vi.fn();
-  subscribe = vi.fn((listener: (status: AiStatus) => void) => {
+  subscribe = vi.fn((listener: (status: unknown) => void) => {
     statusChanged = listener;
     return cleanup;
   });
@@ -95,13 +95,29 @@ test('does not let a delayed initial response overwrite a newer status event', a
   expect(screen.queryByText('gpt-test')).not.toBeInTheDocument();
 });
 
-test('renders visible fallbacks for empty or missing unconfigured metadata', async () => {
+test('renders visible fallbacks for empty unconfigured metadata', async () => {
   getStatus.mockResolvedValue({
     ok: true,
-    data: { ...configured, configured: false, provider: '', model: undefined as unknown as string },
+    data: { ...configured, configured: false, provider: '', model: '' },
   } satisfies IpcResult<AiStatus>);
   renderPanel();
 
   expect(await screen.findByText('AI 未配置')).toBeInTheDocument();
   expect(screen.getAllByText('—')).toHaveLength(2);
+});
+
+test('shows malformed status events as an inline error without throwing', async () => {
+  const user = userEvent.setup();
+  getStatus.mockResolvedValue({ ok: true, data: configured } satisfies IpcResult<AiStatus>);
+  renderPanel();
+  expect(await screen.findByText('AI 已配置')).toBeInTheDocument();
+
+  expect(() => act(() => statusChanged?.({ configured: 'yes' } as unknown as AiStatus))).not.toThrow();
+  expect(screen.getByRole('alert')).toHaveTextContent('AI 状态数据无效');
+  expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
+  expect(screen.queryByText('AI 已配置')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '重试' }));
+  expect(await screen.findByText('AI 已配置')).toBeInTheDocument();
+  expect(getStatus).toHaveBeenCalledTimes(2);
 });
