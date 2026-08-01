@@ -1,10 +1,35 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parseTree, type Node as JsonNode } from 'jsonc-parser';
 import { expect, test } from 'vitest';
 import { ROUTES } from './routes';
 
 const source = readFileSync(resolve(process.cwd(), 'locale/zh.json'), 'utf8');
 const dictionary = JSON.parse(source) as Record<string, unknown>;
+
+function findDuplicateObjectKeys(json: string): string[] {
+  const root = parseTree(json);
+  const duplicates: string[] = [];
+
+  function visit(node: JsonNode | undefined, path: string): void {
+    if (!node) return;
+    if (node.type === 'object') {
+      const keys = new Set<string>();
+      for (const property of node.children ?? []) {
+        const key = String(property.children?.[0]?.value);
+        const propertyPath = path ? `${path}.${key}` : key;
+        if (keys.has(key)) duplicates.push(propertyPath);
+        keys.add(key);
+        visit(property.children?.[1], propertyPath);
+      }
+      return;
+    }
+    for (const child of node.children ?? []) visit(child, path);
+  }
+
+  visit(root, '');
+  return duplicates;
+}
 
 function resolveKey(key: string): unknown {
   return key.split('.').reduce<unknown>((value, segment) =>
@@ -22,13 +47,36 @@ test('parses the locale and resolves every route metadata key without fallback',
   }
 });
 
-test('contains the complete shell appearance vocabulary and localized settings label', () => {
-  expect(resolveKey('nav.settings')).toBe('设置');
-  for (const key of [
-    'shell.loading', 'shell.placeholder', 'shell.theme', 'shell.density', 'shell.aiConfigured',
-    'shell.aiNotConfigured', 'shell.retry', 'shell.knowledgeCount', 'appearance.system',
-    'appearance.light', 'appearance.dark', 'appearance.compact', 'appearance.comfortable',
-  ]) {
-    expect(resolveKey(key), key).toEqual(expect.any(String));
-  }
+test('contains the exact shell localization contract', () => {
+  expect(Object.fromEntries([
+    'nav.settings', 'shell.loading', 'shell.placeholder', 'shell.theme', 'shell.density',
+    'shell.aiConfigured', 'shell.aiNotConfigured', 'shell.retry', 'shell.knowledgeCount',
+    'shell.openAi', 'shell.closeAi', 'shell.resizeNavigation', 'shell.resizeAi',
+    'appearance.system', 'appearance.light', 'appearance.dark', 'appearance.compact',
+    'appearance.comfortable',
+  ].map((key) => [key, resolveKey(key)]))).toEqual({
+    'nav.settings': '设置',
+    'shell.loading': '正在读取状态…',
+    'shell.placeholder': '{{title}}将在后续迁移阶段启用',
+    'shell.theme': '主题',
+    'shell.density': '密度',
+    'shell.aiConfigured': 'AI 已配置',
+    'shell.aiNotConfigured': 'AI 未配置',
+    'shell.retry': '重试',
+    'shell.knowledgeCount': '知识库：{{count}} 篇文档',
+    'shell.openAi': '打开 AI 助手',
+    'shell.closeAi': '关闭 AI 助手',
+    'shell.resizeNavigation': '调整导航栏宽度',
+    'shell.resizeAi': '调整 AI 栏宽度',
+    'appearance.system': '跟随系统',
+    'appearance.light': '亮色',
+    'appearance.dark': '深色',
+    'appearance.compact': '紧凑',
+    'appearance.comfortable': '均衡',
+  });
+});
+
+test('detects duplicate keys structurally and keeps the locale duplicate-free', () => {
+  expect(findDuplicateObjectKeys('{"outer":{"value":1,"value":2}}')).toEqual(['outer.value']);
+  expect(findDuplicateObjectKeys(source)).toEqual([]);
 });

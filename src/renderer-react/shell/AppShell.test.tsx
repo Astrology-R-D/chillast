@@ -18,10 +18,12 @@ const dictionary = {
   chinese: { title: '命理分析' }, tools: { solarTermTitle: '节气年历' },
   settings: { title: 'AI 设置', provider: '供应商', model: '模型' },
   shell: {
-    loading: '正在加载…', placeholder: '{{title}}将在后续迁移中提供。', theme: '主题', density: '密度',
-    aiConfigured: '已配置', aiNotConfigured: '未配置', retry: '重试', knowledgeCount: '知识库：{{count}} 篇文档',
+    loading: '正在读取状态…', placeholder: '{{title}}将在后续迁移阶段启用', theme: '主题', density: '密度',
+    aiConfigured: 'AI 已配置', aiNotConfigured: 'AI 未配置', retry: '重试', knowledgeCount: '知识库：{{count}} 篇文档',
+    openAi: '本地化打开助手', closeAi: '本地化关闭助手',
+    resizeNavigation: '本地化调整导航', resizeAi: '本地化调整 AI',
   },
-  appearance: { system: '跟随系统', light: '浅色', dark: '深色', compact: '紧凑', comfortable: '舒适' },
+  appearance: { system: '跟随系统', light: '亮色', dark: '深色', compact: '紧凑', comfortable: '均衡' },
 };
 let stopSync: (() => void) | undefined;
 
@@ -49,12 +51,26 @@ test('navigates localized placeholders and keeps route state across shell breakp
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('档案管理');
   await user.click(screen.getByRole('button', { name: '个人星盘' }));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
-  expect(screen.getByText('个人星盘将在后续迁移中提供。')).toBeInTheDocument();
+  expect(screen.getByText('个人星盘将在后续迁移阶段启用')).toBeInTheDocument();
 
   act(() => media.setMatches(true));
   act(() => media.setMatches(false));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
   expect(screen.getByRole('button', { name: '个人星盘' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('passes locale-provided accessibility labels through the application shell', async () => {
+  const media = createMatchMediaController(false);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  const user = userEvent.setup();
+  render(<I18nProvider dictionary={dictionary}><AppShell /></I18nProvider>);
+
+  expect(screen.getByRole('separator', { name: '本地化调整导航' })).toBeInTheDocument();
+  expect(screen.getByRole('separator', { name: '本地化调整 AI' })).toBeInTheDocument();
+
+  act(() => media.setMatches(true));
+  await user.click(screen.getByRole('button', { name: '本地化打开助手' }));
+  expect(screen.getByRole('button', { name: '本地化关闭助手' })).toBeInTheDocument();
 });
 
 test('persists theme and density selectors and updates the document', async () => {

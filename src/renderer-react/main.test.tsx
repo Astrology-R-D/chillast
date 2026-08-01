@@ -13,8 +13,12 @@ test('loads locale and renders the localized application shell', async () => {
     profiles: { title: '档案管理' }, chart: { personalTitle: '个人星盘', relationshipTitle: '合盘分析' },
     chinese: { title: '命理分析' }, tools: { solarTermTitle: '节气年历' },
     settings: { title: 'AI 设置', provider: '供应商', model: '模型' },
-    shell: { loading: '加载', placeholder: '{{title}}待迁移', theme: '主题', density: '密度', aiConfigured: '已配置', aiNotConfigured: '未配置', retry: '重试', knowledgeCount: '{{count}} 篇' },
-    appearance: { system: '系统', light: '浅色', dark: '深色', compact: '紧凑', comfortable: '舒适' },
+    shell: {
+      loading: '正在读取状态…', placeholder: '{{title}}将在后续迁移阶段启用', theme: '主题', density: '密度',
+      aiConfigured: 'AI 已配置', aiNotConfigured: 'AI 未配置', retry: '重试', knowledgeCount: '知识库：{{count}} 篇文档',
+      openAi: '打开 AI 助手', closeAi: '关闭 AI 助手', resizeNavigation: '调整导航栏宽度', resizeAi: '调整 AI 栏宽度',
+    },
+    appearance: { system: '跟随系统', light: '亮色', dark: '深色', compact: '紧凑', comfortable: '均衡' },
   };
   const getLocale = vi.fn().mockResolvedValue({ ok: true, data: dictionary });
   vi.stubGlobal('mystApi', {

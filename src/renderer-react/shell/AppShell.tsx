@@ -25,6 +25,12 @@ export function AppShell() {
     <PanelLayout
       navigation={<Navigation active={activeRoute} onNavigate={setActiveRoute} />}
       ai={<AiStatusPanel />}
+      labels={{
+        openAi: t('shell.openAi'),
+        closeAi: t('shell.closeAi'),
+        resizeNavigation: t('shell.resizeNavigation'),
+        resizeAi: t('shell.resizeAi'),
+      }}
     >
       <div className="workspace">
         <header className="workspace__header">

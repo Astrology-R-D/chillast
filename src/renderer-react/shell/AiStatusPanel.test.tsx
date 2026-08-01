@@ -9,7 +9,7 @@ const dictionary = {
   ai: { title: 'AI 占星顾问' },
   settings: { provider: '供应商', model: '模型' },
   shell: {
-    loading: '正在加载…', aiConfigured: '已配置', aiNotConfigured: '未配置', retry: '重试',
+    loading: '正在读取状态…', aiConfigured: 'AI 已配置', aiNotConfigured: 'AI 未配置', retry: '重试',
     knowledgeCount: '知识库：{{count}} 篇文档',
   },
 };
@@ -42,8 +42,8 @@ test('loads status, uses configured wording, and follows status events', async (
   getStatus.mockResolvedValue({ ok: true, data: configured } satisfies IpcResult<AiStatus>);
   renderPanel();
 
-  expect(screen.getByText('正在加载…')).toBeInTheDocument();
-  expect(await screen.findByText('已配置')).toBeInTheDocument();
+  expect(screen.getByText('正在读取状态…')).toBeInTheDocument();
+  expect(await screen.findByText('AI 已配置')).toBeInTheDocument();
   expect(screen.queryByText(/连接/)).not.toBeInTheDocument();
   expect(screen.getByText('OpenAI')).toBeInTheDocument();
   expect(screen.getByText('gpt-test')).toBeInTheDocument();
@@ -51,7 +51,7 @@ test('loads status, uses configured wording, and follows status events', async (
   expect(subscribe).toHaveBeenCalledTimes(1);
 
   act(() => statusChanged?.({ ...configured, configured: false, knowledgeDocCount: 2 }));
-  expect(screen.getByText('未配置')).toBeInTheDocument();
+  expect(screen.getByText('AI 未配置')).toBeInTheDocument();
   expect(screen.getByText('知识库：2 篇文档')).toBeInTheDocument();
 });
 
@@ -64,7 +64,7 @@ test('shows an inline initial error and retries without adding another listener'
 
   expect(await screen.findByRole('alert')).toHaveTextContent('读取失败');
   await user.click(screen.getByRole('button', { name: '重试' }));
-  expect(await screen.findByText('已配置')).toBeInTheDocument();
+  expect(await screen.findByText('AI 已配置')).toBeInTheDocument();
   expect(getStatus).toHaveBeenCalledTimes(2);
   expect(subscribe).toHaveBeenCalledTimes(1);
 });
@@ -93,4 +93,15 @@ test('does not let a delayed initial response overwrite a newer status event', a
 
   expect(screen.getByText('event-model')).toBeInTheDocument();
   expect(screen.queryByText('gpt-test')).not.toBeInTheDocument();
+});
+
+test('renders visible fallbacks for empty or missing unconfigured metadata', async () => {
+  getStatus.mockResolvedValue({
+    ok: true,
+    data: { ...configured, configured: false, provider: '', model: undefined as unknown as string },
+  } satisfies IpcResult<AiStatus>);
+  renderPanel();
+
+  expect(await screen.findByText('AI 未配置')).toBeInTheDocument();
+  expect(screen.getAllByText('—')).toHaveLength(2);
 });

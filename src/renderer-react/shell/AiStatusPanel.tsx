@@ -64,8 +64,8 @@ export function AiStatusPanel() {
             {status.configured ? t('shell.aiConfigured') : t('shell.aiNotConfigured')}
           </p>
           <dl>
-            <div><dt>{t('settings.provider')}</dt><dd>{status.provider}</dd></div>
-            <div><dt>{t('settings.model')}</dt><dd>{status.model}</dd></div>
+            <div><dt>{t('settings.provider')}</dt><dd>{status.provider?.trim() || '—'}</dd></div>
+            <div><dt>{t('settings.model')}</dt><dd>{status.model?.trim() || '—'}</dd></div>
           </dl>
           <p className="ai-status__knowledge">
             {t('shell.knowledgeCount', { count: status.knowledgeDocCount })}

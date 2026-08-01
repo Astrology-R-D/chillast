@@ -19,7 +19,22 @@ export interface PanelLayoutProps {
   navigation: ReactNode;
   ai: ReactNode;
   children: ReactNode;
+  labels?: PanelLayoutLabels;
 }
+
+export interface PanelLayoutLabels {
+  openAi: string;
+  closeAi: string;
+  resizeNavigation: string;
+  resizeAi: string;
+}
+
+const DEFAULT_LABELS: PanelLayoutLabels = {
+  openAi: '打开 AI 助手',
+  closeAi: '关闭 AI 助手',
+  resizeNavigation: '调整导航栏宽度',
+  resizeAi: '调整 AI 助手宽度',
+};
 
 const FOCUSABLE_SELECTOR =
   'a[href], button, input, select, textarea, [contenteditable="true"], [tabindex]';
@@ -254,7 +269,7 @@ export function resizePanelSizesByKeyboard(
   return next;
 }
 
-export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
+export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS }: PanelLayoutProps) {
   const isNarrow = useNarrowLayout();
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(
@@ -410,7 +425,7 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
       </Panel>
       <PanelResizeHandle
         className="shell__resize-handle"
-        aria-label="调整导航栏宽度"
+        aria-label={labels.resizeNavigation}
         disabled={isNarrow}
         hidden={isNarrow}
       />
@@ -434,8 +449,8 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
               ref={openerRef}
               className="shell__icon-button"
               type="button"
-              aria-label="打开 AI 助手"
-              title="打开 AI 助手"
+              aria-label={labels.openAi}
+              title={labels.openAi}
               onClick={() => setIsAiOpen(true)}
             >
               <Bot aria-hidden="true" size={18} />
@@ -446,7 +461,7 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
       </Panel>
       <PanelResizeHandle
         className="shell__resize-handle"
-        aria-label="调整 AI 助手宽度"
+        aria-label={labels.resizeAi}
         disabled={isNarrow}
         hidden={isNarrow}
       />
@@ -491,8 +506,8 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
               ref={closeRef}
               className="shell__icon-button"
               type="button"
-              aria-label="关闭 AI 助手"
-              title="关闭 AI 助手"
+              aria-label={labels.closeAi}
+              title={labels.closeAi}
               onClick={() => setIsAiOpen(false)}
             >
               <X aria-hidden="true" size={18} />
