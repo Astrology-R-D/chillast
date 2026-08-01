@@ -16,7 +16,7 @@ class IpcRouter {
    * @param {ProfileRepository} deps.profileRepository
    * @param {AstrologyService} deps.astrologyService
    */
-  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService, aiSessionStore }) {
+  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService, aiSessionStore, locationResolver, closeDecision }) {
     this.ipcMain = ipcMain;
     this.profiles = profileRepository;
     this.astrology = astrologyService;
@@ -25,6 +25,8 @@ class IpcRouter {
     this.locale = locale || {};
     this.ai = aiService;
     this.aiSessionStore = aiSessionStore || null;
+    this.locationResolver = locationResolver || null;
+    this.closeDecision = typeof closeDecision === 'function' ? closeDecision : null;
     this.webContents = null;
   }
 
@@ -41,6 +43,16 @@ class IpcRouter {
     this._handle('profiles:get', (_e, id) => this.profiles.get(id));
     this._handle('profiles:save', (_e, profileJson) => this.profiles.save(profileJson));
     this._handle('profiles:remove', (_e, id) => this.profiles.remove(id));
+
+    if (this.locationResolver) {
+      this._handle('locations:resolve', (_e, input) => this.locationResolver.resolve(input));
+    }
+    if (this.closeDecision) {
+      this._handle('app:closeDecision', (_e, decision) => {
+        if (decision !== 'proceed' && decision !== 'cancel') throw new Error('Invalid close decision');
+        return this.closeDecision(decision);
+      });
+    }
 
     this._handle('chart:compute', (_e, request) => this.astrology.computeChart(request));
 

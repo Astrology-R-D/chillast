@@ -1,5 +1,85 @@
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+export type Gender = 'male' | 'female' | 'other';
+export type CloseDecision = 'proceed' | 'cancel';
+
+export interface GeoLocation {
+  label: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface BirthData {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  location: GeoLocation;
+}
+
+export interface Profile {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  gender: Gender;
+  birthData: BirthData;
+  notes: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProfileSaveInput {
+  id?: string;
+  nameZh?: string;
+  nameEn?: string;
+  gender: Gender;
+  birthData: BirthData;
+  notes?: string;
+  tags?: string[];
+}
+
+export interface WesternCityRaw {
+  nameZh?: string;
+  nameEn?: string;
+  country?: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface ChineseCityRaw {
+  nameZh: string;
+  province?: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface CitySearchResult {
+  label: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  source: 'western' | 'chinese';
+}
+
+export interface ResolveLocationInput {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  latitude: number;
+  longitude: number;
+}
+
+export interface LocationResolution {
+  timeZone: string;
+  offsetMinutes: number;
+  utcOffset: string;
+  instantUtc: string;
+}
+
 export type LocaleDictionary = {
   [key: string]: string | LocaleDictionary;
 };

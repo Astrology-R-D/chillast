@@ -37,6 +37,15 @@ contextBridge.exposeInMainWorld('mystApi', {
   /** Birth-place lookup. */
   searchCities: (query) => invoke('cities:search', query),
 
+  locations: {
+    resolve: (input) => invoke('locations:resolve', input),
+  },
+
+  app: {
+    onCloseRequested: (callback) => subscribe('app:closeRequested', callback),
+    decideClose: (decision) => invoke('app:closeDecision', decision),
+  },
+
   /** Chart computation. */
   computeChart: (request) => invoke('chart:compute', request),
 

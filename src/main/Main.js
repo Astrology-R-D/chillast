@@ -15,6 +15,7 @@ try {
 const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
 const AiSessionStore = require('./AiSessionStore');
+const LocationResolver = require('../core/location/LocationResolver');
 const { installExternalUrlHandler, resolveSmokeReportPath } = require('./MainPolicy');
 const {
   isNavigationAllowed,
@@ -155,6 +156,9 @@ class Main {
       locale: this.locale,
       aiService: this.aiService,
       aiSessionStore: this.aiSessionStore,
+      locationResolver: new LocationResolver(),
+      // Task 7 replaces this inert sink with the guarded window-close lifecycle.
+      closeDecision: () => {},
     }).register();
   }
 

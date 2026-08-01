@@ -57,6 +57,45 @@ test('isolated fixtures remain unrestricted until trusted webContents is set', a
   });
 });
 
+test('location and close-decision handlers are dependency-gated and trust protected', async () => {
+  const handlers = new Map();
+  const resolutions = [];
+  const decisions = [];
+  const router = new IpcRouter({
+    ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+    locationResolver: { resolve: (input) => { resolutions.push(input); return { timeZone: 'UTC' }; } },
+    closeDecision: (decision) => decisions.push(decision),
+  }).register();
+  const mainFrame = {};
+  const trusted = { mainFrame };
+  router.setWebContents(trusted);
+  const input = { year: 2000, month: 1, day: 1, hour: 0, minute: 0, latitude: 0, longitude: 0 };
+
+  assert.ok(handlers.has('locations:resolve'));
+  assert.ok(handlers.has('app:closeDecision'));
+  assert.equal((await handlers.get('locations:resolve')({ sender: trusted, senderFrame: mainFrame }, input)).ok, true);
+  assert.deepEqual(resolutions, [input]);
+
+  for (const event of [
+    { sender: {}, senderFrame: {} },
+    { sender: trusted, senderFrame: { parent: mainFrame } },
+  ]) {
+    assert.equal((await handlers.get('app:closeDecision')(event, 'proceed')).ok, false);
+  }
+  assert.deepEqual(decisions, []);
+  assert.equal((await handlers.get('app:closeDecision')({ sender: trusted, senderFrame: mainFrame }, 'invalid')).ok, false);
+  assert.deepEqual(decisions, []);
+  assert.equal((await handlers.get('app:closeDecision')({ sender: trusted, senderFrame: mainFrame }, 'cancel')).ok, true);
+  assert.deepEqual(decisions, ['cancel']);
+});
+
+test('optional bridge handlers are absent without injected dependencies', () => {
+  const handlers = new Map();
+  new IpcRouter({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) } }).register();
+  assert.equal(handlers.has('locations:resolve'), false);
+  assert.equal(handlers.has('app:closeDecision'), false);
+});
+
 test('AI configuration persists only provider-accepted candidates', async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-ipc-config-'));
   const dataDir = path.join(userData, 'data');
