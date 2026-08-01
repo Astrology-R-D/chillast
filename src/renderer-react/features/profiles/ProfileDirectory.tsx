@@ -30,7 +30,7 @@ export function ProfileDirectory({ profiles, selectedId, primaryId, recents, onS
     <aside className="profile-directory" aria-label={t('profiles.directory')}>
       <div className="profile-directory__heading">
         <strong>{t('profiles.panelHeading', { count: profiles.length })}</strong>
-        <button data-profile-control className="profile-icon-button" type="button" onClick={onCreate} aria-label={t('profiles.create')} title={t('profiles.create')}>
+        <button data-profile-create data-profile-control className="profile-icon-button" type="button" onClick={onCreate} aria-label={t('profiles.create')} title={t('profiles.create')}>
           <Plus size={17} aria-hidden="true" />
         </button>
       </div>
@@ -58,7 +58,7 @@ export function ProfileDirectory({ profiles, selectedId, primaryId, recents, onS
           const accessibleLabel = primary
             ? `${selectLabel}，${t('profiles.primary')}，${birth(profile)}，${profile.birthData.location.label}`
             : selectLabel;
-          return <button key={profile.id} type="button" className="profile-row" data-selected={selected} aria-pressed={selected} aria-label={accessibleLabel} onClick={() => onSelect(profile.id)}>
+          return <button key={profile.id} type="button" className="profile-row" data-profile-id={profile.id} data-selected={selected} aria-pressed={selected} aria-label={accessibleLabel} onClick={() => onSelect(profile.id)}>
             <span className="profile-row__identity"><span className="profile-row__name" title={preferred}>{preferred}</span>{primary && <span className="profile-row__marker">{t('profiles.primary')}</span>}</span>
             {secondary && <span className="profile-row__secondary" title={secondary}>{secondary}</span>}
             <span className="profile-row__meta"><span>{birth(profile)}</span><span className="profile-row__location" title={profile.birthData.location.label}>{profile.birthData.location.label}</span></span>

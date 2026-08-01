@@ -108,6 +108,8 @@ test('contains exact canonical Task 5 profile strings', () => {
     'profiles.openNatal', 'profiles.openTransit', 'profiles.openRelationship',
     'profiles.loadFailed', 'profiles.retry', 'profiles.noResults', 'profiles.tags',
     'profiles.coordinates', 'profiles.createdAt', 'profiles.updatedAt',
+    'profiles.savedRefreshFailed', 'profiles.deletedRefreshFailed',
+    'profiles.savedProfileMissing', 'profiles.deletedProfilePresent', 'profiles.retryRefresh',
   ].map((key) => [key, resolveKey(key)]))).toEqual({
     'profiles.directory': '档案目录',
     'profiles.search': '搜索档案',
@@ -135,6 +137,11 @@ test('contains exact canonical Task 5 profile strings', () => {
     'profiles.coordinates': '坐标',
     'profiles.createdAt': '创建时间',
     'profiles.updatedAt': '更新时间',
+    'profiles.savedRefreshFailed': '档案已保存，但刷新失败：{{message}}',
+    'profiles.deletedRefreshFailed': '档案已删除，但刷新失败：{{message}}',
+    'profiles.savedProfileMissing': '刷新后未找到已保存的档案，请重试刷新。',
+    'profiles.deletedProfilePresent': '刷新后仍包含已删除的档案，请重试刷新。',
+    'profiles.retryRefresh': '重试刷新档案',
   });
 });
 

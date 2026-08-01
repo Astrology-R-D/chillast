@@ -145,7 +145,7 @@ test('duplicates with a clean payload, mandatory refetch, localized nonblank nam
   const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）', updatedAt: '2026-08-02T12:00:00.000Z' };
   const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [beta] }).mockResolvedValueOnce({ ok: true, data: [beta, copied] });
   const { api } = setup(list);
-  api.profiles.save.mockResolvedValue({ ok: true, data: { ...copied, id: 'stale-copy', updatedAt: beta.updatedAt } });
+  api.profiles.save.mockResolvedValue({ ok: true, data: { ...copied, updatedAt: beta.updatedAt } });
   await screen.findByRole('heading', { name: 'Beatrice Longname' });
   await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
   await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
@@ -154,6 +154,42 @@ test('duplicates with a clean payload, mandatory refetch, localized nonblank nam
   expect(api.profiles.save.mock.calls[0][0]).not.toHaveProperty('createdAt');
   expect(api.profiles.save.mock.calls[0][0]).not.toHaveProperty('updatedAt');
   expect(await screen.findByRole('heading', { name: 'Beatrice Longname（副本）' })).toBeInTheDocument();
+});
+
+test('retries only duplicate refresh and selects only the authoritative returned ID among identical profiles', async () => {
+  const identical = { ...beta, id: 'existing', nameEn: 'Beatrice Longname（副本）' };
+  const saved = { ...identical, id: 'authoritative-copy' };
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [beta, identical] })
+    .mockResolvedValueOnce({ ok: false, error: '刷新断开' })
+    .mockResolvedValueOnce({ ok: true, data: [beta, identical, saved] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: saved });
+  await screen.findByRole('heading', { name: 'Beatrice Longname' });
+
+  await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('档案已保存，但刷新失败：刷新断开');
+  expect(api.profiles.save).toHaveBeenCalledTimes(1);
+  expect(document.querySelector('[data-profile-id="existing"]')).toHaveAttribute('aria-pressed', 'false');
+  await userEvent.click(screen.getByRole('button', { name: '重试刷新档案' }));
+
+  await waitFor(() => expect(document.querySelector('[data-profile-id="authoritative-copy"]')).toHaveAttribute('aria-pressed', 'true'));
+  expect(api.profiles.save).toHaveBeenCalledTimes(1);
+  expect(list).toHaveBeenCalledTimes(3);
+});
+
+test('does not select an identical profile when the authoritative saved ID is absent after refresh', async () => {
+  const identical = { ...beta, id: 'existing', nameEn: 'Beatrice Longname（副本）' };
+  const saved = { ...identical, id: 'missing-copy' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [beta, identical] }).mockResolvedValueOnce({ ok: true, data: [beta, identical] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: saved });
+  await screen.findByRole('heading', { name: 'Beatrice Longname' });
+
+  await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('刷新后未找到已保存的档案');
+  expect(document.querySelector('[data-profile-id="existing"]')).toHaveAttribute('aria-pressed', 'false');
+  expect(api.profiles.save).toHaveBeenCalledTimes(1);
 });
 
 test('keeps duplicate failure inline without an unhandled rejection and retries the same payload', async () => {
@@ -179,7 +215,8 @@ test('keeps duplicate failure inline without an unhandled rejection and retries 
 });
 
 test('uses an accessible delete dialog with cancel, trapped focus, failure, and retry', async () => {
-  const { api, store } = setup();
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha, beta] }).mockResolvedValueOnce({ ok: true, data: [beta] });
+  const { api, store } = setup(list);
   api.profiles.remove.mockResolvedValueOnce({ ok: false, error: '占用中' }).mockResolvedValueOnce({ ok: true, data: true });
   await screen.findByRole('heading', { name: '王晓明' });
   const trigger = screen.getByRole('button', { name: '删除档案' });
@@ -198,4 +235,37 @@ test('uses an accessible delete dialog with cancel, trapped focus, failure, and 
   await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
   expect(store.getState().recentUses.a).toBeUndefined();
   expect(api.profiles.remove).toHaveBeenCalledTimes(2);
+});
+
+test('retries only delete refresh and restores focus to the next canonical row after the trigger is removed', async () => {
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [alpha, beta] })
+    .mockResolvedValueOnce({ ok: false, error: '刷新断开' })
+    .mockResolvedValueOnce({ ok: true, data: [beta] });
+  const { api } = setup(list);
+  api.profiles.remove.mockResolvedValue({ ok: true, data: true });
+  await screen.findByRole('heading', { name: '王晓明' });
+  const trigger = screen.getByRole('button', { name: '删除档案' });
+  await userEvent.click(trigger);
+  await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('档案已删除，但刷新失败：刷新断开');
+  expect(api.profiles.remove).toHaveBeenCalledTimes(1);
+
+  await userEvent.click(screen.getByRole('button', { name: '重试刷新档案' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  const nextRow = document.querySelector<HTMLElement>('[data-profile-id="b"]');
+  await waitFor(() => expect(nextRow).toHaveFocus());
+  expect(trigger.isConnected).toBe(false);
+  expect(api.profiles.remove).toHaveBeenCalledTimes(1);
+});
+
+test('restores delete focus to create when the canonical library becomes empty', async () => {
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: true, data: [] });
+  const { api } = setup(list);
+  api.profiles.remove.mockResolvedValue({ ok: true, data: true });
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '删除档案' }));
+  await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
+
+  await waitFor(() => expect(screen.getByRole('button', { name: '新建档案' })).toHaveFocus());
 });

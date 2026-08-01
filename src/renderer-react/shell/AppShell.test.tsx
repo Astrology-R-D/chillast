@@ -57,6 +57,7 @@ test('navigates localized placeholders and keeps route state across shell breakp
 
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('档案管理');
   expect(await screen.findByRole('complementary', { name: '测试档案目录' })).toBeInTheDocument();
+  expect(screen.getAllByRole('main')).toHaveLength(1);
   await user.click(screen.getByRole('button', { name: '个人星盘' }));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
   expect(screen.getByText('个人星盘将在后续迁移阶段启用')).toBeInTheDocument();

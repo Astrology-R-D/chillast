@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { expect, test, vi } from 'vitest';
 import type { Profile } from '../../api/contracts';
-import { profileQueryKeys, useProfiles, useRemoveProfile, useSaveProfile } from './profileQueries';
+import { profileQueryKeys, refreshProfiles, useProfiles, useRemoveProfile, useSaveProfile } from './profileQueries';
 
 const profile: Profile = {
   id: 'p1', nameZh: '林岚', nameEn: 'Lan Lin', gender: 'female',
@@ -17,7 +17,7 @@ function setup() {
   return { client, wrapper };
 }
 
-test('uses the single profiles key and awaits an active refetch after save and remove', async () => {
+test('keeps backend mutations separate from a throwing canonical refresh', async () => {
   const list = vi.fn()
     .mockResolvedValueOnce({ ok: true, data: [profile] })
     .mockResolvedValueOnce({ ok: true, data: [{ ...profile, updatedAt: '2026-02-01T00:00:00.000Z' }] })
@@ -36,12 +36,27 @@ test('uses the single profiles key and awaits an active refetch after save and r
   await waitFor(() => expect(query.result.current.isSuccess).toBe(true));
 
   await save.result.current.mutateAsync({ ...profile });
+  expect(list).toHaveBeenCalledTimes(1);
+  await refreshProfiles(client);
   expect(list).toHaveBeenCalledTimes(2);
   expect(client.getQueryData<Profile[]>(['profiles'])?.[0].updatedAt).toBe('2026-02-01T00:00:00.000Z');
   await remove.result.current.mutateAsync('p1');
+  expect(list).toHaveBeenCalledTimes(2);
+  await refreshProfiles(client);
   expect(list).toHaveBeenCalledTimes(3);
   expect(client.getQueryData(['profiles'])).toEqual([]);
   expect(profileQueryKeys.all).toEqual(['profiles']);
+});
+
+test('marks profiles stale and rejects when the canonical refetch fails', async () => {
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [profile] }).mockResolvedValueOnce({ ok: false, error: '刷新失败' });
+  vi.stubGlobal('mystApi', { profiles: { list, save: vi.fn(), remove: vi.fn() } });
+  const { client, wrapper } = setup();
+  const query = renderHook(() => useProfiles(), { wrapper });
+  await waitFor(() => expect(query.result.current.isSuccess).toBe(true));
+
+  await expect(refreshProfiles(client)).rejects.toThrow('刷新失败');
+  expect(client.getQueryState(profileQueryKeys.all)?.isInvalidated).toBe(true);
 });
 
 test('retains mutation errors without changing the profile cache optimistically', async () => {

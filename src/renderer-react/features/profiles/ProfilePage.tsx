@@ -8,7 +8,7 @@ import { profileWorkspaceStore, type ProfileWorkspaceState } from '../../stores/
 import type { RouteKey } from '../../shell/routes';
 import { ProfileDetail } from './ProfileDetail';
 import { ProfileDirectory } from './ProfileDirectory';
-import { profileQueryKeys, useProfiles, useRemoveProfile, useSaveProfile } from './profileQueries';
+import { profileQueryKeys, refreshProfiles, useProfiles, useRemoveProfile, useSaveProfile } from './profileQueries';
 import './profiles.css';
 
 interface ProfilePageProps {
@@ -31,6 +31,11 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   const [deleteError, setDeleteError] = useState('');
   const [duplicateError, setDuplicateError] = useState('');
   const [duplicatePayload, setDuplicatePayload] = useState<ProfileSaveInput | null>(null);
+  const [duplicateSavedId, setDuplicateSavedId] = useState<string | null>(null);
+  const [deleteSyncId, setDeleteSyncId] = useState<string | null>(null);
+  const [deleteRefreshing, setDeleteRefreshing] = useState(false);
+  const [focusAfterDelete, setFocusAfterDelete] = useState<string | 'create' | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
   const deleteTrigger = useRef<HTMLElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
@@ -48,31 +53,48 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     if (deleteTarget) cancelRef.current?.focus();
   }, [deleteTarget]);
 
+  useEffect(() => {
+    if (!focusAfterDelete || deleteTarget) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const target = focusAfterDelete === 'create'
+        ? pageRef.current?.querySelector<HTMLElement>('[data-profile-create]')
+        : [...(pageRef.current?.querySelectorAll<HTMLElement>('[data-profile-id]') ?? [])]
+          .find((element) => element.dataset.profileId === focusAfterDelete && element.getAttribute('aria-pressed') === 'true');
+      (target ?? pageRef.current?.querySelector<HTMLElement>('[data-profile-create]'))?.focus();
+      setFocusAfterDelete(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [deleteTarget, focusAfterDelete]);
+
   const select = (id: string) => {
     setSelectedId(id);
     workspaceStore.getState().recordRecentUse(id);
   };
   const selected = profiles.data?.find(({ id }) => id === selectedId) ?? null;
+  const refreshDuplicate = async (savedId: string) => {
+    setDuplicateError('');
+    try {
+      await refreshProfiles(queryClient);
+      const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
+      if (!refreshed.some(({ id }) => id === savedId)) {
+        setDuplicateError(t('profiles.savedProfileMissing'));
+        return;
+      }
+      setSelectedId(savedId);
+      workspaceStore.getState().recordRecentUse(savedId);
+      setDuplicatePayload(null);
+      setDuplicateSavedId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setDuplicateError(t('profiles.savedRefreshFailed', { message }));
+    }
+  };
   const runDuplicate = async (payload: ProfileSaveInput) => {
     setDuplicateError('');
     try {
       const result = await save.mutateAsync(payload);
-      const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
-      const canonical = refreshed.find(({ id }) => id === result.id)
-        ?? refreshed.find((candidate) => candidate.nameZh === payload.nameZh
-          && candidate.nameEn === payload.nameEn
-          && candidate.birthData.year === payload.birthData.year
-          && candidate.birthData.month === payload.birthData.month
-          && candidate.birthData.day === payload.birthData.day
-          && candidate.birthData.hour === payload.birthData.hour
-          && candidate.birthData.minute === payload.birthData.minute
-          && candidate.birthData.location.latitude === payload.birthData.location.latitude
-          && candidate.birthData.location.longitude === payload.birthData.location.longitude);
-      if (canonical) {
-        setSelectedId(canonical.id);
-        workspaceStore.getState().recordRecentUse(canonical.id);
-      }
-      setDuplicatePayload(null);
+      setDuplicateSavedId(result.id);
+      await refreshDuplicate(result.id);
     } catch (error) {
       setDuplicateError(error instanceof Error ? error.message : String(error));
     }
@@ -96,20 +118,48 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     workspaceStore.getState().openChart(intent);
     if (workspaceStore.getState().chartIntent) onNavigate(intent.route);
   };
+  const refreshDelete = async (deletedId: string) => {
+    setDeleteError('');
+    setDeleteRefreshing(true);
+    try {
+      await refreshProfiles(queryClient);
+      const refreshed = queryClient.getQueryData<Profile[]>(profileQueryKeys.all) ?? [];
+      if (refreshed.some(({ id }) => id === deletedId)) {
+        setDeleteError(t('profiles.deletedProfilePresent'));
+        return;
+      }
+      const nextId = refreshed.some(({ id }) => id === selectedId)
+        ? selectedId
+        : workspaceStore.getState().primaryProfileId ?? refreshed[0]?.id ?? null;
+      setSelectedId(nextId);
+      setFocusAfterDelete(nextId ?? 'create');
+      setDeleteSyncId(null);
+      setDeleteTarget(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setDeleteError(t('profiles.deletedRefreshFailed', { message }));
+    } finally {
+      setDeleteRefreshing(false);
+    }
+  };
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    if (deleteSyncId) {
+      await refreshDelete(deleteSyncId);
+      return;
+    }
     setDeleteError('');
     try {
       await remove.mutateAsync(deleteTarget.id);
       workspaceStore.getState().removeProfile(deleteTarget.id);
-      setDeleteTarget(null);
-      deleteTrigger.current?.focus();
+      setDeleteSyncId(deleteTarget.id);
+      await refreshDelete(deleteTarget.id);
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : String(error));
     }
   };
   const closeDelete = () => {
-    if (remove.isPending) return;
+    if (remove.isPending || deleteRefreshing || deleteSyncId) return;
     setDeleteTarget(null); setDeleteError(''); deleteTrigger.current?.focus();
   };
   const trapFocus = (event: React.KeyboardEvent) => {
@@ -121,20 +171,20 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   };
 
   if (profiles.isPending) return <div className="profile-state" role="status">{t('profiles.loading')}</div>;
-  if (profiles.isError) return <div className="profile-state" role="alert"><p>{t('profiles.loadFailed', { message: profiles.error.message })}</p><button data-profile-control type="button" onClick={() => profiles.refetch()}>{t('profiles.retry')}</button></div>;
-  return <div className="profile-page">
+  if (profiles.isError && !profiles.data) return <div className="profile-state" role="alert"><p>{t('profiles.loadFailed', { message: profiles.error.message })}</p><button data-profile-control type="button" onClick={() => profiles.refetch()}>{t('profiles.retry')}</button></div>;
+  return <div ref={pageRef} className="profile-page">
     <ProfileDirectory profiles={profiles.data} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={() => onCreate?.()} />
-    <main className="profile-page__surface">
-      {selected ? <ProfileDetail profile={selected} primary={selected.id === primaryId} pending={save.isPending} onEdit={() => onEdit?.(selected)} onCopy={() => void duplicate(selected)}
+    <section className="profile-page__surface">
+      {selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={save.isPending} onEdit={() => onEdit?.(selected)} onCopy={() => void duplicate(selected)}
         onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />
         : <div className="profile-page__blank">{t('profiles.selectPrompt')}</div>}
-      {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={save.isPending} onClick={() => duplicatePayload && void runDuplicate(duplicatePayload)}>{t('profiles.retry')}</button></div>}
-    </main>
+      {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={save.isPending} onClick={() => duplicateSavedId ? void refreshDuplicate(duplicateSavedId) : duplicatePayload && void runDuplicate(duplicatePayload)}>{t(duplicateSavedId ? 'profiles.retryRefresh' : 'profiles.retry')}</button></div>}
+    </section>
     {deleteTarget && <div className="profile-dialog-backdrop"><div className="profile-dialog" role="alertdialog" aria-modal="true" aria-labelledby="profile-delete-title" aria-describedby="profile-delete-description" onKeyDown={trapFocus}>
       <h2 id="profile-delete-title">{t('profiles.deleteTitle')}</h2><p id="profile-delete-description">{t('profiles.deleteConfirm', { name: deleteTarget.nameZh || deleteTarget.nameEn })}</p>
       {deleteError && <p role="alert">{deleteError}</p>}
-      <div className="profile-dialog__actions"><button data-profile-control ref={cancelRef} type="button" onClick={closeDelete} disabled={remove.isPending}>{t('form.cancel')}</button><button data-profile-control ref={confirmRef} type="button" onClick={() => void confirmDelete()} disabled={remove.isPending}>{deleteError ? t('profiles.retryDelete') : t('profiles.confirmDelete')}</button></div>
+      <div className="profile-dialog__actions"><button data-profile-control ref={cancelRef} type="button" onClick={closeDelete} disabled={remove.isPending || deleteRefreshing || Boolean(deleteSyncId)}>{t('form.cancel')}</button><button data-profile-control ref={confirmRef} type="button" onClick={() => void confirmDelete()} disabled={remove.isPending || deleteRefreshing}>{deleteSyncId ? t('profiles.retryRefresh') : deleteError ? t('profiles.retryDelete') : t('profiles.confirmDelete')}</button></div>
     </div></div>}
   </div>;
 }
