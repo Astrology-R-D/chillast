@@ -235,6 +235,7 @@ test.each(['light', 'dark'] as const)(
   },
 );
 
+// This integration assertion performs a complete in-memory production build.
 test('Vite emits four WOFF2 subsets under 10 MB total with rewritten CSS paths', async () => {
   const result = await build({
     configFile: resolve(process.cwd(), 'vite.config.mts'),
@@ -263,4 +264,4 @@ test('Vite emits four WOFF2 subsets under 10 MB total with rewritten CSS paths',
   ).toBeLessThan(10_000_000);
   expect(productionCss).not.toContain('.ttf');
   expect(productionCss.match(/url\([^)]*\.woff2\)/g)).toHaveLength(4);
-});
+}, 30_000);
