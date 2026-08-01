@@ -34,3 +34,9 @@ test('keeps profile forms dense, tokenized, wrapping, and responsive without nes
   expect(css).toMatch(/@media \(max-width:\s*760px\)[\s\S]*\.profile-form__segments\s*\{[^}]*grid-template-columns:/s);
   expect(css).not.toMatch(/\.profile-form[^,{]*\.\w*card/);
 });
+
+test('uses token-sized segmented steppers and a two-column coordinate row', () => {
+  expect(css).toMatch(/\.profile-segment__steppers button\s*\{[^}]*height:\s*calc\(var\(--control-height\)\s*\/\s*2\)/s);
+  expect(css).toMatch(/\.profile-segment__control\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--control-height\)/s);
+  expect(css).toMatch(/\.location-picker__coordinates\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+});

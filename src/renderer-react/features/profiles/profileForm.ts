@@ -1,3 +1,4 @@
+import unicodeDefaultCaseFold from '../../../core/util/UnicodeCaseFold';
 import type { Gender, Profile, ProfileSaveInput } from '../../api/contracts';
 
 export interface ProfileDraft {
@@ -20,25 +21,25 @@ export interface ProfileDraft {
 }
 
 export type FieldErrors = Partial<Record<keyof ProfileDraft, string>>;
-export type ProfileDraftResult = { ok: true; value: ProfileSaveInput } | { ok: false; errors: FieldErrors };
 
-export function emptyDraft(): ProfileDraft {
-  return { nameZh: '', nameEn: '', gender: 'female', year: '', month: '', day: '', hour: '', minute: '', locationLabel: '', latitude: '', longitude: '', notes: '', tags: '' };
-}
+const pad = (value: number) => String(value).padStart(2, '0');
 
-export function profileToDraft(profile: Profile): ProfileDraft {
+export function createDraft(profile: Profile | null): ProfileDraft {
+  if (!profile) {
+    return {
+      nameZh: '', nameEn: '', gender: 'other', year: String(new Date().getFullYear()), month: '01', day: '01', hour: '00', minute: '00',
+      locationLabel: '', latitude: '', longitude: '', notes: '', tags: '',
+    };
+  }
   const { birthData } = profile;
   return {
     id: profile.id, createdAt: profile.createdAt, updatedAt: profile.updatedAt,
     nameZh: profile.nameZh, nameEn: profile.nameEn, gender: profile.gender,
-    year: String(birthData.year), month: String(birthData.month), day: String(birthData.day),
-    hour: String(birthData.hour), minute: String(birthData.minute),
+    year: String(birthData.year), month: pad(birthData.month), day: pad(birthData.day), hour: pad(birthData.hour), minute: pad(birthData.minute),
     locationLabel: birthData.location.label, latitude: String(birthData.location.latitude), longitude: String(birthData.location.longitude),
     notes: profile.notes, tags: profile.tags.join(', '),
   };
 }
-
-const fold = (value: string) => Array.from(value, (character) => character === '\u0131' ? character : character.toUpperCase().toLowerCase()).join('');
 
 export function parseTagText(value: string): string[] {
   const tags: string[] = [];
@@ -46,7 +47,7 @@ export function parseTagText(value: string): string[] {
   for (const entry of value.split(/[,，\n]/)) {
     const tag = entry.normalize('NFC').trim();
     if (!tag || Array.from(tag).length > 32) continue;
-    const key = fold(tag);
+    const key = unicodeDefaultCaseFold(tag);
     if (seen.has(key)) continue;
     seen.add(key);
     tags.push(tag);
@@ -67,52 +68,65 @@ function finite(value: string, minimum: number, maximum: number): number | null 
   return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
 }
 
-function tagsValid(raw: string): boolean {
+function validTags(raw: string): boolean {
   const entries = raw.split(/[,，\n]/).map((tag) => tag.normalize('NFC').trim()).filter(Boolean);
-  return entries.length <= 20 && entries.every((tag) => Array.from(tag).length <= 32);
+  return entries.every((tag) => Array.from(tag).length <= 32)
+    && new Set(entries.map(unicodeDefaultCaseFold)).size <= 20;
 }
 
-export function validateProfileDraft(draft: ProfileDraft): ProfileDraftResult {
+export function daysInMonth(year: number, month: number): number {
+  if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+export function validateProfileDraft(draft: ProfileDraft): FieldErrors {
   const errors: FieldErrors = {};
-  const nameZh = draft.nameZh.trim();
-  const nameEn = draft.nameEn.trim();
-  if (!nameZh && !nameEn) errors.nameZh = 'form.errorNameRequired';
-  if (!['male', 'female', 'other'].includes(draft.gender)) errors.gender = 'form.errorGender';
+  if (!draft.nameZh.trim() && !draft.nameEn.trim()) errors.nameZh = '至少填写中文或英文名字';
+  if (!['male', 'female', 'other'].includes(draft.gender)) errors.gender = '请选择有效性别';
   const year = integer(draft.year, 1, 3000);
   const month = integer(draft.month, 1, 12);
   const day = integer(draft.day, 1, 31);
-  const hour = integer(draft.hour, 0, 23);
-  const minute = integer(draft.minute, 0, 59);
-  if (year === null) errors.year = 'form.errorYear';
-  if (month === null) errors.month = 'form.errorMonth';
-  if (day === null) errors.day = 'form.errorDay';
-  if (year !== null && month !== null && day !== null) {
-    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    if (day > lastDay) errors.day = 'form.errorDate';
-  }
-  if (hour === null) errors.hour = 'form.errorHour';
-  if (minute === null) errors.minute = 'form.errorMinute';
-  const locationLabel = draft.locationLabel.trim();
-  const latitude = finite(draft.latitude, -90, 90);
-  const longitude = finite(draft.longitude, -180, 180);
-  if (!locationLabel) errors.locationLabel = 'form.errorLocationRequired';
-  if (latitude === null) errors.latitude = 'form.errorLatitude';
-  if (longitude === null) errors.longitude = 'form.errorLongitude';
-  if (!tagsValid(draft.tags)) errors.tags = 'form.errorTags';
-  if (Object.keys(errors).length) return { ok: false, errors };
-  return { ok: true, value: {
+  if (year === null) errors.year = '年份须为 1 至 3000 的整数';
+  if (month === null) errors.month = '月份须为 1 至 12 的整数';
+  if (day === null) errors.day = '日期须为有效整数';
+  if (year !== null && month !== null && day !== null && day > daysInMonth(year, month)) errors.day = '出生日期不存在';
+  if (integer(draft.hour, 0, 23) === null) errors.hour = '小时须为 0 至 23 的整数';
+  if (integer(draft.minute, 0, 59) === null) errors.minute = '分钟须为 0 至 59 的整数';
+  if (!draft.locationLabel.trim()) errors.locationLabel = '请填写地点名称';
+  if (finite(draft.latitude, -90, 90) === null) errors.latitude = '纬度须为 -90 至 90 的有限数字';
+  if (finite(draft.longitude, -180, 180) === null) errors.longitude = '经度须为 -180 至 180 的有限数字';
+  if (!validTags(draft.tags)) errors.tags = '最多 20 个标签，每个不超过 32 个字符';
+  return errors;
+}
+
+export function toSaveInput(draft: ProfileDraft): ProfileSaveInput {
+  return {
     ...(draft.id ? { id: draft.id } : {}),
     ...(draft.createdAt ? { createdAt: draft.createdAt } : {}),
     ...(draft.updatedAt ? { updatedAt: draft.updatedAt } : {}),
-    nameZh, nameEn, gender: draft.gender as Gender, notes: draft.notes, tags: parseTagText(draft.tags),
-    birthData: { year: year!, month: month!, day: day!, hour: hour!, minute: minute!, location: { label: locationLabel, latitude: latitude!, longitude: longitude! } },
-  } };
+    nameZh: draft.nameZh.trim(), nameEn: draft.nameEn.trim(), gender: draft.gender as Gender,
+    notes: draft.notes, tags: parseTagText(draft.tags),
+    birthData: {
+      year: Number(draft.year), month: Number(draft.month), day: Number(draft.day), hour: Number(draft.hour), minute: Number(draft.minute),
+      location: { label: draft.locationLabel.trim(), latitude: Number(draft.latitude), longitude: Number(draft.longitude) },
+    },
+  };
 }
 
 function canonicalDraft(draft: ProfileDraft): unknown {
-  const result = validateProfileDraft(draft);
-  if (result.ok) return result.value;
-  return { ...draft, nameZh: draft.nameZh.trim(), nameEn: draft.nameEn.trim(), locationLabel: draft.locationLabel.trim(), tags: parseTagText(draft.tags) };
+  const errors = validateProfileDraft(draft);
+  return {
+    ...draft,
+    nameZh: draft.nameZh.trim(), nameEn: draft.nameEn.trim(), locationLabel: draft.locationLabel.trim(),
+    year: integer(draft.year, 1, 3000) ?? draft.year,
+    month: integer(draft.month, 1, 12) ?? draft.month,
+    day: integer(draft.day, 1, 31) ?? draft.day,
+    hour: integer(draft.hour, 0, 23) ?? draft.hour,
+    minute: integer(draft.minute, 0, 59) ?? draft.minute,
+    latitude: finite(draft.latitude, -90, 90) ?? draft.latitude,
+    longitude: finite(draft.longitude, -180, 180) ?? draft.longitude,
+    tags: errors.tags ? draft.tags : parseTagText(draft.tags),
+  };
 }
 
 export function isProfileDraftDirty(draft: ProfileDraft, initial: ProfileDraft): boolean {

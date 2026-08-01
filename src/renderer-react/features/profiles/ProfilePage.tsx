@@ -17,7 +17,7 @@ interface ProfilePageProps {
   onNavigate(route: RouteKey): void;
   onCreate?: () => void;
   onEdit?: (profile: Profile) => void;
-  onFormRegistration?: (registration: ProfileFormRegistration | null) => void;
+  onFormRegistration?: (registration: ProfileFormRegistration) => void;
 }
 
 type DuplicatePhase = 'idle' | 'saving' | 'refreshing';
@@ -88,7 +88,7 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   const selected = profiles.data?.find(({ id }) => id === selectedId) ?? null;
   const openCreate = () => { setEditor({ mode: 'create' }); setEditorSaved(null); onCreate?.(); };
   const openEdit = (profile: Profile) => { setEditor({ mode: 'edit', profile }); setEditorSaved(null); onEdit?.(profile); };
-  const saveEditor = async (payload: ProfileSaveInput): Promise<Profile> => {
+  const saveEditor = async (payload: ProfileSaveInput): Promise<void> => {
     let authoritative = editorSaved;
     if (!authoritative) {
       authoritative = await save.mutateAsync(payload);
@@ -106,7 +106,6 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     setSelectedId(authoritative.id);
     workspaceStore.getState().recordRecentUse(authoritative.id);
     setEditor(null); setEditorSaved(null);
-    return authoritative;
   };
   const beginDuplicate = (phase: Exclude<DuplicatePhase, 'idle'>): number | null => {
     if (duplicateBusyRef.current) return null;
@@ -247,7 +246,7 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   return <div ref={pageRef} className="profile-page">
     <ProfileDirectory profiles={profiles.data} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
     <section className="profile-page__surface">
-      {editor ? <ProfileForm key="profile-editor" profile={editorSaved ?? editor.profile} onSave={saveEditor} onCancel={() => { setEditor(null); setEditorSaved(null); }} onRegistration={onFormRegistration} />
+      {editor ? <ProfileForm key="profile-editor" profile={editorSaved ?? editor.profile ?? null} onSave={saveEditor} onCancel={() => { setEditor(null); setEditorSaved(null); }} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
         : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => void duplicate(selected)}
         onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />

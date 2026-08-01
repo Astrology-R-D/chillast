@@ -163,6 +163,8 @@
     "saving": "正在保存…",
     "backendError": "保存失败：{{message}}",
     "retrySave": "重试保存",
+    "increment": "{{field}}增加",
+    "decrement": "{{field}}减少",
     "errorNameRequired": "至少填写中文或英文名字",
     "errorGender": "请选择有效性别",
     "errorYear": "年份须为 1 至 3000 的整数",
