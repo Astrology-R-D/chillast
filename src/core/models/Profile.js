@@ -5,9 +5,28 @@ const BirthData = require('./BirthData');
 /** Allowed gender tokens kept stable for serialization. */
 const GENDERS = Object.freeze(['male', 'female', 'other']);
 
+/** Normalize persisted profile tags into an immutable, bounded string list. */
+function normalizeTags(tags) {
+  if (!Array.isArray(tags)) return Object.freeze([]);
+
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of tags) {
+    if (typeof entry !== 'string') continue;
+    const tag = entry.trim();
+    if (!tag || tag.length > 32) continue;
+    const key = tag.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(tag);
+    if (normalized.length === 20) break;
+  }
+  return Object.freeze(normalized);
+}
+
 /**
  * Profile — the aggregate root persisted to disk. Identified by a stable `id`
- * and carrying bilingual names, gender and the birth moment. Equality and
+ * and carrying bilingual names, gender, tags and the birth moment. Equality and
  * persistence are driven entirely by `toJSON` so the storage layer stays dumb.
  */
 class Profile {
@@ -19,16 +38,18 @@ class Profile {
    * @param {string} params.gender      One of GENDERS.
    * @param {BirthData|object} params.birthData
    * @param {string} [params.notes]     Free-form notes.
+   * @param {string[]} [params.tags]    Normalized profile labels.
    * @param {string} [params.createdAt] ISO timestamp.
    * @param {string} [params.updatedAt] ISO timestamp.
    */
-  constructor({ id, nameZh, nameEn, gender, birthData, notes, createdAt, updatedAt }) {
+  constructor({ id, nameZh, nameEn, gender, birthData, notes, tags, createdAt, updatedAt }) {
     this.id = id || Profile.generateId();
     this.nameZh = String(nameZh || '').trim();
     this.nameEn = String(nameEn || '').trim();
     this.gender = GENDERS.includes(gender) ? gender : 'other';
     this.birthData = birthData instanceof BirthData ? birthData : new BirthData(birthData || {});
     this.notes = String(notes || '');
+    this.tags = normalizeTags(tags);
     this.createdAt = createdAt || new Date().toISOString();
     this.updatedAt = updatedAt || this.createdAt;
   }
@@ -66,6 +87,7 @@ class Profile {
       gender: this.gender,
       birthData: this.birthData.toJSON(),
       notes: this.notes,
+      tags: this.tags,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };

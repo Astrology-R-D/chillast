@@ -8,7 +8,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/RunAll.js && node --test tests/AiServiceConfiguration.test.js tests/ModelProviderConfiguration.test.js tests/PackageResources.test.js",
+    "test": "node tests/RunAll.js && node --test tests/AiServiceConfiguration.test.js tests/ModelProviderConfiguration.test.js tests/PackageResources.test.js tests/ProfileRepository.test.js",
     "smoke": "electron tests/SmokeRenderer.js",
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:react": "concurrently -k \"npm:dev:renderer\" \"wait-on tcp:5173 && cross-env CHILLAST_RENDERER_URL=http://127.0.0.1:5173 electron .\"",

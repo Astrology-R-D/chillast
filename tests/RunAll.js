@@ -84,6 +84,58 @@ test('profile requires a name', () => {
   const bad = Profile.fromJSON({ nameZh: '', nameEn: '', gender: 'other', birthData: subjectA.birthData });
   assert.ok(bad.validate().some((e) => e.includes('名字')));
 });
+test('legacy profiles and non-array tags normalize to a frozen empty array', () => {
+  const legacy = Profile.fromJSON(subjectA);
+  const invalid = Profile.fromJSON({ ...subjectA, tags: 'friend' });
+  assert.deepStrictEqual(legacy.tags, []);
+  assert.deepStrictEqual(invalid.tags, []);
+  assert.ok(Object.isFrozen(legacy.tags));
+  assert.ok(Object.isFrozen(invalid.tags));
+});
+test('profile tags are trimmed and deduplicated case-insensitively', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: [' Friend ', 'WORK', 'friend', 'Work', ' family '] });
+  assert.deepStrictEqual(profile.tags, ['Friend', 'WORK', 'family']);
+});
+test('profile tags ignore empty, non-string, and overlong entries', () => {
+  const profile = Profile.fromJSON({
+    ...subjectA,
+    tags: ['', '   ', null, 42, {}, 'x'.repeat(33), 'valid', '😀'.repeat(17)],
+  });
+  assert.deepStrictEqual(profile.tags, ['valid']);
+});
+test('profile tags retain at most the first 20 normalized entries', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: Array.from({ length: 25 }, (_, i) => `tag-${i}`) });
+  assert.deepStrictEqual(profile.tags, Array.from({ length: 20 }, (_, i) => `tag-${i}`));
+});
+test('profile tags cannot be mutated through input or aggregate references', () => {
+  const input = ['one'];
+  const profile = Profile.fromJSON({ ...subjectA, tags: input });
+  input.push('two');
+  assert.deepStrictEqual(profile.tags, ['one']);
+  assert.throws(() => profile.tags.push('two'), TypeError);
+});
+test('withUpdates preserves tags when omitted', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['friend'] });
+  assert.deepStrictEqual(profile.withUpdates({ notes: 'updated' }).tags, ['friend']);
+});
+test('withUpdates normalizes replacement tags', () => {
+  const profile = Profile.fromJSON({ ...subjectA, tags: ['friend'] });
+  assert.deepStrictEqual(profile.withUpdates({ tags: [' Work ', 'work'] }).tags, ['Work']);
+});
+test('toJSON adds tags without changing existing profile fields', () => {
+  const data = {
+    id: 'profile-json',
+    ...subjectA,
+    notes: 'unchanged',
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-02T00:00:00.000Z',
+  };
+  assert.deepStrictEqual(Profile.fromJSON({ ...data, tags: ['friend'] }).toJSON(), {
+    ...data,
+    birthData: Profile.fromJSON(data).birthData.toJSON(),
+    tags: ['friend'],
+  });
+});
 
 console.log('\nAspectEngine');
 test('detects an exact conjunction within orb', () => {
