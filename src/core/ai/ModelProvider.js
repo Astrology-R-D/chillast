@@ -64,7 +64,8 @@ const PROVIDER_MAP = {
 };
 
 class ModelProvider {
-  constructor() {
+  constructor({ load = esm.load } = {}) {
+    this._load = load;
     this._model = null;
     this._embeddings = null;
     this._settings = null;
@@ -80,13 +81,14 @@ class ModelProvider {
   }
 
   async configure(settings) {
-    this._settings = { ...settings };
+    const nextSettings = { ...settings };
     const provider = settings.provider || 'openai';
     const map = PROVIDER_MAP[provider];
     if (!map) throw new Error(`不支持的 AI 提供商: ${provider}`);
 
-    const mod = await esm.load(map.pkg);
+    const mod = await this._load(map.pkg);
     const ChatCls = mod[map.chatCls];
+    if (typeof ChatCls !== 'function') throw new Error(`AI 提供商模块缺少 ${map.chatCls}`);
 
     // Merge defaults with user settings
     const defaults = map.defaults || {};
@@ -107,21 +109,21 @@ class ModelProvider {
       if (baseUrl) chatOpts.configuration = { baseURL: baseUrl };
     }
 
-    // Chat model construction can throw when no API key is set yet (e.g. first
-    // launch before the user configures one). That must NOT block embeddings /
-    // knowledge-base / tools — leave the chat model unset and carry on.
-    try {
-      this._model = new ChatCls(chatOpts);
-    } catch (e) {
-      this._model = null;
-      console.warn('[ModelProvider] chat model not ready (configure a key):', e.message);
-    }
+    const nextModel = map.needsKey && !settings.apiKey ? null : new ChatCls(chatOpts);
+    const nextEmbeddings = await this._resolveEmbeddings(settings, { provider, baseUrl, map });
+    const previousEmbeddings = this._embeddings;
 
-    // Tear down a previous embeddings worker (if any) before building the new one.
-    if (this._embeddings && typeof this._embeddings.close === 'function') {
-      try { await this._embeddings.close(); } catch (_) { /* best-effort */ }
+    this._settings = nextSettings;
+    this._model = nextModel;
+    this._embeddings = nextEmbeddings;
+
+    if (
+      previousEmbeddings
+      && previousEmbeddings !== nextEmbeddings
+      && typeof previousEmbeddings.close === 'function'
+    ) {
+      try { await previousEmbeddings.close(); } catch (_) { /* best-effort after commit */ }
     }
-    this._embeddings = await this._resolveEmbeddings(settings, { provider, baseUrl, map });
   }
 
   /**
@@ -153,9 +155,10 @@ class ModelProvider {
       }
 
       // openai / openai_compat / any OpenAI-compatible embeddings endpoint.
-      const embMod = await esm.load('@langchain/openai');
-      const opts = { model: emb.model || 'text-embedding-3-small' };
       const key = emb.apiKey || settings.apiKey;
+      if (!key) return null;
+      const embMod = await this._load('@langchain/openai');
+      const opts = { model: emb.model || 'text-embedding-3-small' };
       if (key) opts.apiKey = key;
       if (emb.baseUrl) opts.configuration = { baseURL: emb.baseUrl };
       return new embMod.OpenAIEmbeddings(opts);
@@ -163,7 +166,8 @@ class ModelProvider {
 
     // Back-compat: derive from the chat provider's embeddings (if it has any).
     if (map && map.emb) {
-      const embMod = await esm.load(map.emb.pkg);
+      if (map.needsKey && !settings.apiKey) return null;
+      const embMod = await this._load(map.emb.pkg);
       const EmbCls = embMod[map.emb.cls];
       const opts = {};
       if (settings.apiKey) opts.apiKey = settings.apiKey;

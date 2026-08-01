@@ -48,15 +48,17 @@ class AiService {
     // knowledge paths, embeddings, search — are never lost, else the KB silently
     // stops loading after the user saves a key.
     const merged = { ...(this._lastSettings || {}), ...settings };
-    this._lastSettings = merged;
-    settings = merged;
+    let accepted = false;
 
     // A failed chat-model build (e.g. no key yet) must NOT abort KB/tool init.
     try {
-      await this._mp.configure(settings);
+      await this._mp.configure(merged);
+      this._lastSettings = merged;
+      accepted = true;
     } catch (e) {
       console.error('[AiService] model provider configure failed (continuing):', e.message);
     }
+    settings = accepted ? merged : (this._lastSettings || merged);
 
     // Surface local embedding-model download progress in the startup overlay —
     // but ONLY while the KB index is initializing. A model load triggered later
@@ -71,11 +73,13 @@ class AiService {
     }
 
     // Verify chat model works — don't block on failure, just log
-    try {
-      await this._mp.testConnection();
-    } catch (e) {
-      console.error('[AiService] Chat model test failed:', e.message);
-      // Don't throw — user may still want to use the service with a different model later
+    if (accepted && this._mp.isConfigured()) {
+      try {
+        await this._mp.testConnection();
+      } catch (e) {
+        console.error('[AiService] Chat model test failed:', e.message);
+        // Don't throw — user may still want to use the service with a different model later
+      }
     }
 
     // KB initialization — skip if enableRag is explicitly false
