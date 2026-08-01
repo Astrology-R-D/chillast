@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import {
-  PROFILE_WORKSPACE_STORAGE_KEY,
+  PROFILE_WORKSPACE_KEY,
   createProfileWorkspaceStore,
 } from './profileWorkspace';
 
@@ -9,7 +9,7 @@ const NOW = Date.UTC(2026, 7, 2, 12);
 
 function createStorage(value?: string): Storage & { writes: string[] } {
   const data = new Map<string, string>();
-  if (value !== undefined) data.set(PROFILE_WORKSPACE_STORAGE_KEY, value);
+  if (value !== undefined) data.set(PROFILE_WORKSPACE_KEY, value);
   const writes: string[] = [];
 
   return {
@@ -29,7 +29,7 @@ function createStorage(value?: string): Storage & { writes: string[] } {
 }
 
 function persisted(storage: Storage): Record<string, unknown> {
-  return JSON.parse(storage.getItem(PROFILE_WORKSPACE_STORAGE_KEY) ?? '{}') as Record<string, unknown>;
+  return JSON.parse(storage.getItem(PROFILE_WORKSPACE_KEY) ?? '{}') as Record<string, unknown>;
 }
 
 describe('profile workspace persistence', () => {
@@ -40,7 +40,7 @@ describe('profile workspace persistence', () => {
     expect(store.getState()).toMatchObject({
       primaryProfileId: null,
       recentUses: {},
-      chartNavigationIntent: null,
+      chartIntent: null,
     });
     expect(persisted(storage)).toEqual({ primaryProfileId: null, recentUses: {} });
   });
@@ -100,7 +100,7 @@ describe('profile workspace persistence', () => {
     readFailure.getItem = () => { throw new DOMException('denied', 'SecurityError'); };
     readFailure.setItem = () => { throw new DOMException('full', 'QuotaExceededError'); };
     const readStore = createProfileWorkspaceStore(readFailure, () => NOW);
-    expect(() => readStore.getState().setPrimaryProfileId('profile-a')).not.toThrow();
+    expect(() => readStore.getState().setPrimaryProfile('profile-a')).not.toThrow();
     expect(readStore.getState().primaryProfileId).toBe('profile-a');
 
     const stringify = JSON.stringify;
@@ -123,7 +123,7 @@ describe('profile workspace actions', () => {
     }));
     const store = createProfileWorkspaceStore(storage, () => NOW);
 
-    store.getState().reconcileProfileIds([' ', 'profile-a', 'profile-a', ' profile-b ']);
+    store.getState().reconcileProfiles([' ', 'profile-a', 'profile-a', ' profile-b ']);
 
     expect(store.getState()).toMatchObject({
       primaryProfileId: 'profile-a',
@@ -139,7 +139,7 @@ describe('profile workspace actions', () => {
     const storage = createStorage(JSON.stringify({ primaryProfileId: 'profile-b', recentUses: {} }));
     const store = createProfileWorkspaceStore(storage, () => NOW);
 
-    store.getState().reconcileProfileIds(['profile-a', 'profile-b']);
+    store.getState().reconcileProfiles(['profile-a', 'profile-b']);
 
     expect(store.getState().primaryProfileId).toBe('profile-b');
   });
@@ -149,7 +149,7 @@ describe('profile workspace actions', () => {
     const store = createProfileWorkspaceStore(storage, () => NOW);
     const writesBefore = storage.writes.length;
 
-    store.getState().setPrimaryProfileId(' profile-a ');
+    store.getState().setPrimaryProfile(' profile-a ');
 
     expect(store.getState()).toMatchObject({
       primaryProfileId: 'profile-a',
@@ -183,9 +183,35 @@ describe('profile workspace actions', () => {
     expect(store.getState().recentUses).toEqual({ boundary: NOW - 90 * DAY_MS });
   });
 
+  test('uses a finite per-call now override for validation and pruning', () => {
+    const injectedNow = NOW + 200 * DAY_MS;
+    const store = createProfileWorkspaceStore(createStorage(), () => injectedNow);
+
+    store.getState().recordRecentUse('profile-a', NOW - 90 * DAY_MS, NOW);
+    store.getState().recordRecentUse('profile-b', NOW, NOW);
+
+    expect(store.getState().recentUses).toEqual({
+      'profile-b': NOW,
+      'profile-a': NOW - 90 * DAY_MS,
+    });
+  });
+
+  test.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'ignores an invalid per-call now override: %s',
+    (now) => {
+      const storage = createStorage();
+      const store = createProfileWorkspaceStore(storage, () => NOW);
+      const writesBefore = storage.writes.length;
+
+      expect(() => store.getState().recordRecentUse('profile-a', NOW, now)).not.toThrow();
+      expect(store.getState().recentUses).toEqual({});
+      expect(storage.writes).toHaveLength(writesBefore);
+    },
+  );
+
   test('removing a profile clears its recent and leaves primary null until reconciliation', () => {
     const store = createProfileWorkspaceStore(createStorage(), () => NOW);
-    store.getState().setPrimaryProfileId('profile-a');
+    store.getState().setPrimaryProfile('profile-a');
     store.getState().recordRecentUse('profile-b');
 
     store.getState().removeProfile('profile-a');
@@ -194,7 +220,7 @@ describe('profile workspace actions', () => {
       recentUses: { 'profile-b': NOW },
     });
 
-    store.getState().reconcileProfileIds(['profile-b']);
+    store.getState().reconcileProfiles(['profile-b']);
     expect(store.getState().primaryProfileId).toBe('profile-b');
   });
 });
@@ -216,7 +242,7 @@ describe('chart navigation intent', () => {
     expect(store.getState()).toMatchObject({
       primaryProfileId: 'profile-a',
       recentUses: { 'profile-a': NOW },
-      chartNavigationIntent: intent,
+      chartIntent: intent,
     });
     expect(listener).toHaveBeenCalledTimes(1);
     expect(storage.writes).toHaveLength(writesBefore + 1);
@@ -238,7 +264,7 @@ describe('chart navigation intent', () => {
     const writesBefore = storage.writes.length;
 
     expect(() => store.getState().openChart(intent as never)).not.toThrow();
-    expect(store.getState().chartNavigationIntent).toBeNull();
+    expect(store.getState().chartIntent).toBeNull();
     expect(storage.writes).toHaveLength(writesBefore);
   });
 
@@ -256,7 +282,7 @@ describe('chart navigation intent', () => {
     expect(recreated.getState()).toMatchObject({
       primaryProfileId: 'profile-a',
       recentUses: { 'profile-a': NOW },
-      chartNavigationIntent: null,
+      chartIntent: null,
     });
   });
 });

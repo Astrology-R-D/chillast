@@ -1,7 +1,7 @@
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-export const PROFILE_WORKSPACE_STORAGE_KEY = 'chillast.profileWorkspace';
+export const PROFILE_WORKSPACE_KEY = 'chillast.profileWorkspace';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_USE_MAX_AGE = 90 * DAY_MS;
@@ -15,10 +15,10 @@ export type ChartNavigationIntent =
 export interface ProfileWorkspaceState {
   primaryProfileId: string | null;
   recentUses: Record<string, number>;
-  chartNavigationIntent: ChartNavigationIntent | null;
-  reconcileProfileIds(profileIds: readonly string[]): void;
-  setPrimaryProfileId(profileId: string | null): void;
-  recordRecentUse(profileId: string, usedAt?: number): void;
+  chartIntent: ChartNavigationIntent | null;
+  reconcileProfiles(profileIds: readonly string[]): void;
+  setPrimaryProfile(profileId: string): void;
+  recordRecentUse(profileId: string, usedAt?: number, now?: number): void;
   removeProfile(profileId: string): void;
   openChart(intent: ChartNavigationIntent): void;
   consumeChartIntent(): ChartNavigationIntent | null;
@@ -83,7 +83,7 @@ function emptyWorkspace(): PersistedProfileWorkspace {
 
 function readWorkspace(storage: Storage, now: number): PersistedProfileWorkspace {
   try {
-    const serialized = storage.getItem(PROFILE_WORKSPACE_STORAGE_KEY);
+    const serialized = storage.getItem(PROFILE_WORKSPACE_KEY);
     if (serialized === null) return emptyWorkspace();
     const parsed: unknown = JSON.parse(serialized);
     if (!isPlainObject(parsed) || !isPlainObject(parsed.recentUses)) return emptyWorkspace();
@@ -103,7 +103,7 @@ function readWorkspace(storage: Storage, now: number): PersistedProfileWorkspace
 
 function persistWorkspace(storage: Storage, workspace: PersistedProfileWorkspace): void {
   try {
-    storage.setItem(PROFILE_WORKSPACE_STORAGE_KEY, JSON.stringify(workspace));
+    storage.setItem(PROFILE_WORKSPACE_KEY, JSON.stringify(workspace));
   } catch {
     // Workspace state remains usable when browser persistence is unavailable.
   }
@@ -131,8 +131,8 @@ export function createProfileWorkspaceStore(
 
   return createStore<ProfileWorkspaceState>((set, get) => ({
     ...initial,
-    chartNavigationIntent: null,
-    reconcileProfileIds(profileIds) {
+    chartIntent: null,
+    reconcileProfiles(profileIds) {
       const ids = [...new Set(profileIds.map(validId).filter((id): id is string => id !== null))];
       const allowedIds = new Set(ids);
       const state = get();
@@ -145,13 +145,7 @@ export function createProfileWorkspaceStore(
       set(next);
       persistWorkspace(storage, next);
     },
-    setPrimaryProfileId(profileId) {
-      if (profileId === null) {
-        const next = { primaryProfileId: null, recentUses: get().recentUses };
-        set(next);
-        persistWorkspace(storage, next);
-        return;
-      }
+    setPrimaryProfile(profileId) {
       const id = validId(profileId);
       if (!id) return;
       const now = safeNow(nowProvider);
@@ -160,9 +154,10 @@ export function createProfileWorkspaceStore(
       set(next);
       persistWorkspace(storage, next);
     },
-    recordRecentUse(profileId, usedAt) {
+    recordRecentUse(profileId, usedAt, nowOverride) {
       const id = validId(profileId);
-      const now = safeNow(nowProvider);
+      if (nowOverride !== undefined && !Number.isFinite(nowOverride)) return;
+      const now = nowOverride ?? safeNow(nowProvider);
       const timestamp = usedAt ?? now;
       if (!id || !Number.isFinite(timestamp) || timestamp > now || timestamp < now - RECENT_USE_MAX_AGE) return;
       const next = {
@@ -196,7 +191,7 @@ export function createProfileWorkspaceStore(
       const next = {
         primaryProfileId: normalizedIntent.primaryProfileId,
         recentUses,
-        chartNavigationIntent: normalizedIntent,
+        chartIntent: normalizedIntent,
       };
       set(next);
       persistWorkspace(storage, {
@@ -205,8 +200,8 @@ export function createProfileWorkspaceStore(
       });
     },
     consumeChartIntent() {
-      const intent = get().chartNavigationIntent;
-      if (intent) set({ chartNavigationIntent: null });
+      const intent = get().chartIntent;
+      if (intent) set({ chartIntent: null });
       return intent;
     },
   }));
