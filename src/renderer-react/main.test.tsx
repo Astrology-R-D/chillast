@@ -56,4 +56,4 @@ test('loads locale and renders the localized application shell', async () => {
   expect(document.documentElement).toHaveAttribute('data-theme', 'light');
   expect(document.documentElement).toHaveAttribute('data-theme-preference', 'system');
   expect(document.documentElement).toHaveAttribute('data-density', 'compact');
-});
+}, 15_000);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import type { Profile } from '../../api/contracts';
+import type { Gender, Profile } from '../../api/contracts';
 import { createDraft, isProfileDraftDirty, parseTagText, toSaveInput, validateProfileDraft } from './profileForm';
 
 const profile: Profile = {
@@ -41,9 +41,9 @@ describe('parseTagText', () => {
 });
 
 test('collects deterministic Chinese errors without accepting blanks, decimals, or impossible dates', () => {
-  const draft = { ...createDraft(null), gender: 'invalid', year: '2023', month: '02', day: '29', hour: '1.5', minute: '', locationLabel: ' ', latitude: 'Infinity', longitude: '181', tags: 'x'.repeat(33) };
+  const draft = { ...createDraft(null), gender: 'invalid' as Gender, year: '2023', month: '02', day: '29', hour: '1.5', minute: '', locationLabel: ' ', latitude: 'Infinity', longitude: '181', tags: 'x'.repeat(33) };
   expect(validateProfileDraft(draft)).toEqual({
-    nameZh: '至少填写中文或英文名字', gender: '请选择有效性别', day: '出生日期不存在', hour: '小时须为 0 至 23 的整数', minute: '分钟须为 0 至 59 的整数',
+    names: '至少填写中文或英文名字', gender: '请选择有效性别', day: '出生日期不存在', hour: '小时须为 0 至 23 的整数', minute: '分钟须为 0 至 59 的整数',
     locationLabel: '请填写地点名称', latitude: '纬度须为 -90 至 90 的有限数字', longitude: '经度须为 -180 至 180 的有限数字', tags: '最多 20 个标签，每个不超过 32 个字符',
   });
 });

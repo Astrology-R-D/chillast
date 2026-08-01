@@ -124,6 +124,7 @@
     "deletePending": "正在删除并同步档案…"
   },
   "form": {
+    "names": "姓名",
     "nameZh": "中文名字",
     "nameEn": "英文名字",
     "gender": "性别",

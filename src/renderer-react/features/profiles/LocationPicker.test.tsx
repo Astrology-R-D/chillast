@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import locale from '../../../../locale/zh.json';
@@ -19,7 +19,7 @@ function deferred<T>() {
 
 function Wrapper({ initial = { locationLabel: '', latitude: '', longitude: '' }, birthMoment = moment }: { initial?: LocationPickerValue; birthMoment?: BirthMomentValue }) {
   const [value, setValue] = useState(initial);
-  return <I18nProvider dictionary={locale}><LocationPicker value={value} birthMoment={birthMoment} errors={{}} onChange={(patch) => setValue((current) => ({ ...current, ...patch }))} /></I18nProvider>;
+  return <I18nProvider dictionary={locale}><LocationPicker value={value} birthMoment={birthMoment} errors={{}} onChange={setValue} /></I18nProvider>;
 }
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -68,13 +68,36 @@ test('supports keyboard and click selection while manual location fields remain 
   expect(screen.getByRole('textbox', { name: '地点名称' })).toHaveValue('手动地点');
 });
 
-test('resolves canonical historical fields and invalidates old resolution on dependency change', async () => {
-  vi.useFakeTimers();
-  const resolve = vi.spyOn(apiClient, 'resolveLocation').mockResolvedValue({ timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '2000-01-01T19:04:00.000Z' });
+test('emits a complete location value for every manual change', () => {
+  const onChange = vi.fn();
+  render(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '39.9', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={onChange} /></I18nProvider>);
+  fireEvent.change(screen.getByRole('spinbutton', { name: '纬度' }), { target: { value: '40' } });
+  expect(onChange).toHaveBeenCalledWith({ locationLabel: '北京', latitude: '40', longitude: '116.4' });
+});
+
+test('resolves immediately and synchronously excludes a result for old dependencies', async () => {
+  const next = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
+  const resolve = vi.spyOn(apiClient, 'resolveLocation')
+    .mockResolvedValueOnce({ timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '2000-01-01T19:04:00.000Z' })
+    .mockReturnValueOnce(next.promise);
   const { rerender } = render(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '39.9', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>);
-  await act(() => vi.advanceTimersByTimeAsync(350));
-  expect(screen.getByText(/Asia\/Shanghai.*UTC\+08:00/)).toBeInTheDocument();
+  await waitFor(() => expect(resolve).toHaveBeenCalledTimes(1));
+  expect(await screen.findByText('Asia/Shanghai · UTC+08:00')).toBeInTheDocument();
+  expect(screen.queryByText(/2000-01-01T|派生时区/)).not.toBeInTheDocument();
   expect(resolve).toHaveBeenCalledWith({ year: 2000, month: 1, day: 2, hour: 3, minute: 4, latitude: 39.9, longitude: 116.4 });
   rerender(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '40', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>);
   expect(screen.queryByText(/Asia\/Shanghai/)).not.toBeInTheDocument();
+  expect(resolve).toHaveBeenCalledTimes(2);
+  await act(async () => next.resolve({ timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '2000-01-01T19:04:00.000Z' }));
+  expect(screen.getByText('Asia/Shanghai · UTC+08:00')).toBeInTheDocument();
+});
+
+test('ignores a stale immediate resolution promise after dependencies change', async () => {
+  const stale = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
+  const current = deferred<{ timeZone: string; utcOffsetMinutes: number; utcOffsetLabel: string; instantUtc: string }>();
+  vi.spyOn(apiClient, 'resolveLocation').mockReturnValueOnce(stale.promise).mockReturnValueOnce(current.promise);
+  const { rerender } = render(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '39.9', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>);
+  rerender(<I18nProvider dictionary={locale}><LocationPicker value={{ locationLabel: '北京', latitude: '40', longitude: '116.4' }} birthMoment={moment} errors={{}} onChange={() => {}} /></I18nProvider>);
+  await act(async () => stale.resolve({ timeZone: 'Stale/Zone', utcOffsetMinutes: 0, utcOffsetLabel: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' }));
+  expect(screen.queryByText(/Stale\/Zone/)).not.toBeInTheDocument();
 });

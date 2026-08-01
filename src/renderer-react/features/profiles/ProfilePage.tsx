@@ -8,7 +8,7 @@ import { profileWorkspaceStore, type ProfileWorkspaceState } from '../../stores/
 import type { RouteKey } from '../../shell/routes';
 import { ProfileDetail } from './ProfileDetail';
 import { ProfileDirectory } from './ProfileDirectory';
-import { ProfileForm, type ProfileFormRegistration } from './ProfileEditor';
+import { ProfileForm, type DraftRegistration } from './ProfileEditor';
 import { profileQueryKeys, refreshProfiles, useProfiles, useRemoveProfile, useSaveProfile } from './profileQueries';
 import './profiles.css';
 
@@ -17,7 +17,7 @@ interface ProfilePageProps {
   onNavigate(route: RouteKey): void;
   onCreate?: () => void;
   onEdit?: (profile: Profile) => void;
-  onFormRegistration?: (registration: ProfileFormRegistration) => void;
+  onFormRegistration?: (registration: DraftRegistration) => void;
 }
 
 type DuplicatePhase = 'idle' | 'saving' | 'refreshing';

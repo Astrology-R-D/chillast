@@ -7,7 +7,7 @@ export interface ProfileDraft {
   updatedAt?: string;
   nameZh: string;
   nameEn: string;
-  gender: Gender | string;
+  gender: Gender;
   year: string;
   month: string;
   day: string;
@@ -20,7 +20,7 @@ export interface ProfileDraft {
   tags: string;
 }
 
-export type FieldErrors = Partial<Record<keyof ProfileDraft, string>>;
+export type ProfileFieldErrors = Partial<Record<keyof ProfileDraft | 'names' | 'save', string>>;
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -79,9 +79,9 @@ export function daysInMonth(year: number, month: number): number {
   return [4, 6, 9, 11].includes(month) ? 30 : 31;
 }
 
-export function validateProfileDraft(draft: ProfileDraft): FieldErrors {
-  const errors: FieldErrors = {};
-  if (!draft.nameZh.trim() && !draft.nameEn.trim()) errors.nameZh = '至少填写中文或英文名字';
+export function validateProfileDraft(draft: ProfileDraft): ProfileFieldErrors {
+  const errors: ProfileFieldErrors = {};
+  if (!draft.nameZh.trim() && !draft.nameEn.trim()) errors.names = '至少填写中文或英文名字';
   if (!['male', 'female', 'other'].includes(draft.gender)) errors.gender = '请选择有效性别';
   const year = integer(draft.year, 1, 3000);
   const month = integer(draft.month, 1, 12);
@@ -104,7 +104,7 @@ export function toSaveInput(draft: ProfileDraft): ProfileSaveInput {
     ...(draft.id ? { id: draft.id } : {}),
     ...(draft.createdAt ? { createdAt: draft.createdAt } : {}),
     ...(draft.updatedAt ? { updatedAt: draft.updatedAt } : {}),
-    nameZh: draft.nameZh.trim(), nameEn: draft.nameEn.trim(), gender: draft.gender as Gender,
+    nameZh: draft.nameZh.trim(), nameEn: draft.nameEn.trim(), gender: draft.gender,
     notes: draft.notes, tags: parseTagText(draft.tags),
     birthData: {
       year: Number(draft.year), month: Number(draft.month), day: Number(draft.day), hour: Number(draft.hour), minute: Number(draft.minute),

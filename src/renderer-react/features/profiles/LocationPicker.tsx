@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { apiClient } from '../../api/client';
 import type { CitySearchResult, LocationResolution, ResolveLocationInput } from '../../api/contracts';
 import { useI18n } from '../../i18n/I18nProvider';
-import { daysInMonth, type FieldErrors, type ProfileDraft } from './profileForm';
+import { daysInMonth, type ProfileDraft, type ProfileFieldErrors } from './profileForm';
 
 export type LocationPickerValue = Pick<ProfileDraft, 'locationLabel' | 'latitude' | 'longitude'>;
 export type BirthMomentValue = Pick<ProfileDraft, 'year' | 'month' | 'day' | 'hour' | 'minute'>;
@@ -10,8 +10,8 @@ export type BirthMomentValue = Pick<ProfileDraft, 'year' | 'month' | 'day' | 'ho
 export interface LocationPickerProps {
   value: LocationPickerValue;
   birthMoment: BirthMomentValue;
-  errors: Pick<FieldErrors, 'locationLabel' | 'latitude' | 'longitude'>;
-  onChange(patch: Partial<LocationPickerValue>): void;
+  errors: Pick<ProfileFieldErrors, 'locationLabel' | 'latitude' | 'longitude'>;
+  onChange(value: LocationPickerValue): void;
   disabled?: boolean;
 }
 
@@ -37,9 +37,8 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
   const [active, setActive] = useState(-1);
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [searchError, setSearchError] = useState('');
-  const [resolution, setResolution] = useState<LocationResolution | null>(null);
-  const [resolveState, setResolveState] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [resolveError, setResolveError] = useState('');
+  const [resolution, setResolution] = useState<{ key: string; value: LocationResolution } | null>(null);
+  const [resolveStatus, setResolveStatus] = useState<{ key: string; state: 'loading' | 'error'; error?: string } | null>(null);
   const [retry, setRetry] = useState(0);
   const searchSequence = useRef(0);
   const resolveSequence = useRef(0);
@@ -69,20 +68,18 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
   const dependency = resolveInput ? JSON.stringify(resolveInput) : '';
   useEffect(() => {
     const sequence = ++resolveSequence.current;
-    setResolution(null); setResolveError('');
-    if (!resolveInput) { setResolveState('idle'); return undefined; }
-    const timer = window.setTimeout(async () => {
-      setResolveState('loading');
+    if (!resolveInput) return;
+    setResolveStatus({ key: dependency, state: 'loading' });
+    void (async () => {
       try {
         const next = await apiClient.resolveLocation(resolveInput);
         if (sequence !== resolveSequence.current) return;
-        setResolution(next); setResolveState('idle');
+        setResolution({ key: dependency, value: next }); setResolveStatus(null);
       } catch (error) {
         if (sequence !== resolveSequence.current) return;
-        setResolveState('error'); setResolveError(error instanceof Error ? error.message : String(error));
+        setResolveStatus({ key: dependency, state: 'error', error: error instanceof Error ? error.message : String(error) });
       }
-    }, 350);
-    return () => window.clearTimeout(timer);
+    })();
   }, [dependency, retry]);
 
   const changeQuery = (next: string) => {
@@ -120,20 +117,20 @@ export function LocationPicker({ value, birthMoment, errors, onChange, disabled 
     </div>
     <div className="location-picker__manual">
       <div className="profile-field"><label htmlFor={`${listId}-locationLabel`}>{t('form.locationLabel')}</label>
-        <input id={`${listId}-locationLabel`} name="locationLabel" data-profile-control value={value.locationLabel} aria-invalid={Boolean(errors.locationLabel)} aria-describedby={errors.locationLabel ? `${listId}-locationLabel-error` : undefined} onChange={(event) => onChange({ locationLabel: event.target.value })} />
+        <input id={`${listId}-locationLabel`} name="locationLabel" data-profile-control value={value.locationLabel} aria-invalid={Boolean(errors.locationLabel)} aria-describedby={errors.locationLabel ? `${listId}-locationLabel-error` : undefined} onChange={(event) => onChange({ ...value, locationLabel: event.target.value })} />
         {errors.locationLabel && <span id={`${listId}-locationLabel-error`} className="profile-field__error">{errors.locationLabel}</span>}
       </div>
       <div className="location-picker__coordinates">
         {([['latitude', 'form.latitude'], ['longitude', 'form.longitude']] as const).map(([field, label]) => <div className="profile-field" key={field}><label htmlFor={`${listId}-${field}`}>{t(label)}</label>
-          <input id={`${listId}-${field}`} name={field} data-profile-control type="number" step="any" value={value[field]} aria-invalid={Boolean(errors[field])} aria-describedby={errors[field] ? `${listId}-${field}-error` : undefined} onChange={(event) => onChange({ [field]: event.target.value })} />
+          <input id={`${listId}-${field}`} name={field} data-profile-control type="number" step="any" value={value[field]} aria-invalid={Boolean(errors[field])} aria-describedby={errors[field] ? `${listId}-${field}-error` : undefined} onChange={(event) => onChange({ ...value, [field]: event.target.value })} />
           {errors[field] && <span id={`${listId}-${field}-error`} className="profile-field__error">{errors[field]}</span>}
         </div>)}
       </div>
     </div>
     <div className="location-picker__timezone" aria-live="polite">
-      {resolveState === 'loading' && <span role="status">{t('form.timezoneResolving')}</span>}
-      {resolution && <span>{t('form.timezoneDerived', { zone: resolution.timeZone, offset: resolution.utcOffsetLabel, instant: resolution.instantUtc })}</span>}
-      {resolveState === 'error' && <span role="alert">{t('form.timezoneFailed', { message: resolveError })} <button type="button" disabled={disabled} onClick={() => setRetry((current) => current + 1)}>{t('form.retryTimezone')}</button></span>}
+      {resolveStatus?.key === dependency && resolveStatus.state === 'loading' && <span role="status">{t('form.timezoneResolving')}</span>}
+      {resolution?.key === dependency && <span>{resolution.value.timeZone} · {resolution.value.utcOffsetLabel}</span>}
+      {resolveStatus?.key === dependency && resolveStatus.state === 'error' && <span role="alert">{t('form.timezoneFailed', { message: resolveStatus.error ?? '' })} <button type="button" disabled={disabled} onClick={() => setRetry((current) => current + 1)}>{t('form.retryTimezone')}</button></span>}
     </div>
   </fieldset>;
 }

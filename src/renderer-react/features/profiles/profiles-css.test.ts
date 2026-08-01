@@ -39,4 +39,6 @@ test('uses token-sized segmented steppers and a two-column coordinate row', () =
   expect(css).toMatch(/\.profile-segment__steppers button\s*\{[^}]*height:\s*calc\(var\(--control-height\)\s*\/\s*2\)/s);
   expect(css).toMatch(/\.profile-segment__control\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--control-height\)/s);
   expect(css).toMatch(/\.location-picker__coordinates\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  const mobile = css.match(/@media \(max-width:\s*760px\)\s*\{([\s\S]*)\}\s*$/)?.[1] ?? '';
+  expect(mobile).toMatch(/\.location-picker__coordinates\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
 });
