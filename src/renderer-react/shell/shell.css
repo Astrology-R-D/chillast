@@ -78,8 +78,33 @@
 }
 
 .shell--narrow {
-  display: grid;
+  display: grid !important;
   grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.shell--narrow .shell__navigation-panel {
+  grid-column: 1;
+  width: 56px;
+  min-width: 56px;
+  flex: 0 0 56px !important;
+}
+
+.shell--narrow .shell__main-panel {
+  grid-column: 2;
+  min-width: 0;
+  flex: 1 1 auto !important;
+}
+
+.shell--narrow .shell__ai-panel {
+  position: fixed !important;
+  width: 0 !important;
+  height: 0 !important;
+  flex: 0 0 0 !important;
+  overflow: visible !important;
+}
+
+.shell--narrow .shell__resize-handle {
+  display: none !important;
 }
 
 .shell__navigation--rail {
@@ -110,6 +135,14 @@
   min-height: 0;
   overflow: auto;
   overflow-wrap: anywhere;
+}
+
+.shell__main-content {
+  height: 100%;
+}
+
+.shell__main--narrow .shell__main-content {
+  height: auto;
 }
 
 .shell__icon-button {

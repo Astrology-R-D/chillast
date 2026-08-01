@@ -17,7 +17,7 @@ export interface PanelLayoutProps {
 }
 
 const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'a[href], button, input, select, textarea, [contenteditable="true"], [tabindex]';
 
 export const PANEL_AUTO_SAVE_ID = 'chillast.shell.desktop';
 
@@ -76,28 +76,60 @@ export function sanitizePersistedPanelLayout(layout: unknown): number[] | null {
 
 function sanitizeStoredPanelState(serialized: string): string | null {
   try {
-    const state = JSON.parse(serialized) as Record<string, { layout?: unknown }>;
+    const state = JSON.parse(serialized) as Record<string, unknown>;
     if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
 
-    for (const value of Object.values(state)) {
-      if (!value || typeof value !== 'object') continue;
-      const layout = sanitizePersistedPanelLayout(value.layout);
-      if (!layout) return null;
-      value.layout = layout;
+    const sanitized: Record<string, { layout: number[]; expandToSizes: Record<string, number> }> = {};
+    for (const [panelKey, value] of Object.entries(state)) {
+      if (!isSafeStorageKey(panelKey) || !value || typeof value !== 'object' || Array.isArray(value)) {
+        continue;
+      }
+      const entry = value as { layout?: unknown; expandToSizes?: unknown };
+      const layout = sanitizePersistedPanelLayout(entry.layout);
+      const expandToSizes = entry.expandToSizes;
+      if (!layout || !expandToSizes || typeof expandToSizes !== 'object' || Array.isArray(expandToSizes)) {
+        continue;
+      }
+      const expandEntries = Object.entries(expandToSizes);
+      if (
+        expandEntries.some(
+          ([key, size]) =>
+            !isSafeStorageKey(key) ||
+            typeof size !== 'number' ||
+            !Number.isFinite(size) ||
+            size < 0 ||
+            size > 100,
+        )
+      ) {
+        continue;
+      }
+      sanitized[panelKey] = { layout, expandToSizes: Object.fromEntries(expandEntries) };
     }
-    return JSON.stringify(state);
+    return JSON.stringify(sanitized);
   } catch {
     return null;
   }
 }
 
+function isSafeStorageKey(key: string): boolean {
+  return Boolean(key.trim()) && key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
+}
+
 export const PANEL_STORAGE = Object.freeze({
   getItem(name: string): string | null {
-    const stored = localStorage.getItem(name);
-    return name === PANEL_STORAGE_KEY && stored ? sanitizeStoredPanelState(stored) : stored;
+    try {
+      const stored = localStorage.getItem(name);
+      return name === PANEL_STORAGE_KEY && stored ? sanitizeStoredPanelState(stored) : stored;
+    } catch {
+      return null;
+    }
   },
   setItem(name: string, value: string): void {
-    localStorage.setItem(name, value);
+    try {
+      localStorage.setItem(name, value);
+    } catch {
+      // Persistence is optional; resizing must remain usable when storage is unavailable.
+    }
   },
 });
 
@@ -117,6 +149,7 @@ function redistributeAcrossSide(
   }
 }
 
+// Contract oracle for browser-level react-resizable-panels behavior; not used by PanelLayout runtime.
 export function resizePanelSizesByKeyboard(
   layout: readonly number[],
   handleIndex: number,
@@ -205,12 +238,13 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
   const openerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
-  const desktopAiRef = useRef<HTMLElement>(null);
+  const restoreOpenerOnCloseRef = useRef(true);
 
   useLayoutEffect(() => {
     if (!isNarrow && isAiOpen) {
+      restoreOpenerOnCloseRef.current = false;
       setIsAiOpen(false);
-      desktopAiRef.current?.focus();
+      dialogRef.current?.focus();
     }
   }, [isAiOpen, isNarrow]);
 
@@ -219,21 +253,48 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
 
     closeRef.current?.focus();
     const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setIsAiOpen(false);
+      if (event.key === 'Escape' && !event.defaultPrevented) setIsAiOpen(false);
+    };
+    const handleFocusIn = (event: FocusEvent) => {
+      if (event.target instanceof Node && !dialogRef.current?.contains(event.target)) {
+        closeRef.current?.focus();
+      }
     };
     document.addEventListener('keydown', handleEscape);
+    document.addEventListener('focusin', handleFocusIn);
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
-      openerRef.current?.focus();
+      document.removeEventListener('focusin', handleFocusIn);
+      if (restoreOpenerOnCloseRef.current) openerRef.current?.focus();
+      restoreOpenerOnCloseRef.current = true;
     };
   }, [isAiOpen]);
+
+  const isHiddenFromFocus = (element: HTMLElement) => {
+    if (element.tabIndex < 0 || element.matches(':disabled, [aria-disabled="true"]')) return true;
+    let current: HTMLElement | null = element;
+    while (current && current !== dialogRef.current?.parentElement) {
+      if (
+        current.hidden ||
+        current.hasAttribute('inert') ||
+        current.getAttribute('aria-hidden') === 'true' ||
+        current.matches('fieldset[disabled] *')
+      ) {
+        return true;
+      }
+      const style = window.getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden') return true;
+      current = current.parentElement;
+    }
+    return false;
+  };
 
   const trapFocus = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Tab') return;
     const focusable = Array.from(
       dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
-    );
+    ).filter((element) => !isHiddenFromFocus(element));
     if (focusable.length === 0) {
       event.preventDefault();
       dialogRef.current?.focus();
@@ -251,14 +312,53 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
     }
   };
 
-  if (isNarrow) {
-    return (
-      <div className="shell shell--narrow">
-        <nav className="shell__navigation shell__navigation--rail" aria-label="主导航">
+  return (
+    <PanelGroup
+      className={`shell ${isNarrow ? 'shell--narrow' : 'shell--desktop'}${isAiOpen ? ' shell--ai-open' : ''}`}
+      direction="horizontal"
+      autoSaveId={PANEL_AUTO_SAVE_ID}
+      keyboardResizeBy={KEYBOARD_RESIZE_BY}
+      storage={PANEL_STORAGE}
+    >
+      <Panel
+        className="shell__panel shell__navigation-panel"
+        id="shell-navigation-panel"
+        order={1}
+        defaultSize={PANEL_SIZES.navigation.defaultSize}
+        minSize={PANEL_SIZES.navigation.minSize}
+        maxSize={PANEL_SIZES.navigation.maxSize}
+        collapsible
+        collapsedSize={PANEL_SIZES.navigation.collapsedSize}
+      >
+        <nav
+          className={`shell__navigation${isNarrow ? ' shell__navigation--rail' : ''}`}
+          aria-label="主导航"
+          aria-hidden={isNarrow && isAiOpen ? true : undefined}
+          inert={isNarrow && isAiOpen}
+        >
           {navigation}
         </nav>
-        <main className="shell__main shell__main--narrow" aria-label="工作区">
-          <div className="shell__main-toolbar">
+      </Panel>
+      <PanelResizeHandle
+        className="shell__resize-handle"
+        aria-label="调整导航栏宽度"
+        disabled={isNarrow}
+        hidden={isNarrow}
+      />
+      <Panel
+        className="shell__panel shell__main-panel"
+        id="shell-main-panel"
+        order={2}
+        defaultSize={PANEL_SIZES.main.defaultSize}
+        minSize={PANEL_SIZES.main.minSize}
+      >
+        <main
+          className={`shell__main${isNarrow ? ' shell__main--narrow' : ''}`}
+          aria-label="工作区"
+          aria-hidden={isNarrow && isAiOpen ? true : undefined}
+          inert={isNarrow && isAiOpen}
+        >
+          <div className="shell__main-toolbar" hidden={!isNarrow}>
             <button
               ref={openerRef}
               className="shell__icon-button"
@@ -272,78 +372,15 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
           </div>
           <div className="shell__main-content">{children}</div>
         </main>
-        {isAiOpen ? (
-          <>
-            <div className="shell__scrim" aria-hidden="true" onClick={() => setIsAiOpen(false)} />
-            <aside
-              ref={dialogRef}
-              className="shell__ai-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-label="AI 助手"
-              tabIndex={-1}
-              onKeyDown={trapFocus}
-            >
-              <div className="shell__ai-toolbar">
-                <button
-                  ref={closeRef}
-                  className="shell__icon-button"
-                  type="button"
-                  aria-label="关闭 AI 助手"
-                  title="关闭 AI 助手"
-                  onClick={() => setIsAiOpen(false)}
-                >
-                  <X aria-hidden="true" size={18} />
-                </button>
-              </div>
-              <div className="shell__ai-content">{ai}</div>
-            </aside>
-          </>
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <PanelGroup
-      className="shell shell--desktop"
-      direction="horizontal"
-      autoSaveId={PANEL_AUTO_SAVE_ID}
-      keyboardResizeBy={KEYBOARD_RESIZE_BY}
-      storage={PANEL_STORAGE}
-    >
-      <Panel
-        id="shell-navigation-panel"
-        order={1}
-        defaultSize={PANEL_SIZES.navigation.defaultSize}
-        minSize={PANEL_SIZES.navigation.minSize}
-        maxSize={PANEL_SIZES.navigation.maxSize}
-        collapsible
-        collapsedSize={PANEL_SIZES.navigation.collapsedSize}
-      >
-        <nav className="shell__navigation" aria-label="主导航">
-          {navigation}
-        </nav>
-      </Panel>
-      <PanelResizeHandle
-        className="shell__resize-handle"
-        aria-label="调整导航栏宽度"
-      />
-      <Panel
-        id="shell-main-panel"
-        order={2}
-        defaultSize={PANEL_SIZES.main.defaultSize}
-        minSize={PANEL_SIZES.main.minSize}
-      >
-        <main className="shell__main" aria-label="工作区">
-          {children}
-        </main>
       </Panel>
       <PanelResizeHandle
         className="shell__resize-handle"
         aria-label="调整 AI 助手宽度"
+        disabled={isNarrow}
+        hidden={isNarrow}
       />
       <Panel
+        className="shell__panel shell__ai-panel"
         id="shell-ai-panel"
         order={3}
         defaultSize={PANEL_SIZES.ai.defaultSize}
@@ -352,10 +389,39 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
         collapsible
         collapsedSize={PANEL_SIZES.ai.collapsedSize}
       >
-        <aside ref={desktopAiRef} className="shell__ai" aria-label="AI 助手" tabIndex={-1}>
-          {ai}
+        <aside
+          ref={dialogRef}
+          className={`shell__ai${isNarrow ? ' shell__ai-overlay' : ''}`}
+          role={isNarrow ? 'dialog' : undefined}
+          aria-modal={isNarrow && isAiOpen ? true : undefined}
+          aria-label="AI 助手"
+          aria-hidden={isNarrow && !isAiOpen ? true : undefined}
+          inert={isNarrow && !isAiOpen}
+          hidden={isNarrow && !isAiOpen}
+          tabIndex={-1}
+          onKeyDown={trapFocus}
+        >
+          <div className="shell__ai-toolbar" hidden={!isNarrow}>
+            <button
+              ref={closeRef}
+              className="shell__icon-button"
+              type="button"
+              aria-label="关闭 AI 助手"
+              title="关闭 AI 助手"
+              onClick={() => setIsAiOpen(false)}
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+          </div>
+          <div className="shell__ai-content">{ai}</div>
         </aside>
       </Panel>
+      <div
+        className="shell__scrim"
+        aria-hidden="true"
+        hidden={!isNarrow || !isAiOpen}
+        onClick={() => setIsAiOpen(false)}
+      />
     </PanelGroup>
   );
 }

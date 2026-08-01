@@ -1,5 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect, useState } from 'react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { createMatchMediaController } from '../test/matchMedia';
 import {
@@ -18,6 +19,16 @@ const content = {
 };
 
 beforeEach(() => localStorage.clear());
+
+function StatefulProbe({ label, onMount }: { label: string; onMount: () => void }) {
+  const [count, setCount] = useState(0);
+  useEffect(onMount, [onMount]);
+  return (
+    <button type="button" onClick={() => setCount((value) => value + 1)}>
+      {label}: {count}
+    </button>
+  );
+}
 
 test('renders navigation, main, AI, and two keyboard-accessible separators on desktop', async () => {
   const user = userEvent.setup();
@@ -232,6 +243,118 @@ test('traps focus inside the narrow AI dialog', async () => {
   expect(close).toHaveFocus();
 });
 
+test('isolates the background and skips hidden or inert controls when trapping focus', async () => {
+  const media = createMatchMediaController(true);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  const user = userEvent.setup();
+  render(
+    <PanelLayout
+      navigation={<button type="button">背景导航操作</button>}
+      ai={
+        <>
+          <button type="button" style={{ display: 'none' }}>CSS 隐藏操作</button>
+          <div inert><button type="button">惰性操作</button></div>
+          <button type="button">可见首项</button>
+          <button type="button">可见末项</button>
+          <button type="button" hidden>隐藏操作</button>
+        </>
+      }
+    >
+      <button type="button">背景主操作</button>
+    </PanelLayout>,
+  );
+
+  const closedAi = document.querySelector('.shell__ai');
+  expect(closedAi).toHaveAttribute('inert');
+  expect(closedAi).toHaveAttribute('hidden');
+  expect(screen.queryByRole('button', { name: '可见首项' })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '打开 AI 助手' }));
+  const dialog = screen.getByRole('dialog', { name: 'AI 助手' });
+  const navigation = document.querySelector('.shell__navigation');
+  const main = document.querySelector('.shell__main');
+  expect(navigation).toHaveAttribute('inert');
+  expect(navigation).toHaveAttribute('aria-hidden', 'true');
+  expect(main).toHaveAttribute('inert');
+  expect(main).toHaveAttribute('aria-hidden', 'true');
+
+  const close = within(dialog).getByRole('button', { name: '关闭 AI 助手' });
+  const last = within(dialog).getByRole('button', { name: '可见末项' });
+  const backgroundMainAction = screen.getByRole('button', { name: '背景主操作', hidden: true });
+  backgroundMainAction.focus();
+  expect(close).toHaveFocus();
+  close.focus();
+  await user.keyboard('{Shift>}{Tab}{/Shift}');
+  expect(last).toHaveFocus();
+  await user.tab();
+  expect(close).toHaveFocus();
+  expect(screen.getByRole('button', { name: '背景导航操作', hidden: true })).not.toHaveFocus();
+  expect(backgroundMainAction).not.toHaveFocus();
+});
+
+test('keeps child state and mount identity across breakpoints and narrow AI toggles', async () => {
+  const media = createMatchMediaController(false);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  const user = userEvent.setup();
+  const mounts = { navigation: 0, main: 0, ai: 0 };
+  const onNavigationMount = () => { mounts.navigation += 1; };
+  const onMainMount = () => { mounts.main += 1; };
+  const onAiMount = () => { mounts.ai += 1; };
+  render(
+    <PanelLayout
+      navigation={<StatefulProbe label="导航状态" onMount={onNavigationMount} />}
+      ai={<StatefulProbe label="AI 状态" onMount={onAiMount} />}
+    >
+      <StatefulProbe label="主状态" onMount={onMainMount} />
+    </PanelLayout>,
+  );
+
+  await user.click(screen.getByRole('button', { name: '导航状态: 0' }));
+  await user.click(screen.getByRole('button', { name: '主状态: 0' }));
+  await user.click(screen.getByRole('button', { name: 'AI 状态: 0' }));
+  act(() => media.setMatches(true));
+
+  expect(screen.getByRole('button', { name: '导航状态: 1' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '主状态: 1' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'AI 状态: 1' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '打开 AI 助手' }));
+  expect(screen.getByRole('button', { name: 'AI 状态: 1' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '关闭 AI 助手' }));
+  await user.click(screen.getByRole('button', { name: '打开 AI 助手' }));
+  expect(screen.getByRole('button', { name: 'AI 状态: 1' })).toBeInTheDocument();
+
+  act(() => media.setMatches(false));
+  expect(screen.getByRole('button', { name: '导航状态: 1' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '主状态: 1' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'AI 状态: 1' })).toBeInTheDocument();
+  expect(mounts).toEqual({ navigation: 1, main: 1, ai: 1 });
+});
+
+test('does not close the narrow AI dialog when a child consumes Escape', async () => {
+  const media = createMatchMediaController(true);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  const user = userEvent.setup();
+  render(
+    <PanelLayout
+      {...content}
+      ai={
+        <button type="button" onKeyDown={(event) => {
+          if (event.key === 'Escape') event.preventDefault();
+        }}>
+          消费 Escape
+        </button>
+      }
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: '打开 AI 助手' }));
+  const consumer = screen.getByRole('button', { name: '消费 Escape' });
+  consumer.focus();
+  await user.keyboard('{Escape}');
+  expect(screen.getByRole('dialog', { name: 'AI 助手' })).toBeInTheDocument();
+  expect(consumer).toHaveFocus();
+});
+
 test('switching from desktop to narrow does not open a stale AI overlay', () => {
   const media = createMatchMediaController(false);
   vi.stubGlobal('matchMedia', media.matchMedia);
@@ -257,7 +380,7 @@ test('switching an open narrow AI dialog to desktop focuses the desktop AI panel
 
   const desktopAi = screen.getByRole('complementary', { name: 'AI 助手' });
   expect(screen.queryByRole('dialog', { name: 'AI 助手' })).not.toBeInTheDocument();
-  expect(container.querySelector('.shell__scrim')).not.toBeInTheDocument();
+  expect(container.querySelector('.shell__scrim')).toHaveAttribute('hidden');
   expect(desktopAi).toHaveFocus();
 
   act(() => media.setMatches(true));
@@ -286,4 +409,39 @@ test('clamps stale persisted sizes and ignores the legacy AI width key', () => {
     'shell-ai-panel,shell-main-panel,shell-navigation-panel': { layout: [22, 56, 22] },
   });
   expect(localStorage.getItem('ai.sidebarWidth')).toBe('1');
+});
+
+test('removes malformed persisted entries and preserves valid schema entries', () => {
+  const key = `react-resizable-panels:${PANEL_AUTO_SAVE_ID}`;
+  localStorage.setItem(key, JSON.stringify({
+    valid: { layout: [18, 55, 27], expandToSizes: { 'shell-ai-panel': 27 } },
+    primitive: 'bad',
+    missingLayout: { expandToSizes: {} },
+    missingExpand: { layout: [18, 55, 27] },
+    nullExpand: { layout: [18, 55, 27], expandToSizes: null },
+    arrayExpand: { layout: [18, 55, 27], expandToSizes: [] },
+    badExpandKey: { layout: [18, 55, 27], expandToSizes: { '': 27 } },
+    reservedExpandKey: { layout: [18, 55, 27], expandToSizes: { ['__proto__']: 27 } },
+    badExpandSize: { layout: [18, 55, 27], expandToSizes: { ai: 'wide' } },
+    negativeExpandSize: { layout: [18, 55, 27], expandToSizes: { ai: -1 } },
+    oversizedExpandSize: { layout: [18, 55, 27], expandToSizes: { ai: 101 } },
+    infiniteExpandSize: { layout: [18, 55, 27], expandToSizes: { ai: Number.POSITIVE_INFINITY } },
+  }));
+
+  expect(JSON.parse(PANEL_STORAGE.getItem(key)!)).toEqual({
+    valid: { layout: [18, 55, 27], expandToSizes: { 'shell-ai-panel': 27 } },
+  });
+
+  localStorage.setItem(key, JSON.stringify({ panelKey: 'bad' }));
+  expect(PANEL_STORAGE.getItem(key)).toBe('{}');
+});
+
+test('contains storage read and write failures', () => {
+  vi.stubGlobal('localStorage', {
+    getItem: vi.fn(() => { throw new Error('read failed'); }),
+    setItem: vi.fn(() => { throw new Error('write failed'); }),
+  });
+
+  expect(PANEL_STORAGE.getItem(`react-resizable-panels:${PANEL_AUTO_SAVE_ID}`)).toBeNull();
+  expect(() => PANEL_STORAGE.setItem('key', 'value')).not.toThrow();
 });
