@@ -1,8 +1,13 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { expect, test } from 'vitest';
+import { build as viteBuild } from 'vite';
 
 const repositoryRoot = process.cwd();
+
+interface BuildOutput {
+  output: Array<{ type: string; code?: string }>;
+}
 
 test('restricts renderer connections to self and localhost Vite HMR', () => {
   const html = readFileSync(resolve(repositoryRoot, 'src/renderer-react/index.html'), 'utf8');
@@ -24,6 +29,59 @@ test('keeps TypeScript build information under the ignored dist directory', () =
   expect(tsconfig.include).toContain('vite.config.mts');
   expect(existsSync(resolve(repositoryRoot, 'vite.config.mts'))).toBe(true);
   expect(existsSync(resolve(repositoryRoot, 'vite.config.ts'))).toBe(false);
+});
+
+test('bundles the shared CommonJS Unicode fold implementation for the browser', async () => {
+  const output = await viteBuild({
+    configFile: false,
+    logLevel: 'silent',
+    build: {
+      write: false,
+      lib: {
+        entry: resolve(repositoryRoot, 'src/renderer-react/features/profiles/directory.ts'),
+        formats: ['es'],
+      },
+    },
+  }) as BuildOutput | BuildOutput[];
+  const outputs = Array.isArray(output) ? output : [output];
+  const code = outputs
+    .flatMap((item) => item.output)
+    .find((item) => item.type === 'chunk')?.code;
+
+  expect(code).not.toMatch(/\brequire\s*\(|\bprocess\b|\bBuffer\b/);
+
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(code ?? '').toString('base64')}`;
+  const bundled = await import(/* @vite-ignore */ moduleUrl) as {
+    selectDirectoryProfiles: (
+      profiles: unknown[],
+      query: { search: string; recent: string; sort: string },
+      recents: Record<string, number>,
+      now: number,
+    ) => Array<{ id: string }>;
+  };
+  const profile = {
+    id: 'folded',
+    nameZh: '',
+    nameEn: 'Straße',
+    birthData: {
+      year: 2000,
+      month: 1,
+      day: 1,
+      hour: 0,
+      minute: 0,
+      location: { label: '', latitude: 0, longitude: 0 },
+    },
+    notes: '',
+    tags: [],
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  expect(bundled.selectDirectoryProfiles(
+    [profile],
+    { search: 'STRASSE', recent: 'all', sort: 'name-asc' },
+    {},
+    Date.parse('2026-08-02T12:00:00.000Z'),
+  ).map(({ id }) => id)).toEqual(['folded']);
 });
 
 test('packages only legacy-referenced upright fonts within the payload budgets', () => {

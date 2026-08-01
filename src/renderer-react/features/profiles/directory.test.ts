@@ -67,6 +67,26 @@ describe('selectDirectoryProfiles search', () => {
     expect(ids(selectDirectoryProfiles([bilingual], query({ search }), {}, NOW))).toEqual(['bilingual']);
   });
 
+  test.each([
+    ['STRASSE', 'Straße'],
+    ['ΟΣ', 'ος'],
+    ['ΟΣ', 'οσ'],
+    ['i\u0307', 'İ'],
+    ['fullwidth', 'ＦＵＬＬＷＩＤＴＨ'],
+  ])('applies Unicode 17 default folding to %s and %s', (search, nameEn) => {
+    const candidate = profile('folded', { nameZh: '', nameEn });
+    expect(ids(selectDirectoryProfiles([candidate], query({ search }), {}, NOW))).toEqual(['folded']);
+  });
+
+  test('keeps dotted capital I distinct from plain I under default folding', () => {
+    const profiles = [
+      profile('dotted', { nameZh: '', nameEn: 'İ' }),
+      profile('plain', { nameZh: '', nameEn: 'I' }),
+    ];
+
+    expect(ids(selectDirectoryProfiles(profiles, query({ search: 'i\u0307' }), {}, NOW))).toEqual(['dotted']);
+  });
+
   test('requires every token while allowing tokens to match across fields', () => {
     expect(ids(selectDirectoryProfiles([bilingual], query({ search: ' Alice   北京 事业 consultation ' }), {}, NOW))).toEqual(['bilingual']);
     expect(selectDirectoryProfiles([bilingual], query({ search: 'Alice missing' }), {}, NOW)).toEqual([]);
@@ -143,34 +163,51 @@ describe('selectDirectoryProfiles recent filters', () => {
 });
 
 describe('selectDirectoryProfiles sorting', () => {
-  test('sorts updated timestamps descending with future, malformed, and missing values last', () => {
+  test('sorts canonical zoned timestamps descending with exact-now and offset ties', () => {
     const profiles = [
       profile('invalid', { updatedAt: 'not-a-date' }),
       profile('older', { updatedAt: '2026-06-01T00:00:00.000Z' }),
       profile('future', { updatedAt: '2026-08-03T00:00:00.000Z' }),
       profile('invalid-calendar', { updatedAt: '2026-02-30T00:00:00.000Z' }),
-      profile('newer-b', { updatedAt: '2026-08-01T00:00:00.000Z' }),
-      profile('newer-a', { updatedAt: '2026-08-01T00:00:00.000Z' }),
+      profile('now-utc', { updatedAt: '2026-08-02T12:00:00.000Z' }),
+      profile('now-offset', { updatedAt: '2026-08-02T20:00:00+08:00' }),
       profile('missing', { updatedAt: undefined } as unknown as Partial<Profile>),
     ];
 
     expect(ids(selectDirectoryProfiles(profiles, query({ sort: 'updated-desc' }), {}, NOW))).toEqual([
-      'newer-a', 'newer-b', 'older', 'future', 'invalid', 'invalid-calendar', 'missing',
+      'now-offset', 'now-utc', 'older', 'future', 'invalid', 'invalid-calendar', 'missing',
     ]);
   });
 
-  test('sorts preferred and fallback names with a fixed Chinese-aware collator and ID ties', () => {
+  test('rejects non-canonical, invalid-clock, and invalid-offset updated timestamps', () => {
+    const profiles = [
+      profile('valid', { updatedAt: '2026-07-01T01:02:03Z' }),
+      profile('date-only', { updatedAt: '2026-07-01' }),
+      profile('no-seconds', { updatedAt: '2026-07-01T01:02Z' }),
+      profile('hour-24', { updatedAt: '2026-07-01T24:00:00Z' }),
+      profile('second-60', { updatedAt: '2026-07-01T01:02:60Z' }),
+      profile('offset-hour', { updatedAt: '2026-07-01T01:02:03+24:00' }),
+      profile('offset-minute', { updatedAt: '2026-07-01T01:02:03+01:60' }),
+    ];
+
+    expect(ids(selectDirectoryProfiles(profiles, query({ sort: 'updated-desc' }), {}, NOW))).toEqual([
+      'valid', 'date-only', 'hour-24', 'no-seconds', 'offset-hour', 'offset-minute', 'second-60',
+    ]);
+  });
+
+  test('sorts names by NFKC default-folded lexical keys and resolves equal keys by ID', () => {
     const profiles = [
       profile('empty', { nameZh: '', nameEn: '' }),
-      profile('li-b', { nameZh: '李雷', nameEn: 'Zulu' }),
-      profile('wang', { nameZh: '王芳', nameEn: 'Alpha' }),
+      profile('strasse-b', { nameZh: '', nameEn: 'Straße' }),
+      profile('strasse-a', { nameZh: '', nameEn: 'STRASSE' }),
+      profile('width', { nameZh: '', nameEn: 'Ａlpha' }),
+      profile('wang', { nameZh: '王芳', nameEn: 'Zulu' }),
       profile('fallback', { nameZh: '', nameEn: 'Alice' }),
-      profile('li-a', { nameZh: '李雷', nameEn: 'Echo' }),
       profile('missing', { nameZh: undefined, nameEn: null } as unknown as Partial<Profile>),
     ];
 
     expect(ids(selectDirectoryProfiles(profiles, query({ sort: 'name-asc' }), {}, NOW))).toEqual([
-      'empty', 'missing', 'li-a', 'li-b', 'wang', 'fallback',
+      'empty', 'missing', 'fallback', 'width', 'strasse-a', 'strasse-b', 'wang',
     ]);
   });
 
@@ -181,24 +218,33 @@ describe('selectDirectoryProfiles sorting', () => {
       profile('tie-b'),
       profile('hour', { birthData: { ...profile('x').birthData, hour: 2 } }),
       profile('day', { birthData: { ...profile('x').birthData, day: 1 } }),
-      profile('month', { birthData: { ...profile('x').birthData, month: 0 } }),
+      profile('month', { birthData: { ...profile('x').birthData, month: 2 } }),
       profile('tie-a'),
     ];
 
     expect(ids(selectDirectoryProfiles(profiles, query({ sort: 'birth-asc' }), {}, NOW))).toEqual([
-      'year', 'month', 'day', 'hour', 'tie-a', 'tie-b', 'minute',
+      'year', 'day', 'hour', 'tie-a', 'tie-b', 'minute', 'month',
     ]);
   });
 
-  test('puts malformed and missing birth data last with deterministic ID ties', () => {
+  test('accepts birth domain boundaries and puts malformed values last by ID', () => {
     const profiles = [
-      profile('nan', { birthData: { ...profile('x').birthData, year: Number.NaN } }),
-      profile('valid'),
+      profile('max', { birthData: { ...profile('x').birthData, year: 3000, month: 12, day: 31, hour: 23, minute: 59 } }),
+      profile('leap', { birthData: { ...profile('x').birthData, year: 2000, month: 2, day: 29, hour: 12, minute: 30 } }),
+      profile('min', { birthData: { ...profile('x').birthData, year: 1, month: 1, day: 1, hour: 0, minute: 0 } }),
+      profile('day', { birthData: { ...profile('x').birthData, month: 2, day: 30 } }),
+      profile('float', { birthData: { ...profile('x').birthData, minute: 1.5 } }),
+      profile('hour', { birthData: { ...profile('x').birthData, hour: 24 } }),
+      profile('minute', { birthData: { ...profile('x').birthData, minute: 60 } }),
       profile('missing', { birthData: undefined } as unknown as Partial<Profile>),
+      profile('month', { birthData: { ...profile('x').birthData, month: 0 } }),
+      profile('nan', { birthData: { ...profile('x').birthData, year: Number.NaN } }),
+      profile('year-high', { birthData: { ...profile('x').birthData, year: 3001 } }),
+      profile('year-low', { birthData: { ...profile('x').birthData, year: 0 } }),
     ];
 
     expect(ids(selectDirectoryProfiles(profiles, query({ sort: 'birth-asc' }), {}, NOW))).toEqual([
-      'valid', 'missing', 'nan',
+      'min', 'leap', 'max', 'day', 'float', 'hour', 'minute', 'missing', 'month', 'nan', 'year-high', 'year-low',
     ]);
   });
 
