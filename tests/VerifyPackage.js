@@ -41,6 +41,7 @@ for (const required of [
   'src/preload/Preload.js',
   'src/core/util/UnicodeCaseFold.js',
   'src/core/util/UnicodeCaseFoldData.js',
+  'licenses/UNICODE-LICENSE-3.0.txt',
   'dist/renderer-react/theme-bootstrap.js',
 ]) {
   assert.ok(fileSet.has(required), `missing packaged file: ${required}`);
@@ -68,6 +69,7 @@ for (const archiveName of [
   'src/preload/Preload.js',
   'src/core/util/UnicodeCaseFold.js',
   'src/core/util/UnicodeCaseFoldData.js',
+  'licenses/UNICODE-LICENSE-3.0.txt',
   'dist/renderer-react/index.html',
   'dist/renderer-react/theme-bootstrap.js',
   ...rootTtf,
@@ -88,7 +90,7 @@ console.log(JSON.stringify({
   reactWoff2: reactWoff2.length,
   script: scriptMatch[1],
   style: styleMatch[1],
-  sourceHashesVerified: 6 + rootTtf.length + reactWoff2.length + 2,
+  sourceHashesVerified: 7 + rootTtf.length + reactWoff2.length + 2,
   optionalResourceSources: [...OPTIONAL_RESOURCE_SOURCES],
   verifiedExtraResources: resourceVerification.verified,
   missingOptionalResources: resourceVerification.missingOptional,

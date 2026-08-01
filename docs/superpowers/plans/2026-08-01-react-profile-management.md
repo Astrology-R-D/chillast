@@ -20,7 +20,7 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 
 ## Design Decisions
 
-- Normalize tags to Unicode NFC in the domain model, accept only strings, trim and remove empty values, limit each tag to 32 Unicode code points and each profile to 20 tags, and deduplicate with Unicode 17.0.0 full default case-fold keys while retaining the first spelling. Generate the CommonJS folding table reproducibly from official `CaseFolding.txt` statuses C+F, excluding simple and Turkic mappings. Missing or malformed legacy `tags` becomes a frozen `[]`.
+- Normalize tags to Unicode NFC in the domain model, accept only strings, trim and remove empty values, limit each tag to 32 Unicode code points and each profile to 20 tags, and deduplicate with Unicode 17.0.0 full default case-fold keys while retaining the first spelling. Generate the CommonJS folding table reproducibly from the tracked official `CaseFolding.txt` statuses C+F, excluding simple and Turkic mappings, and verify exact bytes offline. Package the complete Unicode License V3 notice with the application. Missing or malformed legacy `tags` becomes a frozen `[]`.
 - Do not persist primary profile, recents, timezone, or UTC offset. Primary and recents use `localStorage`; timezone and offset are derived for the entered local birth moment.
 - Keep at most 50 recent profile uses and prune entries older than 90 days. The directory exposes 7-day and 30-day filters from that bounded map.
 - Resolve the primary profile to the persisted ID when it still exists, otherwise the first profile in the current sorted server response, otherwise `null`.
@@ -36,7 +36,10 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 - Modify `src/core/models/Profile.js`: normalize and serialize `tags` while accepting records that omit it.
 - Create `src/core/util/UnicodeCaseFold.js`: apply full default Unicode folding to normalized tag keys.
 - Create `src/core/util/UnicodeCaseFoldData.js`: generated Unicode 17.0.0 C+F mapping table.
-- Create `tools/generate-unicode-case-folding.mjs`: reproduce the mapping table from official Unicode data.
+- Create `vendor/unicode/17.0.0/CaseFolding.txt`: pinned official Unicode source data.
+- Create `licenses/UNICODE-LICENSE-3.0.txt`: complete notice packaged with the application.
+- Create `tools/generate-unicode-case-folding.mjs`: reproduce the mapping table from tracked Unicode data and provide offline `--check` mode.
+- Create `tests/UnicodeCaseFoldGenerator.test.js`: clean/tampered generation, provenance, and license coverage.
 - Modify `tests/RunAll.js`: domain compatibility and normalization assertions.
 - Create `tests/ProfileRepository.test.js`: round-trip old and tagged profile documents through disk storage.
 - Create `tests/RunNodeTests.js`: discover and run root Node test files deterministically.
@@ -98,7 +101,10 @@ The existing renderer remains usable. Existing `profiles:list`, `profiles:get`, 
 - Modify: `src/core/models/Profile.js`
 - Create: `src/core/util/UnicodeCaseFold.js`
 - Create: `src/core/util/UnicodeCaseFoldData.js`
+- Create: `vendor/unicode/17.0.0/CaseFolding.txt`
+- Create: `licenses/UNICODE-LICENSE-3.0.txt`
 - Create: `tools/generate-unicode-case-folding.mjs`
+- Create: `tests/UnicodeCaseFoldGenerator.test.js`
 - Modify: `tests/RunAll.js`
 - Create: `tests/ProfileRepository.test.js`
 - Create: `tests/RunNodeTests.js`
