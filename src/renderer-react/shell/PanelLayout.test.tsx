@@ -417,6 +417,77 @@ test('moves narrow opener focus to desktop AI when the dialog is closed', () => 
   expect(desktopAi).not.toHaveAttribute('inert');
 });
 
+test('initializes a persisted collapsed desktop AI panel as hidden and inert', async () => {
+  const key = `react-resizable-panels:${PANEL_AUTO_SAVE_ID}`;
+  localStorage.setItem(key, JSON.stringify({
+    'shell-ai-panel,shell-main-panel,shell-navigation-panel': {
+      layout: [16, 84, 0],
+      expandToSizes: { 'shell-ai-panel': 27 },
+    },
+  }));
+  const user = userEvent.setup();
+  render(
+    <PanelLayout {...content} ai={<button type="button">折叠 AI 操作</button>}>
+      <button type="button">主区停靠点</button>
+    </PanelLayout>,
+  );
+
+  const aiAside = document.querySelector('.shell__ai');
+  const aiAction = screen.getByRole('button', { name: '折叠 AI 操作', hidden: true });
+  expect(aiAside).toHaveAttribute('hidden');
+  expect(aiAside).toHaveAttribute('inert');
+  expect(aiAside).toHaveAttribute('aria-hidden', 'true');
+  expect(screen.queryByRole('complementary', { name: 'AI 助手' })).not.toBeInTheDocument();
+
+  screen.getByRole('button', { name: '主区停靠点' }).focus();
+  await user.tab();
+  expect(aiAction).not.toHaveFocus();
+});
+
+test('expands a collapsed desktop AI before focusing it from an open narrow dialog', async () => {
+  const key = `react-resizable-panels:${PANEL_AUTO_SAVE_ID}`;
+  localStorage.setItem(key, JSON.stringify({
+    'shell-ai-panel,shell-main-panel,shell-navigation-panel': {
+      layout: [16, 84, 0],
+      expandToSizes: { 'shell-ai-panel': 27 },
+    },
+  }));
+  const media = createMatchMediaController(true);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  const user = userEvent.setup();
+  render(<PanelLayout {...content} />);
+
+  await user.click(screen.getByRole('button', { name: '打开 AI 助手' }));
+  act(() => media.setMatches(false));
+
+  const desktopAi = screen.getByRole('complementary', { name: 'AI 助手' });
+  expect(desktopAi).not.toHaveAttribute('hidden');
+  expect(desktopAi).not.toHaveAttribute('inert');
+  expect(desktopAi).toHaveFocus();
+});
+
+test('moves closed narrow opener focus to main when desktop AI remains collapsed', () => {
+  const key = `react-resizable-panels:${PANEL_AUTO_SAVE_ID}`;
+  localStorage.setItem(key, JSON.stringify({
+    'shell-ai-panel,shell-main-panel,shell-navigation-panel': {
+      layout: [16, 84, 0],
+      expandToSizes: { 'shell-ai-panel': 27 },
+    },
+  }));
+  const media = createMatchMediaController(true);
+  vi.stubGlobal('matchMedia', media.matchMedia);
+  render(<PanelLayout {...content} />);
+  screen.getByRole('button', { name: '打开 AI 助手' }).focus();
+
+  act(() => media.setMatches(false));
+
+  const main = screen.getByRole('main', { name: '工作区' });
+  expect(main).toHaveFocus();
+  expect(main).not.toHaveAttribute('hidden');
+  expect(main).not.toHaveAttribute('inert');
+  expect(screen.queryByRole('complementary', { name: 'AI 助手' })).not.toBeInTheDocument();
+});
+
 test('does not steal focus from navigation or main across closed breakpoint transitions', () => {
   const media = createMatchMediaController(false);
   vi.stubGlobal('matchMedia', media.matchMedia);

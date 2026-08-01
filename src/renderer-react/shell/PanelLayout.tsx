@@ -7,7 +7,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import {
+  type ImperativePanelHandle,
+  Panel,
+  PanelGroup,
+  PanelResizeHandle,
+} from 'react-resizable-panels';
 import { useNarrowLayout } from './useNarrowLayout';
 
 export interface PanelLayoutProps {
@@ -30,6 +35,11 @@ export const PANEL_SIZES = Object.freeze({
 const PANEL_CONSTRAINTS = [PANEL_SIZES.navigation, PANEL_SIZES.main, PANEL_SIZES.ai];
 const KEYBOARD_RESIZE_BY = 6;
 const PANEL_STORAGE_KEY = `react-resizable-panels:${PANEL_AUTO_SAVE_ID}`;
+const PANEL_STORAGE_ENTRY_KEY = [
+  'shell-navigation-panel',
+  'shell-main-panel',
+  'shell-ai-panel',
+].sort().join(',');
 
 export function sanitizePersistedPanelLayout(layout: unknown): number[] | null {
   if (
@@ -133,6 +143,18 @@ export const PANEL_STORAGE = Object.freeze({
   },
 });
 
+function readInitialDesktopAiCollapsed(): boolean {
+  const serialized = PANEL_STORAGE.getItem(PANEL_STORAGE_KEY);
+  if (!serialized) return false;
+  try {
+    const state = JSON.parse(serialized) as Record<string, { layout?: unknown }>;
+    const layout = state[PANEL_STORAGE_ENTRY_KEY]?.layout;
+    return Array.isArray(layout) && layout[2] === PANEL_SIZES.ai.collapsedSize;
+  } catch {
+    return false;
+  }
+}
+
 function redistributeAcrossSide(
   layout: number[],
   indices: readonly number[],
@@ -235,6 +257,11 @@ export function resizePanelSizesByKeyboard(
 export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
   const isNarrow = useNarrowLayout();
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(
+    readInitialDesktopAiCollapsed,
+  );
+  const aiPanelRef = useRef<ImperativePanelHandle>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
   const narrowToolbarRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -242,6 +269,13 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
   const restoreOpenerOnCloseRef = useRef(true);
   const previousIsNarrowRef = useRef(isNarrow);
   const activeBeforeLayoutRef = useRef<Element | null>(null);
+  const acceptPanelCallbacksRef = useRef(false);
+  const observedPanelCollapseRef = useRef(false);
+  const focusAiAfterExpandRef = useRef(false);
+
+  useLayoutEffect(() => {
+    acceptPanelCallbacksRef.current = true;
+  }, []);
 
   useLayoutEffect(() => {
     const wasNarrow = previousIsNarrowRef.current;
@@ -254,9 +288,16 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
         if (isAiOpen) {
           restoreOpenerOnCloseRef.current = false;
           setIsAiOpen(false);
-          dialogRef.current?.focus();
+          if (isDesktopAiCollapsed) {
+            focusAiAfterExpandRef.current = true;
+            if (observedPanelCollapseRef.current) aiPanelRef.current?.expand();
+            setIsDesktopAiCollapsed(false);
+          } else {
+            dialogRef.current?.focus();
+          }
         } else if (narrowToolbarRef.current?.contains(activeBeforeChange)) {
-          dialogRef.current?.focus();
+          if (isDesktopAiCollapsed) mainRef.current?.focus();
+          else dialogRef.current?.focus();
         }
       }
     }
@@ -266,7 +307,14 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
     return () => {
       activeBeforeLayoutRef.current = document.activeElement;
     };
-  }, [isAiOpen, isNarrow]);
+  }, [isAiOpen, isDesktopAiCollapsed, isNarrow]);
+
+  useLayoutEffect(() => {
+    if (focusAiAfterExpandRef.current && !isNarrow && !isDesktopAiCollapsed) {
+      focusAiAfterExpandRef.current = false;
+      dialogRef.current?.focus();
+    }
+  }, [isDesktopAiCollapsed, isNarrow]);
 
   useEffect(() => {
     if (!isAiOpen) return;
@@ -331,6 +379,7 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
       first.focus();
     }
   };
+  const isAiHidden = isNarrow ? !isAiOpen : isDesktopAiCollapsed;
 
   return (
     <PanelGroup
@@ -373,10 +422,12 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
         minSize={PANEL_SIZES.main.minSize}
       >
         <main
+          ref={mainRef}
           className={`shell__main${isNarrow ? ' shell__main--narrow' : ''}`}
           aria-label="工作区"
           aria-hidden={isNarrow && isAiOpen ? true : undefined}
           inert={isNarrow && isAiOpen}
+          tabIndex={-1}
         >
           <div ref={narrowToolbarRef} className="shell__main-toolbar" hidden={!isNarrow}>
             <button
@@ -400,6 +451,7 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
         hidden={isNarrow}
       />
       <Panel
+        ref={aiPanelRef}
         className="shell__panel shell__ai-panel"
         id="shell-ai-panel"
         order={3}
@@ -408,6 +460,19 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
         maxSize={PANEL_SIZES.ai.maxSize}
         collapsible
         collapsedSize={PANEL_SIZES.ai.collapsedSize}
+        onCollapse={() => {
+          observedPanelCollapseRef.current = true;
+          if (acceptPanelCallbacksRef.current) {
+            if (!isNarrow && dialogRef.current?.contains(document.activeElement)) {
+              mainRef.current?.focus();
+            }
+            setIsDesktopAiCollapsed(true);
+          }
+        }}
+        onExpand={() => {
+          observedPanelCollapseRef.current = false;
+          if (acceptPanelCallbacksRef.current) setIsDesktopAiCollapsed(false);
+        }}
       >
         <aside
           ref={dialogRef}
@@ -415,9 +480,9 @@ export function PanelLayout({ navigation, ai, children }: PanelLayoutProps) {
           role={isNarrow ? 'dialog' : undefined}
           aria-modal={isNarrow && isAiOpen ? true : undefined}
           aria-label="AI 助手"
-          aria-hidden={isNarrow && !isAiOpen ? true : undefined}
-          inert={isNarrow && !isAiOpen}
-          hidden={isNarrow && !isAiOpen}
+          aria-hidden={isAiHidden ? true : undefined}
+          inert={isAiHidden}
+          hidden={isAiHidden}
           tabIndex={-1}
           onKeyDown={trapFocus}
         >
