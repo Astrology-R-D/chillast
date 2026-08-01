@@ -102,7 +102,8 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     if (!editorFocusReturn) return;
     const { origin, selectedId: returnId } = editorFocusReturn;
     const selectedRow = returnId ? [...(pageRef.current?.querySelectorAll<HTMLElement>('[data-profile-id]') ?? [])].find((element) => element.dataset.profileId === returnId) : undefined;
-    (origin?.isConnected ? origin : selectedRow ?? pageRef.current?.querySelector<HTMLElement>('[data-profile-create]'))?.focus();
+    const detailEdit = pageRef.current?.querySelector<HTMLElement>('.profile-detail__actions button');
+    (origin?.isConnected ? origin : selectedRow ?? detailEdit ?? pageRef.current?.querySelector<HTMLElement>('[data-profile-create]'))?.focus();
     setEditorFocusReturn(null);
   }, [editor, editorFocusReturn]);
 
@@ -174,6 +175,7 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     setCommittedOverlays((current) => { const next = { ...current }; delete next[committed.profile.id]; return next; });
     setSelectedId(committed.profile.id);
     workspaceStore.getState().recordRecentUse(committed.profile.id);
+    setEditorFocusReturn({ origin: null, selectedId: committed.profile.id });
     setEditor(null); setEditorCommit(null); editorCommitRef.current = null;
   };
   const beginDuplicate = (phase: Exclude<DuplicatePhase, 'idle'>): number | null => {
@@ -284,6 +286,12 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     setDeleteError('');
     try {
       await remove.mutateAsync(deleteTarget.id);
+      setCommittedOverlays((current) => {
+        if (!current[deleteTarget.id]) return current;
+        const next = { ...current };
+        delete next[deleteTarget.id];
+        return next;
+      });
       workspaceStore.getState().removeProfile(deleteTarget.id);
       setDeleteSyncId(deleteTarget.id);
       await refreshDelete(deleteTarget.id);

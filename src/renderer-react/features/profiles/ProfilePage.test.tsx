@@ -470,6 +470,67 @@ test('cancel after committed save failure displays overlay until equivalent cano
   expect(screen.queryByText('2026-08-02T13:10:00.000Z')).not.toBeInTheDocument();
 });
 
+test('confirmed delete removes a committed overlay before successful canonical refresh', async () => {
+  const committed = { ...alpha, nameZh: '待删除已保存档案', updatedAt: '2026-08-02T13:20:00.000Z' };
+  const list = vi.fn()
+    .mockResolvedValueOnce({ ok: true, data: [alpha] })
+    .mockResolvedValueOnce({ ok: false, error: '刷新断开' })
+    .mockResolvedValueOnce({ ok: true, data: [] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: committed });
+  api.profiles.remove.mockResolvedValue({ ok: true, data: true });
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  const name = screen.getByRole('textbox', { name: '中文名字' });
+  await userEvent.clear(name); await userEvent.type(name, committed.nameZh);
+  await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('刷新断开');
+  await userEvent.click(screen.getByRole('button', { name: '取消' }));
+  expect(screen.getByRole('heading', { name: committed.nameZh })).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: '删除档案' }));
+  await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  expect(document.querySelector('[data-profile-id="a"]')).not.toBeInTheDocument();
+  expect(document.querySelector('[data-profile-id][aria-pressed="true"]')).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: committed.nameZh })).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('button', { name: '新建档案' })).toHaveFocus());
+});
+
+test('focuses the authoritative profile row after a successful create save', async () => {
+  const created = { ...alpha, id: 'created', nameZh: '新建已保存档案', updatedAt: '2026-08-02T13:25:00.000Z' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: true, data: [alpha, created] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: created });
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '新建档案' }));
+  fireEvent.change(screen.getByRole('textbox', { name: '中文名字' }), { target: { value: created.nameZh } });
+  fireEvent.change(screen.getByRole('textbox', { name: '地点名称' }), { target: { value: '北京 / Beijing' } });
+  fireEvent.change(screen.getByRole('spinbutton', { name: '纬度' }), { target: { value: '39.9042' } });
+  fireEvent.change(screen.getByRole('spinbutton', { name: '经度' }), { target: { value: '116.4074' } });
+  await userEvent.click(screen.getByRole('button', { name: '创建档案' }));
+
+  expect(await screen.findByRole('heading', { name: created.nameZh })).toBeInTheDocument();
+  expect(document.querySelector('[data-profile-id="created"]')).toHaveFocus();
+  expect(document.body).not.toHaveFocus();
+});
+
+test('focuses the saved profile row after a successful edit save', async () => {
+  const saved = { ...alpha, nameZh: '编辑已保存档案', updatedAt: '2026-08-02T13:30:00.000Z' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: true, data: [saved] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: saved });
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  const name = screen.getByRole('textbox', { name: '中文名字' });
+  await userEvent.clear(name); await userEvent.type(name, saved.nameZh);
+  await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+  expect(await screen.findByRole('heading', { name: saved.nameZh })).toBeInTheDocument();
+  expect(document.querySelector('[data-profile-id="a"]')).toHaveFocus();
+  expect(document.body).not.toHaveFocus();
+});
+
 test('ignores a save completion after selecting out of the editor', async () => {
   const pending = deferred<{ ok: true; data: Profile }>();
   const { api } = setup();
