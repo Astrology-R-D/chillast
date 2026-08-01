@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
 import { expect, test } from 'vitest';
 
 const repositoryRoot = process.cwd();
@@ -24,4 +24,51 @@ test('keeps TypeScript build information under the ignored dist directory', () =
   expect(tsconfig.include).toContain('vite.config.mts');
   expect(existsSync(resolve(repositoryRoot, 'vite.config.mts'))).toBe(true);
   expect(existsSync(resolve(repositoryRoot, 'vite.config.ts'))).toBe(false);
+});
+
+test('packages only legacy-referenced upright fonts within the payload budgets', () => {
+  const packageJson = JSON.parse(readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8')) as {
+    build: { files: string[] };
+  };
+  const fontEntries = packageJson.build.files.filter((entry) => entry.startsWith('fonts/'));
+  const expectedEntries = [
+    'fonts/LICENSE.txt',
+    'fonts/MapleMono-NF-CN-Bold.ttf',
+    'fonts/MapleMono-NF-CN-Medium.ttf',
+    'fonts/MapleMono-NF-CN-Regular.ttf',
+    'fonts/MapleMono-NF-CN-SemiBold.ttf',
+  ];
+
+  expect(fontEntries.some((entry) => entry.includes('*'))).toBe(false);
+  expect(fontEntries.some((entry) => /italic/i.test(entry))).toBe(false);
+  expect([...fontEntries].sort()).toEqual(expectedEntries);
+
+  const selectedRootFonts = fontEntries.filter((entry) => entry.endsWith('.ttf'));
+  expect(selectedRootFonts).toHaveLength(4);
+  expect(
+    selectedRootFonts.reduce((total, entry) => total + statSync(resolve(repositoryRoot, entry)).size, 0),
+  ).toBeLessThan(90 * 1024 * 1024);
+
+  const legacyTheme = readFileSync(
+    resolve(repositoryRoot, 'src/renderer/styles/Theme.css'),
+    'utf8',
+  );
+  const legacyFontNames = [...legacyTheme.matchAll(/url\(['"]?[^'")]*\/([^/'")]+\.ttf)/g)].map(
+    (match) => match[1],
+  );
+  expect(legacyFontNames).toHaveLength(4);
+  expect(legacyFontNames.every((fileName) => selectedRootFonts.some((entry) => basename(entry) === fileName)))
+    .toBe(true);
+
+  expect(packageJson.build.files).toContain('dist/renderer-react/**/*');
+  expect(packageJson.build.files).toContain('!src/renderer-react/assets/fonts/**/*');
+  const reactFontDirectory = resolve(repositoryRoot, 'src/renderer-react/assets/fonts');
+  const reactFonts = readdirSync(reactFontDirectory).filter((fileName) => fileName.endsWith('.woff2'));
+  expect(reactFonts).toHaveLength(4);
+  expect(
+    reactFonts.reduce(
+      (total, fileName) => total + statSync(resolve(reactFontDirectory, fileName)).size,
+      0,
+    ),
+  ).toBeLessThan(10 * 1024 * 1024);
 });
