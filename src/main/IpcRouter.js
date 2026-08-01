@@ -69,11 +69,20 @@ class IpcRouter {
         const { app, safeStorage } = require('electron');
         const fs = require('fs');
         const path = require('path');
-        const dataDir = path.join(app.getPath('userData'), 'data');
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        const persistedSettings = this._readAiSettings();
+        const merged = { ...persistedSettings, ...settings };
+        const configureResult = await this.ai.configure(merged);
+        if (!configureResult || !configureResult.accepted) {
+          const reason = configureResult && configureResult.error
+            ? configureResult.error
+            : 'model provider rejected the settings';
+          throw new Error(`AI configuration was not accepted: ${reason}`);
+        }
 
         // Save API key — try safeStorage, fallback to plain JSON
-        if (settings.apiKey) {
+        if (Object.prototype.hasOwnProperty.call(settings, 'apiKey')) {
+          const dataDir = path.join(app.getPath('userData'), 'data');
+          if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
           const credPath = path.join(dataDir, 'ai-credentials.json');
           const credJson = JSON.stringify({ apiKey: settings.apiKey });
           try {
@@ -91,7 +100,7 @@ class IpcRouter {
         // Persist non-secret settings, preserving fields owned by other panels
         // (mcpServers, toolProviders) so saving the provider doesn't wipe them.
         this._writeAiSettings({
-          ...this._readAiSettings(),
+          ...persistedSettings,
           provider: settings.provider,
           model: settings.model,
           baseUrl: settings.baseUrl || '',
@@ -99,9 +108,6 @@ class IpcRouter {
           maxTokens: settings.maxTokens,
         });
 
-        // Carry persisted MCP/tool prefs into the configure call.
-        const merged = { ...this._readAiSettings(), ...settings };
-        await this.ai.configure(merged);
         if (this.webContents) this.webContents.send('ai:statusChanged', this.ai.status());
         return { ok: true };
       });

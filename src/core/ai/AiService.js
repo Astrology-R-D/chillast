@@ -49,6 +49,7 @@ class AiService {
     // stops loading after the user saves a key.
     const merged = { ...(this._lastSettings || {}), ...settings };
     let accepted = false;
+    let configureError = null;
 
     // A failed chat-model build (e.g. no key yet) must NOT abort KB/tool init.
     try {
@@ -56,6 +57,7 @@ class AiService {
       this._lastSettings = merged;
       accepted = true;
     } catch (e) {
+      configureError = e && e.message ? e.message : String(e);
       console.error('[AiService] model provider configure failed (continuing):', e.message);
     }
     settings = accepted ? merged : (this._lastSettings || merged);
@@ -139,6 +141,7 @@ class AiService {
 
     this._chainFactory = new ChainFactory(this._mp, this._kb);
     this._configured = this._mp.isConfigured();
+    return accepted ? { accepted: true } : { accepted: false, error: configureError };
   }
 
   /** Expose the tool registry (for the settings UI / introspection). */

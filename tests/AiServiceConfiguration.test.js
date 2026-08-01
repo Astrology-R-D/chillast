@@ -59,8 +59,9 @@ test('failed reconfigure preserves previous effective status, model settings, an
     enableRag: false, mcpServers: {}, search: { provider: 'old-search' },
   });
 
-  await service.configure({ provider: 'invalid', model: 'bad', temperature: 0.9 });
+  const result = await service.configure({ provider: 'invalid', model: 'bad', temperature: 0.9 });
 
+  assert.deepEqual(result, { accepted: false, error: 'invalid provider' });
   assert.deepEqual(service.status(), {
     configured: true,
     provider: 'controlled',
@@ -89,8 +90,9 @@ test('accepted provider without a key commits settings and becomes unconfigured'
   service._mp = provider;
   await service.configure({ provider: 'controlled', model: 'ready', apiKey: 'key', enableRag: false, mcpServers: {} });
 
-  await service.configure({ model: 'awaiting-key', apiKey: '' });
+  const result = await service.configure({ model: 'awaiting-key', apiKey: '' });
 
+  assert.deepEqual(result, { accepted: true });
   assert.equal(service.status().configured, false);
   assert.equal(service.status().model, 'awaiting-key');
   assert.equal(service._lastSettings.apiKey, '');
@@ -102,8 +104,9 @@ test('first invalid provider remains unconfigured while non-chat tools initializ
   const provider = modelProvider(false);
   service._mp = provider;
 
-  await service.configure({ provider: 'invalid', enableRag: false, mcpServers: {} });
+  const result = await service.configure({ provider: 'invalid', enableRag: false, mcpServers: {} });
 
+  assert.deepEqual(result, { accepted: false, error: 'invalid provider' });
   assert.equal(service.status().configured, false);
   assert.equal(service._lastSettings, null);
   assert.ok(service.getToolRegistry());
