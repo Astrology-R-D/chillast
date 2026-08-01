@@ -24,3 +24,18 @@ test('keeps the narrow rail and AI overlay geometry stable', () => {
   expect(css).toMatch(/\.shell__navigation--rail\s*\{[^}]*min-width:\s*56px/s);
   expect(css).toMatch(/\.shell__ai-overlay\s*\{[^}]*width:\s*min\(420px, calc\(100vw - 56px\)\)/s);
 });
+
+test('styles shell navigation, stable controls, placeholder, and AI status without gradients', () => {
+  expect(css).toMatch(/\.shell-nav__button\[data-active='true'\]/);
+  expect(css).toMatch(/\.workspace__appearance\s+select\s*\{[^}]*height:\s*var\(--control-height\)/s);
+  expect(css).toMatch(/\.workspace__header\s*\{[^}]*flex-wrap:\s*wrap/s);
+  expect(css).toMatch(/\.ai-status__state\[data-configured='true'\]/);
+  expect(css).toContain('.workspace__placeholder');
+  expect(css).not.toMatch(/gradient\s*\(/i);
+  expect(css).not.toMatch(/letter-spacing:\s*-/);
+});
+
+test('hides rail text while route buttons retain accessible names', () => {
+  expect(css).toMatch(/\.shell__navigation--rail \.shell-nav__label[^{]*\{[^}]*display:\s*none/s);
+  expect(css).toMatch(/\.shell__navigation--rail \.shell-nav__group[^{]*\{[^}]*display:\s*none/s);
+});

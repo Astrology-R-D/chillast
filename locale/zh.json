@@ -18,7 +18,24 @@
     "groupChinese": "命理",
     "groupTools": "工具",
     "solarTerms": "节气年历",
-    "settings": "AI 设置"
+    "settings": "设置"
+  },
+  "shell": {
+    "loading": "正在加载…",
+    "placeholder": "{{title}}将在后续迁移中提供。",
+    "theme": "主题",
+    "density": "密度",
+    "aiConfigured": "已配置",
+    "aiNotConfigured": "未配置",
+    "retry": "重试",
+    "knowledgeCount": "知识库：{{count}} 篇文档"
+  },
+  "appearance": {
+    "system": "跟随系统",
+    "light": "浅色",
+    "dark": "深色",
+    "compact": "紧凑",
+    "comfortable": "舒适"
   },
   "profiles": {
     "title": "档案管理",
@@ -148,10 +165,6 @@
     "colStem": "天干 (十神)",
     "colBranch": "地支",
     "colHidden": "藏干 (十神)",
-    "pillarYear": "年柱",
-    "pillarMonth": "月柱",
-    "pillarDay": "日柱",
-    "pillarHour": "时柱",
     "dayMasterStrength": "日主旺弱（参考）：{{label}} · 同类+印 {{n}}/{{total}}",
     "dayMasterAnalysis": "日主分析",
     "trueSolarTime": "真太阳时",
