@@ -2,9 +2,11 @@
 
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const test = require('node:test');
 
 const {
+  isNavigationAllowed,
   loadRenderer,
   reportRendererFailure,
   selectRendererTarget,
@@ -161,6 +163,69 @@ test('renderer URL takes priority over the React renderer flag', () => {
     kind: 'react-url',
     value: 'http://localhost:5173',
   });
+});
+
+test('packaged renderer rejects a dev URL before applying renderer precedence', () => {
+  assert.throws(
+    () => selectRendererTarget({
+      env: {
+        CHILLAST_RENDERER: 'react',
+        CHILLAST_RENDERER_URL: 'http://localhost:5173',
+      },
+      appRoot,
+      isPackaged: true,
+    }),
+    /packaged/i,
+  );
+  assert.equal(selectRendererTarget({
+    env: { CHILLAST_RENDERER: 'react' },
+    appRoot,
+    isPackaged: true,
+  }).kind, 'react-file');
+});
+
+test('file renderer navigation allows only the selected document with query or fragment', () => {
+  const target = {
+    kind: 'react-file',
+    value: path.join(appRoot, 'dist', 'renderer-react', 'index file.html'),
+  };
+  const documentUrl = pathToFileURL(path.resolve(target.value));
+
+  for (const value of [
+    documentUrl.href,
+    new URL('?mode=smoke', documentUrl).href,
+    new URL('#route', documentUrl).href,
+  ]) {
+    assert.equal(isNavigationAllowed(target, value), true, value);
+  }
+  for (const value of [
+    new URL('other.html', documentUrl).href,
+    pathToFileURL(`${path.resolve(target.value)}.evil`).href,
+    'https://example.com/',
+    'file:///C:/different/index%2Fescape.html',
+  ]) {
+    assert.equal(isNavigationAllowed(target, value), false, value);
+  }
+});
+
+test('dev renderer navigation is restricted to the selected origin', () => {
+  const target = { kind: 'react-url', value: 'http://localhost:5173/app?boot=1' };
+
+  for (const value of [
+    'http://localhost:5173/app',
+    'http://localhost:5173/another/path?query=1#hash',
+  ]) {
+    assert.equal(isNavigationAllowed(target, value), true, value);
+  }
+  for (const value of [
+    'http://localhost:5174/app',
+    'http://127.0.0.1:5173/app',
+    'https://localhost:5173/app',
+    'http://localhost:5173@evil.example/app',
+    'not a URL',
+  ]) {
+    assert.equal(isNavigationAllowed(target, value), false, value);
+  }
 });
 
 test('loadRenderer delegates URL targets to loadURL', async () => {

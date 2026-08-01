@@ -1,12 +1,16 @@
 'use strict';
 
 const path = require('node:path');
+const { fileURLToPath } = require('node:url');
 
 const DEFAULT_APP_ROOT = path.resolve(__dirname, '..', '..');
 const LOCAL_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
-function selectRendererTarget({ env = process.env, appRoot = DEFAULT_APP_ROOT } = {}) {
+function selectRendererTarget({ env = process.env, appRoot = DEFAULT_APP_ROOT, isPackaged = false } = {}) {
   if (env.CHILLAST_RENDERER_URL) {
+    if (isPackaged) {
+      throw new Error('CHILLAST_RENDERER_URL is disabled in packaged applications');
+    }
     let rendererUrl;
     try {
       rendererUrl = new URL(env.CHILLAST_RENDERER_URL);
@@ -40,6 +44,24 @@ function selectRendererTarget({ env = process.env, appRoot = DEFAULT_APP_ROOT } 
   };
 }
 
+function isNavigationAllowed(target, requestedUrl) {
+  try {
+    const candidate = new URL(requestedUrl);
+    if (target.kind === 'react-url') {
+      return candidate.origin === new URL(target.value).origin;
+    }
+    if (candidate.protocol !== 'file:') return false;
+
+    const candidatePath = path.resolve(fileURLToPath(candidate));
+    const targetPath = path.resolve(target.value);
+    return process.platform === 'win32'
+      ? candidatePath.toLowerCase() === targetPath.toLowerCase()
+      : candidatePath === targetPath;
+  } catch (_) {
+    return false;
+  }
+}
+
 function loadRenderer(win, target) {
   if (target.kind === 'react-url') return win.loadURL(target.value);
   return win.loadFile(target.value);
@@ -61,4 +83,4 @@ function reportRendererFailure({ app, dialog, error, win }) {
   }
 }
 
-module.exports = { loadRenderer, reportRendererFailure, selectRendererTarget };
+module.exports = { isNavigationAllowed, loadRenderer, reportRendererFailure, selectRendererTarget };

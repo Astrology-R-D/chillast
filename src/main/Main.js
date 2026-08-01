@@ -16,6 +16,7 @@ const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
 const AiSessionStore = require('./AiSessionStore');
 const {
+  isNavigationAllowed,
   loadRenderer,
   reportRendererFailure,
   selectRendererTarget,
@@ -158,7 +159,7 @@ class Main {
     const win = this.config.window || {};
     let rendererTarget;
     try {
-      rendererTarget = selectRendererTarget();
+      rendererTarget = selectRendererTarget({ isPackaged: app.isPackaged });
     } catch (error) {
       console.error('[Main] Renderer load failed:', error);
       reportRendererFailure({ app, dialog, error, win: null });
@@ -187,17 +188,22 @@ class Main {
     this.router.setWebContents(this.mainWindow.webContents);
 
     const rendererWindow = this.mainWindow;
+    rendererWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+      const requestedUrl = typeof navigationUrl === 'string' ? navigationUrl : event.url;
+      if (!isNavigationAllowed(rendererTarget, requestedUrl)) event.preventDefault();
+    });
+
+    // Open external links in the OS browser, never inside the app shell.
+    rendererWindow.webContents.setWindowOpenHandler(({ url }) => {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    });
+
     loadRenderer(rendererWindow, rendererTarget).catch((error) => {
       console.error('[Main] Renderer load failed:', error);
       reportRendererFailure({ app, dialog, error, win: rendererWindow });
     });
     this.mainWindow.once('ready-to-show', () => this.mainWindow.show());
-
-    // Open external links in the OS browser, never inside the app shell.
-    this.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    });
 
     this.mainWindow.on('closed', () => { this.mainWindow = null; });
   }

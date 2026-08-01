@@ -280,6 +280,12 @@ class IpcRouter {
   _handle(channel, fn) {
     this.ipcMain.handle(channel, async (event, ...args) => {
       try {
+        if (
+          this.webContents
+          && (event.sender !== this.webContents || event.senderFrame !== this.webContents.mainFrame)
+        ) {
+          throw new Error('拒绝来自不受信任渲染器的 IPC 请求');
+        }
         const data = await fn(event, ...args);
         return { ok: true, data };
       } catch (err) {
