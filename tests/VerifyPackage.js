@@ -1,0 +1,80 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const asar = require('@electron/asar');
+
+const root = path.join(__dirname, '..');
+const archive = path.join(root, 'release', 'win-unpacked', 'resources', 'app.asar');
+
+function hash(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function archiveBuffer(name) {
+  return asar.extractFile(archive, path.normalize(name));
+}
+
+function assertMatchesSource(archiveName, sourceName = archiveName) {
+  const source = fs.readFileSync(path.join(root, sourceName));
+  assert.equal(hash(archiveBuffer(archiveName)), hash(source), `${archiveName} differs from ${sourceName}`);
+}
+
+assert.ok(fs.existsSync(archive), `package archive missing: ${archive}`);
+const files = asar.listPackage(archive, { isPack: false })
+  .map((name) => name.replace(/^[/\\]/, '').replace(/\\/g, '/'));
+const fileSet = new Set(files);
+
+for (const required of [
+  'src/renderer/Index.html',
+  'dist/renderer-react/index.html',
+  'src/preload/Preload.js',
+  'dist/renderer-react/theme-bootstrap.js',
+]) {
+  assert.ok(fileSet.has(required), `missing packaged file: ${required}`);
+}
+
+const rootTtf = files.filter((name) => /^fonts\/[^/]+\.ttf$/i.test(name));
+const reactWoff2 = files.filter((name) => /^dist\/renderer-react\/assets\/[^/]+\.woff2$/i.test(name));
+assert.equal(rootTtf.length, 4, `expected 4 root TTF files, found ${rootTtf.length}`);
+assert.equal(reactWoff2.length, 4, `expected 4 React WOFF2 files, found ${reactWoff2.length}`);
+assert.equal(
+  files.filter((name) => /italic/i.test(name) && /\.(ttf|otf|woff2?)$/i.test(name)).length,
+  0,
+  'italic font unexpectedly packaged',
+);
+
+const reactHtml = archiveBuffer('dist/renderer-react/index.html').toString('utf8');
+const scriptMatch = reactHtml.match(/src="(\.\/assets\/[^"?]+\.js)"/);
+const styleMatch = reactHtml.match(/href="(\.\/assets\/[^"?]+\.css)"/);
+assert.ok(scriptMatch, 'React HTML does not reference relative JavaScript');
+assert.ok(styleMatch, 'React HTML does not reference relative CSS');
+assert.match(reactHtml, /src="\.\/theme-bootstrap\.js"/);
+
+for (const archiveName of [
+  'src/renderer/Index.html',
+  'src/preload/Preload.js',
+  'dist/renderer-react/index.html',
+  'dist/renderer-react/theme-bootstrap.js',
+  ...rootTtf,
+  ...reactWoff2,
+  `dist/renderer-react/${scriptMatch[1].slice(2)}`,
+  `dist/renderer-react/${styleMatch[1].slice(2)}`,
+]) {
+  assertMatchesSource(archiveName);
+}
+
+console.log(JSON.stringify({
+  archive,
+  legacyHtml: true,
+  reactHtml: true,
+  preload: true,
+  themeBootstrap: true,
+  rootTtf: rootTtf.length,
+  reactWoff2: reactWoff2.length,
+  script: scriptMatch[1],
+  style: styleMatch[1],
+  sourceHashesVerified: 4 + rootTtf.length + reactWoff2.length + 2,
+}, null, 2));

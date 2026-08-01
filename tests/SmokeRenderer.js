@@ -11,15 +11,23 @@
  */
 
 const path = require('path');
-const os = require('os');
 const fs = require('fs');
 const { app, BrowserWindow, ipcMain } = require('electron');
+const { runElectronSmokeController } = require('./ElectronSmokeController');
 
 const ProfileRepository = require('../src/main/ProfileRepository');
 const IpcRouter = require('../src/main/IpcRouter');
 const AstrologyService = require('../src/core/astrology/AstrologyService');
 
+runElectronSmokeController('myst-smoke-', app);
+
 const consoleErrors = [];
+const userDataDir = process.env.CHILLAST_SMOKE_USER_DATA;
+let win = null;
+let finished = false;
+
+app.disableHardwareAcceleration();
+app.setPath('userData', userDataDir);
 
 async function poll(win, description, probe, timeout = 10000) {
   const deadline = Date.now() + timeout;
@@ -36,12 +44,17 @@ async function poll(win, description, probe, timeout = 10000) {
   throw new Error(`${description} timed out; last result: ${JSON.stringify(last)}`);
 }
 
-function fail(message) {
-  console.error(`\n✗ SMOKE FAILED: ${message}\n`);
-  app.exit(1);
+function finish(code, message) {
+  if (finished) return;
+  finished = true;
+  if (message) console.error(`\n✗ SMOKE FAILED: ${message}\n`);
+  if (win && !win.isDestroyed()) win.destroy();
+  app.exit(code);
 }
 
-app.disableHardwareAcceleration();
+function fail(message) {
+  finish(1, message);
+}
 
 app.whenReady().then(async () => {
   // Configure the Swiss Ephemeris path (Main does this in the real app); without
@@ -52,9 +65,7 @@ app.whenReady().then(async () => {
     SwissEphCore.configure({ ephePath: path.join(__dirname, '..', 'assets', 'ephemeris') });
   } catch (_) { /* swisseph optional; JS fallback otherwise */ }
 
-  // Isolated temp store.
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'myst-smoke-'));
-  const repo = new ProfileRepository(tmpDir).init();
+  const repo = new ProfileRepository(path.join(userDataDir, 'data')).init();
   const aiService = {
     status: () => ({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
     getInitStatus: () => null,
@@ -69,7 +80,7 @@ app.whenReady().then(async () => {
     aiSessionStore,
   }).register();
 
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     show: false,
     width: 1200,
     height: 800,
@@ -87,6 +98,20 @@ app.whenReady().then(async () => {
   });
   win.webContents.on('preload-error', (_e, file, error) => {
     consoleErrors.push(`preload-error ${file}: ${error}`);
+  });
+  win.webContents.on('did-fail-load', (_event, code, description) => {
+    consoleErrors.push(`did-fail-load ${code}: ${description}`);
+  });
+  win.webContents.on('render-process-gone', (_event, details) => {
+    consoleErrors.push(`render-process-gone: ${JSON.stringify(details)}`);
+  });
+  win.webContents.once('dom-ready', () => {
+    void win.webContents.executeJavaScript(`
+      window.__legacySmokeErrors = [];
+      window.addEventListener('error', (event) => window.__legacySmokeErrors.push('window: ' + event.message));
+      window.addEventListener('unhandledrejection', (event) => window.__legacySmokeErrors.push('unhandled: ' + String(event.reason)));
+      document.addEventListener('securitypolicyviolation', (event) => window.__legacySmokeErrors.push('CSP: ' + event.violatedDirective));
+    `).catch((error) => consoleErrors.push(`browser error capture: ${error.message}`));
   });
 
   try {
@@ -129,6 +154,7 @@ app.whenReady().then(async () => {
       out.svgLen = svg.length;
       return out;
     })()`);
+    consoleErrors.push(...await win.webContents.executeJavaScript('window.__legacySmokeErrors || []'));
 
     console.log('\nSmoke report:', JSON.stringify(report, null, 2));
     console.log('Console errors:', consoleErrors.length ? consoleErrors : 'none');
@@ -149,7 +175,7 @@ app.whenReady().then(async () => {
       fail(problems.join('; '));
     } else {
       console.log('\n✓ SMOKE PASSED\n');
-      app.exit(0);
+      finish(0);
     }
   } catch (err) {
     fail((err && err.stack) || String(err));

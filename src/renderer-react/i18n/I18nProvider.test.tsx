@@ -1,12 +1,19 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 import type { LocaleDictionary } from '../api/contracts';
-import { I18nProvider, useI18n } from './I18nProvider';
+import { I18nProvider, translate, useI18n } from './I18nProvider';
 
 function Translation({ id, variables }: { id: string; variables?: Record<string, string | number> }) {
   const { t } = useI18n();
   return <span>{t(id, variables)}</span>;
 }
+
+test('pure translate resolves nested values, interpolation, and explicit fallbacks', () => {
+  const dictionary = { app: { bootError: '启动失败：{{message}}' } };
+
+  expect(translate(dictionary, 'app.bootError', { message: '配置错误' })).toBe('启动失败：配置错误');
+  expect(translate(dictionary, 'app.missing', {}, '正在启动')).toBe('正在启动');
+});
 
 describe('I18nProvider', () => {
   test('looks up nested translation keys', () => {

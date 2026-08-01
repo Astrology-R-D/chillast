@@ -1,11 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { App } from './App';
+import { App, withTimeout } from './App';
 import { AppProviders } from './AppProviders';
 
 const dictionary = {
-  app: { title: 'CHILLAST' }, ai: { title: 'AI 占星顾问' },
+  app: { title: 'CHILLAST', bootText: '正在校准星图…', bootError: '应用启动失败：{{message}}' }, ai: { title: 'AI 占星顾问' },
   nav: {
     profiles: '档案管理', personal: '个人星盘', relationship: '合盘分析', chinese: '命理分析',
     solarTerms: '节气年历', settings: '设置', groupProfiles: '档案', groupCharts: '星盘',
@@ -24,6 +24,16 @@ const dictionary = {
 };
 
 const status = { configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 };
+const startupLabels = {
+  loading: '正在载入 CHILLAST…',
+  error: 'CHILLAST 无法启动：{{message}}',
+  retry: '再次尝试',
+};
+const startupDictionary = {
+  ...dictionary,
+  app: { ...dictionary.app, bootText: startupLabels.loading, bootError: startupLabels.error },
+  shell: { ...dictionary.shell, retry: startupLabels.retry },
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -61,7 +71,10 @@ beforeEach(() => {
   installApi();
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 test('shows stable startup loading while config and locale load concurrently', () => {
   const config = deferred<never>();
@@ -73,10 +86,22 @@ test('shows stable startup loading while config and locale load concurrently', (
 
   renderApp();
 
-  expect(screen.getByRole('status')).toHaveTextContent('正在启动应用');
+  expect(screen.getByRole('status')).toHaveTextContent(dictionary.app.bootText);
   expect(calls.config).toHaveBeenCalledTimes(1);
   expect(calls.locale).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+});
+
+test('uses locale startup text as soon as the dictionary is available', async () => {
+  const config = deferred<never>();
+  installApi({
+    config: vi.fn(() => config.promise),
+    locale: vi.fn().mockResolvedValue({ ok: true, data: startupDictionary }),
+  });
+
+  renderApp();
+
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(startupLabels.loading));
 });
 
 test('renders the localized shell only after both startup requests succeed', async () => {
@@ -119,6 +144,23 @@ test.each([
   expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
 });
 
+test('updates an existing startup error when locale arrives later', async () => {
+  const locale = deferred<{ ok: true; data: typeof startupDictionary }>();
+  installApi({
+    config: vi.fn().mockResolvedValue({ ok: false, error: '配置读取失败' }),
+    locale: vi.fn(() => locale.promise),
+  });
+  renderApp();
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('配置读取失败');
+  locale.resolve({ ok: true, data: startupDictionary });
+
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(
+    startupLabels.error.replace('{{message}}', '配置读取失败'),
+  ));
+  expect(screen.getByRole('button', { name: startupLabels.retry })).toBeInTheDocument();
+});
+
 test('retry refetches both startup resources and renders after recovery', async () => {
   const config = vi.fn()
     .mockResolvedValueOnce({ ok: false, error: '暂时失败' })
@@ -133,6 +175,43 @@ test('retry refetches both startup resources and renders after recovery', async 
   expect(await screen.findByRole('heading', { level: 1, name: '档案管理' })).toBeInTheDocument();
   expect(config).toHaveBeenCalledTimes(2);
   expect(locale).toHaveBeenCalledTimes(2);
+});
+
+test('retry starts fresh requests when one prior request is still pending and ignores its late result', async () => {
+  const oldConfig = deferred<{ ok: true; data: { layout: { sidebarWidth: number } } }>();
+  const config = vi.fn()
+    .mockImplementationOnce(() => oldConfig.promise)
+    .mockResolvedValueOnce({ ok: true, data: { layout: { sidebarWidth: 300 } } });
+  const locale = vi.fn()
+    .mockResolvedValueOnce({ ok: false, error: '语言读取失败' })
+    .mockResolvedValueOnce({ ok: true, data: dictionary });
+  installApi({ config, locale });
+  const user = userEvent.setup();
+  renderApp();
+
+  await user.click(await screen.findByRole('button', { name: '重试' }));
+
+  expect(await screen.findByRole('heading', { level: 1, name: '档案管理' })).toBeInTheDocument();
+  expect(config).toHaveBeenCalledTimes(2);
+  expect(locale).toHaveBeenCalledTimes(2);
+  expect(document.documentElement.style.getPropertyValue('--sidebar-width')).toBe('300px');
+
+  oldConfig.resolve({ ok: true, data: { layout: { sidebarWidth: 900 } } });
+  await act(async () => Promise.resolve());
+  expect(document.documentElement.style.getPropertyValue('--sidebar-width')).toBe('300px');
+});
+
+test.each(['config', 'locale'])('withTimeout identifies a timed out %s request', async (resource) => {
+  vi.useFakeTimers();
+  const pending = deferred<never>();
+  const result = expect(withTimeout(pending.promise, resource, 100)).rejects.toThrow(
+    new RegExp(`${resource}.*超时`),
+  );
+
+  await vi.advanceTimersByTimeAsync(100);
+
+  await result;
+  vi.useRealTimers();
 });
 
 test('each AppProviders mount owns a fresh QueryClient cache', async () => {

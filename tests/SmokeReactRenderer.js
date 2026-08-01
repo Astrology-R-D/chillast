@@ -1,22 +1,31 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
+const { runElectronSmokeController } = require('./ElectronSmokeController');
+
+runElectronSmokeController('chillast-react-smoke-', app);
 
 const root = path.join(__dirname, '..');
 const errors = [];
+const userDataDir = process.env.CHILLAST_SMOKE_USER_DATA;
+let win = null;
 let finished = false;
 
 app.disableHardwareAcceleration();
-app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-react-smoke-')));
+app.setPath('userData', userDataDir);
 
-function fail(reason) {
+function finish(code, reason) {
   if (finished) return;
   finished = true;
-  console.error(`\nReact smoke failed: ${reason}\n`);
-  app.exit(1);
+  if (reason) console.error(`\nReact smoke failed: ${reason}\n`);
+  if (win && !win.isDestroyed()) win.destroy();
+  app.exit(code);
+}
+
+function fail(reason) {
+  finish(1, reason);
 }
 
 async function poll(win, description, probe, timeout = 10000) {
@@ -59,7 +68,7 @@ app.whenReady().then(async () => {
   registerEnvelope('ai:initStatus', () => null);
   registerEnvelope('ai:setContext', () => ({ ok: true }));
 
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     show: false,
     width: 1440,
     height: 920,
@@ -84,10 +93,11 @@ app.whenReady().then(async () => {
   win.webContents.on('render-process-gone', (_event, details) => {
     errors.push(`render-process-gone: ${JSON.stringify(details)}`);
   });
-
-  try {
-    await win.loadFile(path.join(root, 'dist', 'renderer-react', 'index.html'));
-    await win.webContents.executeJavaScript(`
+  win.webContents.on('did-fail-load', (_event, code, description) => {
+    errors.push(`did-fail-load ${code}: ${description}`);
+  });
+  win.webContents.once('dom-ready', () => {
+    void win.webContents.executeJavaScript(`
       window.__smokeErrors = [];
       window.addEventListener('error', (event) => window.__smokeErrors.push('window: ' + event.message));
       window.addEventListener('unhandledrejection', (event) => {
@@ -97,7 +107,11 @@ app.whenReady().then(async () => {
       document.addEventListener('securitypolicyviolation', (event) => {
         window.__smokeErrors.push('CSP: ' + event.violatedDirective + ' ' + event.blockedURI);
       });
-    `);
+    `).catch((error) => errors.push(`browser error capture: ${error.message}`));
+  });
+
+  try {
+    await win.loadFile(path.join(root, 'dist', 'renderer-react', 'index.html'));
 
     const desktop = await poll(win, 'desktop shell', async () => {
       const heading = document.querySelector('h1');
@@ -162,11 +176,10 @@ app.whenReady().then(async () => {
       return result;
     })()`);
     const afterResize = await poll(win, 'keyboard panel resize', () => {
-      const handle = document.querySelectorAll('[role="separator"]')[0];
       const width = document.querySelector('.shell__navigation-panel')?.getBoundingClientRect().width ?? 0;
-      const value = handle?.getAttribute('aria-valuenow');
       const baseline = window.__smokePanelResizeBaseline;
-      return { ready: Math.abs(width - baseline.width) > 1 || value !== baseline.value, value: { width, value } };
+      const value = document.querySelectorAll('[role="separator"]')[0]?.getAttribute('aria-valuenow');
+      return { ready: Math.abs(width - baseline.width) > 1, value: { width, value } };
     });
 
     win.setContentSize(1100, 720);
@@ -235,15 +248,38 @@ app.whenReady().then(async () => {
 
     const screenshotDir = path.join(__dirname, 'screenshots');
     fs.mkdirSync(screenshotDir, { recursive: true });
-    await win.webContents.capturePage().then((image) => image.toPNG()).then((png) => {
-      fs.writeFileSync(path.join(screenshotDir, 'react-shell.png'), png);
-    });
+    const image = await win.webContents.capturePage();
+    const size = image.getSize();
+    const bitmap = image.toBitmap();
+    const png = image.toPNG();
+    let minLuminance = 255;
+    let maxLuminance = 0;
+    const colors = new Set();
+    for (let offset = 0; offset < bitmap.length; offset += 4 * 97) {
+      const blue = bitmap[offset] ?? 0;
+      const green = bitmap[offset + 1] ?? 0;
+      const red = bitmap[offset + 2] ?? 0;
+      const luminance = Math.round((red + green + blue) / 3);
+      minLuminance = Math.min(minLuminance, luminance);
+      maxLuminance = Math.max(maxLuminance, luminance);
+      colors.add(`${red},${green},${blue}`);
+    }
+    const screenshot = {
+      width: size.width,
+      height: size.height,
+      bytes: png.length,
+      luminanceRange: maxLuminance - minLuminance,
+      sampledColors: colors.size,
+    };
+    if (size.width < 1000 || size.height < 700 || png.length < 10000 || screenshot.luminanceRange < 20 || colors.size < 32) {
+      throw new Error(`screenshot is blank or incomplete: ${JSON.stringify(screenshot)}`);
+    }
+    fs.writeFileSync(path.join(screenshotDir, 'react-shell.png'), png);
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, screenshot }, null, 2));
     console.log(`Screenshot: ${path.join(screenshotDir, 'react-shell.png')}`);
     console.log('\nReact smoke passed\n');
-    finished = true;
-    app.exit(0);
+    finish(0);
   } catch (error) {
     fail(error && error.stack ? error.stack : String(error));
   }

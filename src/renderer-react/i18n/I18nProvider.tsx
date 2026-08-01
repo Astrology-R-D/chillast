@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { LocaleDictionary } from '../api/contracts';
 
-type InterpolationVariables = Record<string, string | number>;
+export type InterpolationVariables = Record<string, string | number>;
 
 interface I18nContextValue {
   t: (key: string, variables?: InterpolationVariables) => string;
@@ -9,7 +9,7 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-function findTranslation(dictionary: LocaleDictionary, key: string): string | undefined {
+function findTranslation(dictionary: LocaleDictionary | null | undefined, key: string): string | undefined {
   let current: unknown = dictionary;
   for (const segment of key.split('.')) {
     if (
@@ -25,6 +25,20 @@ function findTranslation(dictionary: LocaleDictionary, key: string): string | un
   return typeof current === 'string' ? current : undefined;
 }
 
+export function translate(
+  dictionary: LocaleDictionary | null | undefined,
+  key: string,
+  variables: InterpolationVariables = {},
+  fallback = key,
+): string {
+  const translation = findTranslation(dictionary, key) ?? fallback;
+  return translation.replace(/{{\s*([\w.-]+)\s*}}/g, (placeholder, variable: string) =>
+    Object.prototype.hasOwnProperty.call(variables, variable)
+      ? String(variables[variable])
+      : placeholder,
+  );
+}
+
 export function I18nProvider({
   dictionary,
   children,
@@ -33,16 +47,7 @@ export function I18nProvider({
   children: ReactNode;
 }) {
   const value = useMemo<I18nContextValue>(() => ({
-    t: (key, variables = {}) => {
-      const translation = findTranslation(dictionary, key);
-      if (translation === undefined) return key;
-
-      return translation.replace(/{{\s*([\w.-]+)\s*}}/g, (placeholder, variable: string) =>
-        Object.prototype.hasOwnProperty.call(variables, variable)
-          ? String(variables[variable])
-          : placeholder,
-      );
-    },
+    t: (key, variables = {}) => translate(dictionary, key, variables),
   }), [dictionary]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
