@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "requestedCharacterCount": 543,
+  "subsetCharacterCount": 508,
+  "sourceMissing": [
+    {
+      "character": "℞",
+      "codePoint": "U+211E"
+    },
+    {
+      "character": "∠",
+      "codePoint": "U+2220"
+    },
+    {
+      "character": "☉",
+      "codePoint": "U+2609"
+    },
+    {
+      "character": "☊",
+      "codePoint": "U+260A"
+    },
+    {
+      "character": "☋",
+      "codePoint": "U+260B"
+    },
+    {
+      "character": "☌",
+      "codePoint": "U+260C"
+    },
+    {
+      "character": "☍",
+      "codePoint": "U+260D"
+    },
+    {
+      "character": "☽",
+      "codePoint": "U+263D"
+    },
+    {
+      "character": "☿",
+      "codePoint": "U+263F"
+    },
+    {
+      "character": "♀",
+      "codePoint": "U+2640"
+    },
+    {
+      "character": "♂",
+      "codePoint": "U+2642"
+    },
+    {
+      "character": "♃",
+      "codePoint": "U+2643"
+    },
+    {
+      "character": "♄",
+      "codePoint": "U+2644"
+    },
+    {
+      "character": "♅",
+      "codePoint": "U+2645"
+    },
+    {
+      "character": "♆",
+      "codePoint": "U+2646"
+    },
+    {
+      "character": "♇",
+      "codePoint": "U+2647"
+    },
+    {
+      "character": "♈",
+      "codePoint": "U+2648"
+    },
+    {
+      "character": "♉",
+      "codePoint": "U+2649"
+    },
+    {
+      "character": "♊",
+      "codePoint": "U+264A"
+    },
+    {
+      "character": "♋",
+      "codePoint": "U+264B"
+    },
+    {
+      "character": "♌",
+      "codePoint": "U+264C"
+    },
+    {
+      "character": "♍",
+      "codePoint": "U+264D"
+    },
+    {
+      "character": "♎",
+      "codePoint": "U+264E"
+    },
+    {
+      "character": "♏",
+      "codePoint": "U+264F"
+    },
+    {
+      "character": "♐",
+      "codePoint": "U+2650"
+    },
+    {
+      "character": "♑",
+      "codePoint": "U+2651"
+    },
+    {
+      "character": "♒",
+      "codePoint": "U+2652"
+    },
+    {
+      "character": "♓",
+      "codePoint": "U+2653"
+    },
+    {
+      "character": "⚷",
+      "codePoint": "U+26B7"
+    },
+    {
+      "character": "⚸",
+      "codePoint": "U+26B8"
+    },
+    {
+      "character": "⚺",
+      "codePoint": "U+26BA"
+    },
+    {
+      "character": "⚻",
+      "codePoint": "U+26BB"
+    },
+    {
+      "character": "⚼",
+      "codePoint": "U+26BC"
+    },
+    {
+      "character": "✱",
+      "codePoint": "U+2731"
+    },
+    {
+      "character": "＋",
+      "codePoint": "U+FF0B"
+    }
+  ]
+}

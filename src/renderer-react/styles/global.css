@@ -35,6 +35,10 @@ textarea {
   letter-spacing: 0;
 }
 
+.glyph {
+  font-family: var(--font-glyph);
+}
+
 button,
 input,
 select,

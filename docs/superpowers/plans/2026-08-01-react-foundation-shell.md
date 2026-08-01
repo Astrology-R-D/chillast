@@ -808,20 +808,25 @@ export function startPreferenceSync(): () => void {
 
 - [ ] **Step 4: Create the complete foundation token styles**
 
-Create `src/renderer-react/styles/fonts.css` with four bundled faces:
+Create `tools/build-ui-fonts.mjs` using `subset-font` and `fontkit`. The reproducible generator parses `locale/zh.json`, combines its string values with printable ASCII and the explicit UI/astrology/Chinese glyph seed, partitions the request against the source Maple cmap, and emits committed WOFF2 files under `src/renderer-react/assets/fonts/`. It must parse each generated WOFF2 and fail if a source-supported requested glyph is missing. It also writes deterministic `manifest.json` metadata with requested/subset counts and every source-missing fallback character/code point; Maple must not be claimed to contain those characters.
+
+Create `src/renderer-react/styles/fonts.css` with the four generated faces:
 
 ```css
-@font-face { font-family: "Maple Mono NF CN"; src: url("../../../fonts/MapleMono-NF-CN-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "Maple Mono NF CN"; src: url("../../../fonts/MapleMono-NF-CN-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
-@font-face { font-family: "Maple Mono NF CN"; src: url("../../../fonts/MapleMono-NF-CN-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "Maple Mono NF CN"; src: url("../../../fonts/MapleMono-NF-CN-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Maple Mono NF CN"; src: url("../assets/fonts/MapleMono-NF-CN-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Maple Mono NF CN"; src: url("../assets/fonts/MapleMono-NF-CN-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Maple Mono NF CN"; src: url("../assets/fonts/MapleMono-NF-CN-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Maple Mono NF CN"; src: url("../assets/fonts/MapleMono-NF-CN-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
 ```
+
+Font coverage tests must use a cmap-aware parser to prove all source-supported seed characters exist in all four WOFF2 files, the manifest exactly accounts for source-missing requested characters, and total built font payload remains below 10 MB. Root Maple TTFs remain for the legacy renderer and are not copied into the React build.
 
 Create `src/renderer-react/styles/tokens.css`:
 
 ```css
 :root {
   --font-ui: "Maple Mono NF CN", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-glyph: "Maple Mono NF CN", "Segoe UI Symbol", "Microsoft YaHei", "Segoe UI", sans-serif;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
   --fs-xs: 10px; --fs-sm: 11px; --fs-md: 13px; --fs-lg: 16px; --fs-xl: 19px;
   --fw-normal: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
@@ -869,6 +874,7 @@ Create `src/renderer-react/styles/global.css`:
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; }
 body { overflow: hidden; color: var(--text-primary); background: var(--surface-base); font-family: var(--font-ui); font-size: var(--fs-md); letter-spacing: 0; }
+.glyph { font-family: var(--font-glyph); }
 button, input, select, textarea { color: inherit; font: inherit; letter-spacing: 0; }
 button { border: 0; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

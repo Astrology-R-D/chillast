@@ -1,9 +1,17 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import * as fontkit from 'fontkit';
 import { build } from 'vite';
 import { expect, test } from 'vitest';
 
 const stylesDirectory = resolve(process.cwd(), 'src/renderer-react/styles');
+const fontAssetsDirectory = resolve(process.cwd(), 'src/renderer-react/assets/fonts');
+const fontWeights = ['Regular', 'Medium', 'SemiBold', 'Bold'] as const;
+const explicitGlyphSeed =
+  '，。；：！？、（）【】《》「」『』“”‘’…—·＋−×÷°′″℞' +
+  '♈♉♊♋♌♍♎♏♐♑♒♓☉☽☿♀♂♃♄♅♆♇⚷☊☋⚸☌☍△□✱⚻⚼∠⚺✶' +
+  '甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥金木水火土阴阳' +
+  '鼠牛虎兔龙蛇马羊猴鸡狗猪';
 
 const approvedThemes = {
   light: {
@@ -74,6 +82,35 @@ function contrastRatio(foreground: string, background: string): number {
   );
 }
 
+function collectStrings(value: unknown, strings: string[] = []): string[] {
+  if (typeof value === 'string') strings.push(value);
+  else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, strings));
+  else if (value && typeof value === 'object') {
+    Object.values(value).forEach((item) => collectStrings(item, strings));
+  }
+  return strings;
+}
+
+function openFont(path: string): fontkit.Font {
+  const font = fontkit.openSync(path);
+  if (!('glyphForCodePoint' in font)) throw new Error(`Expected a single font in ${path}`);
+  return font;
+}
+
+function requestedCharacters(): string[] {
+  const locale = JSON.parse(readFileSync(resolve(process.cwd(), 'locale/zh.json'), 'utf8'));
+  const printableAscii = Array.from({ length: 95 }, (_, index) =>
+    String.fromCodePoint(index + 32),
+  ).join('');
+  return [...new Set(`${printableAscii}${explicitGlyphSeed}${collectStrings(locale).join('')}`)].sort(
+    (left, right) => left.codePointAt(0)! - right.codePointAt(0)!,
+  );
+}
+
+function codePointLabel(character: string): string {
+  return `U+${character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
 test('defines four compact Maple Mono WOFF2 faces', () => {
   const fontsPath = resolve(stylesDirectory, 'fonts.css');
   const css = readFileSync(fontsPath, 'utf8');
@@ -98,6 +135,55 @@ test('defines four compact Maple Mono WOFF2 faces', () => {
   }
 });
 
+test('manifest accounts for source-missing glyphs and every supported glyph exists in each subset', () => {
+  const manifestPath = resolve(fontAssetsDirectory, 'manifest.json');
+  if (!existsSync(manifestPath)) {
+    expect(existsSync(manifestPath), 'font coverage manifest').toBe(true);
+    return;
+  }
+
+  const requested = requestedCharacters();
+  const sourceFonts = fontWeights.map((weight) =>
+    openFont(resolve(process.cwd(), `fonts/MapleMono-NF-CN-${weight}.ttf`)),
+  );
+  const sourceSupport = requested.map((character) =>
+    sourceFonts.map((font) => font.glyphForCodePoint(character.codePointAt(0)!).id !== 0),
+  );
+  for (const supportByWeight of sourceSupport) {
+    expect(new Set(supportByWeight).size, 'source weights must expose the same requested cmap').toBe(1);
+  }
+
+  const supported = requested.filter((_character, index) => sourceSupport[index][0]);
+  const missing = requested.filter((_character, index) => !sourceSupport[index][0]);
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+
+  expect(missing).toHaveLength(35);
+  expect(
+    [...'℞∠☉☊☋☌☍☽☿♀♂♃♄♅♆♇♈♉♊♋♌♍♎♏♐♑♒♓⚷⚸⚺⚻⚼✱'].every((character) =>
+      missing.includes(character),
+    ),
+  ).toBe(true);
+  expect(manifest).toEqual({
+    version: 1,
+    requestedCharacterCount: requested.length,
+    subsetCharacterCount: supported.length,
+    sourceMissing: missing.map((character) => ({
+      character,
+      codePoint: codePointLabel(character),
+    })),
+  });
+
+  for (const weight of fontWeights) {
+    const subset = openFont(resolve(fontAssetsDirectory, `MapleMono-NF-CN-${weight}.woff2`));
+    for (const character of supported) {
+      expect(
+        subset.glyphForCodePoint(character.codePointAt(0)!).id,
+        `${weight} ${codePointLabel(character)}`,
+      ).toBeGreaterThan(0);
+    }
+  }
+});
+
 test('defines theme, density, token, and global foundations', () => {
   const tokens = readFileSync(resolve(stylesDirectory, 'tokens.css'), 'utf8');
   const themes = readFileSync(resolve(stylesDirectory, 'themes.css'), 'utf8');
@@ -106,6 +192,9 @@ test('defines theme, density, token, and global foundations', () => {
 
   expect(tokens).toContain("--font-family: 'Maple Mono NF CN'");
   expect(tokens).toContain("'Microsoft YaHei', 'Segoe UI', sans-serif");
+  expect(tokens).toContain(
+    "--font-glyph: 'Maple Mono NF CN', 'Segoe UI Symbol', 'Microsoft YaHei', 'Segoe UI', sans-serif",
+  );
   expect(tokens).toContain('--radius-sm: 4px');
   expect(tokens).toContain('--radius-md: 6px');
   expect(tokens).toContain('--radius-lg: 8px');
@@ -123,6 +212,7 @@ test('defines theme, density, token, and global foundations', () => {
   expect(global).toContain('overflow: hidden');
   expect(global).toContain(':focus-visible');
   expect(global).toContain('var(--focus)');
+  expect(global).toMatch(/\.glyph\s*\{[^}]*font-family:\s*var\(--font-glyph\)/);
   expect(global).not.toContain('var(--focus-ring)');
   expect(global).toContain('prefers-reduced-motion: reduce');
 });
