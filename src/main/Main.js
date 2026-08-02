@@ -17,6 +17,7 @@ const AiService = require('../core/ai/AiService');
 const AiSessionStore = require('./AiSessionStore');
 const LocationResolver = require('../core/astrology/LocationResolver');
 const { installExternalUrlHandler, resolveSmokeReportPath } = require('./MainPolicy');
+const CloseGuard = require('./CloseGuard');
 const {
   isNavigationAllowed,
   loadRenderer,
@@ -39,6 +40,8 @@ class Main {
     this.profileRepository = null;
     this.astrologyService = null;
     this.smokeErrors = [];
+    this.closeGuard = null;
+    this.pendingSmokeCloseReport = null;
   }
 
   /** Compose services that do not depend on Electron being ready. */
@@ -163,7 +166,17 @@ class Main {
 
   _handleCloseDecision(decision) {
     if (decision !== 'proceed' && decision !== 'cancel') throw new Error('Invalid close decision');
-    return false;
+    if (this.pendingSmokeCloseReport) this._writePendingSmokeStage(`decision-${decision}`);
+    const accepted = this.closeGuard ? this.closeGuard.decide(decision) : false;
+    if (accepted && decision === 'proceed' && this.pendingSmokeCloseReport) this._writePendingSmokeStage('approved', true);
+    return accepted;
+  }
+
+  _writePendingSmokeStage(stage, approved = false) {
+    if (!this.pendingSmokeCloseReport) return;
+    const { path: reportPath, report } = this.pendingSmokeCloseReport;
+    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+    fs.writeFileSync(reportPath, JSON.stringify({ ...report, closeHandshake: approved, closeStage: stage }, null, 2), 'utf8');
   }
 
   createWindow() {
@@ -197,6 +210,18 @@ class Main {
     });
 
     this.router.setWebContents(this.mainWindow.webContents);
+
+    if (rendererTarget.kind !== 'legacy') {
+      this.closeGuard = new CloseGuard({
+        win: this.mainWindow,
+        diagnostic: (message) => {
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            void dialog.showMessageBox(this.mainWindow, { type: 'warning', title: 'CHILLAST', message });
+          }
+        },
+      });
+      this.closeGuard.install();
+    }
 
     const rendererWindow = this.mainWindow;
     let smokeReportPath = null;
@@ -239,7 +264,16 @@ class Main {
     });
     this.mainWindow.once('ready-to-show', () => this.mainWindow.show());
 
-    this.mainWindow.on('closed', () => { this.mainWindow = null; });
+    this.mainWindow.on('closed', () => {
+      this.closeGuard?.dispose();
+      this.closeGuard = null;
+      this.mainWindow = null;
+      if (this.pendingSmokeCloseReport) {
+        const pendingReport = this.pendingSmokeCloseReport;
+        this.pendingSmokeCloseReport = null;
+        this._writeSmokeReport(pendingReport.path, { ...pendingReport.report, closeHandshake: true }, pendingReport.exitCode);
+      }
+    });
   }
 
   _captureSmokeErrors(webContents) {
@@ -278,11 +312,19 @@ class Main {
           };
         })()`);
         if (state.hasApi && state.marker && state.routes === 6 && state.title) {
-          this._writeSmokeReport(reportPath, {
+          const report = {
             targetKind: rendererTarget.kind,
             ...state,
             errors: [...this.smokeErrors],
-          }, this.smokeErrors.length ? 1 : 0);
+          };
+          const exitCode = this.smokeErrors.length ? 1 : 0;
+          if (rendererTarget.kind !== 'legacy') {
+            this.pendingSmokeCloseReport = { path: reportPath, report, exitCode };
+            this._writePendingSmokeStage('requested');
+            this.mainWindow.close();
+          } else {
+            this._writeSmokeReport(reportPath, report, exitCode);
+          }
           return;
         }
       } catch (error) {

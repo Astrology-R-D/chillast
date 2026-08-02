@@ -26,3 +26,22 @@ test('Main rejects unknown close decisions and denies valid decisions until Task
     delete require.cache[require.resolve('../src/main/Main')];
   }
 });
+
+test('Main delegates valid decisions to the installed close guard', () => {
+  const originalLoad = Module._load;
+  Module._load = function load(request, parent, isMain) {
+    if (request === 'electron') return { app: {}, BrowserWindow: class {}, dialog: {}, ipcMain: {}, nativeTheme: {}, shell: {} };
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  try {
+    const Main = require('../src/main/Main');
+    const main = new Main();
+    const decisions = [];
+    main.closeGuard = { decide: (decision) => { decisions.push(decision); return true; } };
+    assert.equal(main._handleCloseDecision('proceed'), true);
+    assert.deepEqual(decisions, ['proceed']);
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[require.resolve('../src/main/Main')];
+  }
+});

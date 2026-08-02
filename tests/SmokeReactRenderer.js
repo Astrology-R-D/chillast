@@ -9,6 +9,14 @@ runElectronSmokeController('chillast-react-smoke-', app);
 
 const root = path.join(__dirname, '..');
 const errors = [];
+const expectedProfileScreenshotNames = [
+  'profile-light-compact-1440x920.png',
+  'profile-light-compact-1280x800.png',
+  'profile-light-compact-1100x720.png',
+  'profile-dark-comfortable-1440x920.png',
+  'profile-dark-comfortable-1280x800.png',
+  'profile-dark-comfortable-1100x720.png',
+];
 const seededProfile = {
   id: 'smoke-profile',
   nameZh: '烟测档案',
@@ -76,6 +84,25 @@ function registerEnvelope(channel, handler) {
   });
 }
 
+function imageMetrics(image) {
+  const size = image.getSize();
+  const bitmap = image.toBitmap();
+  const png = image.toPNG();
+  let minLuminance = 255;
+  let maxLuminance = 0;
+  const colors = new Set();
+  for (let offset = 0; offset < bitmap.length; offset += 4 * 97) {
+    const blue = bitmap[offset] ?? 0;
+    const green = bitmap[offset + 1] ?? 0;
+    const red = bitmap[offset + 2] ?? 0;
+    const luminance = Math.round((red + green + blue) / 3);
+    minLuminance = Math.min(minLuminance, luminance);
+    maxLuminance = Math.max(maxLuminance, luminance);
+    colors.add(`${red},${green},${blue}`);
+  }
+  return { png, width: size.width, height: size.height, bytes: png.length, luminanceRange: maxLuminance - minLuminance, sampledColors: colors.size };
+}
+
 app.whenReady().then(async () => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
   const locale = JSON.parse(fs.readFileSync(path.join(root, 'locale', 'zh.json'), 'utf8'));
@@ -109,7 +136,7 @@ app.whenReady().then(async () => {
     smokeProfiles = smokeProfiles.filter((profile) => profile.id !== id);
     return found;
   });
-  registerEnvelope('cities:search', () => []);
+  registerEnvelope('cities:search', () => [{ key: 'shanghai', label: '上海 / Shanghai', nameZh: '上海', nameEn: 'Shanghai', region: '', country: 'CN', latitude: 31.2304, longitude: 121.4737, source: 'western' }]);
   registerEnvelope('chinese:searchCities', () => []);
   registerEnvelope('locations:resolve', () => ({
     timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1990-01-01T16:00:00.000Z',
@@ -205,6 +232,55 @@ app.whenReady().then(async () => {
     if (desktop.separators !== 2) throw new Error(`expected two separators, got ${desktop.separators}`);
     if (!desktop.narrowToolbarsHidden) throw new Error('narrow-only toolbars are visible on desktop');
 
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.profile-detail__commands button')[1].click()`);
+    await poll(win, 'direct transit route', () => ({ ready: document.querySelector('h1')?.textContent === '个人星盘' }));
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+    await poll(win, 'return to profiles', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '烟测档案' }));
+
+    await win.webContents.executeJavaScript(`document.querySelector('[data-profile-create]').click()`);
+    await poll(win, 'create form', () => ({ ready: Boolean(document.querySelector('.profile-form')) }));
+    await win.webContents.executeJavaScript(`(() => {
+      const set = (selector, value) => {
+        const element = document.querySelector(selector);
+        const setter = Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value').set;
+        setter.call(element, value);
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      set('[name="nameZh"]', '新建烟测档案');
+      for (const [name, value] of Object.entries({ year: '2001', month: '02', day: '03', hour: '04', minute: '05' })) set('[name="' + name + '"]', value);
+      set('[role="combobox"][aria-autocomplete="list"]', '上海');
+    })()`);
+    await poll(win, 'city result', () => ({ ready: Boolean(document.querySelector('.location-picker__results [role="option"]')) }));
+    await win.webContents.executeJavaScript(`document.querySelector('.location-picker__results [role="option"]').click()`);
+    await poll(win, 'location resolution', () => ({ ready: document.querySelector('.location-picker__timezone')?.textContent.includes('Asia/Shanghai') }));
+    await win.webContents.executeJavaScript(`document.querySelector('.profile-form button[type="submit"]').click()`);
+    await poll(win, 'created profile refetch', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '新建烟测档案' && document.querySelectorAll('.profile-row').length === 2 }));
+
+    await win.webContents.executeJavaScript(`document.querySelector('.profile-detail__actions button').click()`);
+    await poll(win, 'edit form', () => ({ ready: Boolean(document.querySelector('.profile-form [name="notes"]')) }));
+    await win.webContents.executeJavaScript(`(() => {
+      const element = document.querySelector('.profile-form [name="notes"]');
+      Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value').set.call(element, '未保存烟测备注');
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelectorAll('.shell-nav__button')[1].click();
+    })()`);
+    const dirtyCancelRetained = await poll(win, 'dirty dialog', () => ({ ready: Boolean(document.querySelector('.dirty-navigation__dialog')), value: true }));
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '取消').click()`);
+    await poll(win, 'dirty cancel retained', () => ({ ready: document.querySelector('.profile-form [name="notes"]')?.value === '未保存烟测备注' && document.querySelector('h1')?.textContent === '档案管理' }));
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[1].click()`);
+    await poll(win, 'dirty dialog repeated', () => ({ ready: Boolean(document.querySelector('.dirty-navigation__dialog')) }));
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '放弃更改').click()`);
+    const dirtyDiscardNavigated = await poll(win, 'dirty discard navigation', () => ({ ready: document.querySelector('h1')?.textContent === '个人星盘', value: true }));
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+    await poll(win, 'profile after discard', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '烟测档案' }));
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.profile-detail__actions button')[1].click()`);
+    await poll(win, 'duplicate profile', () => ({ ready: document.querySelectorAll('.profile-row').length === 3 }));
+    await win.webContents.executeJavaScript(`document.querySelector('.profile-detail__actions button:last-child').click()`);
+    await poll(win, 'delete dialog', () => ({ ready: Boolean(document.querySelector('.profile-dialog')) }));
+    await win.webContents.executeJavaScript(`document.querySelector('.profile-dialog__actions button:last-child').click()`);
+    await poll(win, 'delete duplicate', () => ({ ready: document.querySelectorAll('.profile-row').length === 2 && !document.querySelector('.profile-dialog') }));
+
     await win.webContents.executeJavaScript(`
       document.querySelectorAll('.shell-nav__button')[1].click();
       const selects = document.querySelectorAll('.workspace__appearance select');
@@ -295,42 +371,88 @@ app.whenReady().then(async () => {
       throw new Error(`desktop state was not retained: ${JSON.stringify(restored)}`);
     }
 
+    const screenshotDir = path.join(__dirname, 'screenshots');
+    fs.mkdirSync(screenshotDir, { recursive: true });
+    const profileScreenshots = [];
+    let screenshotIndex = 0;
+    for (const appearance of [
+      { theme: 'light', density: 'compact' },
+      { theme: 'dark', density: 'comfortable' },
+    ]) {
+      for (const [width, height] of [[1440, 920], [1280, 800], [1100, 720]]) {
+        errors.push(...await win.webContents.executeJavaScript('window.__smokeErrors || []'));
+        smokeProfiles = [seededProfile];
+        win.setContentSize(width, height);
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('renderer reload timed out')), 10000);
+          win.webContents.once('did-finish-load', () => { clearTimeout(timeout); resolve(); });
+          win.webContents.reload();
+        });
+        await poll(win, `reloaded profile shell ${width}x${height}`, () => ({
+          ready: Boolean(document.querySelector('.workspace__appearance select') && document.querySelector('.profile-detail h2')),
+        }));
+        await win.webContents.executeJavaScript(`(() => {
+          window.__smokeErrors = [];
+          window.__smokeExpectedTheme = '${appearance.theme}';
+          window.__smokeExpectedDensity = '${appearance.density}';
+          window.addEventListener('error', (event) => window.__smokeErrors.push('window: ' + event.message));
+          window.addEventListener('unhandledrejection', (event) => window.__smokeErrors.push('unhandledrejection: ' + String(event.reason)));
+          const selects = document.querySelectorAll('.workspace__appearance select');
+          selects[0].value = '${appearance.theme}'; selects[0].dispatchEvent(new Event('change', { bubbles: true }));
+          selects[1].value = '${appearance.density}'; selects[1].dispatchEvent(new Event('change', { bubbles: true }));
+          document.querySelectorAll('.shell-nav__button')[0].click();
+        })()`);
+        const geometry = await poll(win, `profile geometry ${width}x${height}`, () => {
+          const page = document.querySelector('.profile-page');
+          const directory = document.querySelector('.profile-directory');
+          const surface = document.querySelector('.profile-page__surface');
+          if (!page || !directory || !surface || document.querySelector('h1')?.textContent !== '档案管理'
+            || document.querySelector('.profile-detail h2')?.textContent !== '烟测档案'
+            || document.querySelectorAll('.profile-row').length !== 1
+            || document.documentElement.dataset.theme !== window.__smokeExpectedTheme
+            || document.documentElement.dataset.density !== window.__smokeExpectedDensity) return { ready: false, value: {
+              route: document.querySelector('h1')?.textContent,
+              profile: document.querySelector('.profile-detail h2')?.textContent,
+              rows: document.querySelectorAll('.profile-row').length,
+              theme: document.documentElement.dataset.theme,
+              density: document.documentElement.dataset.density,
+              page: Boolean(page), directory: Boolean(directory), surface: Boolean(surface),
+            } };
+          const pageRect = page.getBoundingClientRect();
+          const directoryRect = directory.getBoundingClientRect();
+          const surfaceRect = surface.getBoundingClientRect();
+          const sideBySide = directoryRect.right <= surfaceRect.left + 1;
+          const stacked = directoryRect.bottom <= surfaceRect.top + 1;
+          const controlsFit = Array.from(document.querySelectorAll('[data-profile-control]')).every((element) => element.scrollWidth <= element.clientWidth + 1);
+          const labelsFit = Array.from(document.querySelectorAll('.profile-page label, .profile-page h2, .profile-page h3')).every((element) => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1);
+          return { ready: true, value: { pageWidth: pageRect.width, sideBySide, stacked, controlsFit, labelsFit, bodyOverflow: document.body.scrollWidth - document.body.clientWidth } };
+        });
+        if ((geometry.pageWidth >= 760 ? !geometry.sideBySide : !geometry.stacked) || !geometry.controlsFit || !geometry.labelsFit || geometry.bodyOverflow > 1) {
+          throw new Error(`invalid profile geometry: ${JSON.stringify({ width, height, ...appearance, ...geometry })}`);
+        }
+        win.showInactive();
+        win.webContents.invalidate();
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await win.webContents.capturePage();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const image = (await win.webContents.capturePage()).resize({ width, height, quality: 'best' });
+        const metrics = imageMetrics(image);
+        const computedName = `profile-${appearance.theme}-${appearance.density}-${width}x${height}.png`;
+        const name = expectedProfileScreenshotNames[screenshotIndex++];
+        if (name !== computedName) throw new Error(`unexpected screenshot matrix order: ${computedName}`);
+        if (metrics.width !== width || metrics.height !== height || metrics.bytes < 10000 || metrics.luminanceRange < 20 || metrics.sampledColors < 32) {
+          throw new Error(`screenshot is blank or incomplete: ${JSON.stringify({ name, ...metrics, png: undefined })}`);
+        }
+        fs.writeFileSync(path.join(screenshotDir, name), metrics.png);
+        profileScreenshots.push({ name, width: metrics.width, height: metrics.height, bytes: metrics.bytes, luminanceRange: metrics.luminanceRange, sampledColors: metrics.sampledColors, geometry });
+      }
+    }
+
     const pageErrors = await win.webContents.executeJavaScript('window.__smokeErrors');
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    const screenshotDir = path.join(__dirname, 'screenshots');
-    fs.mkdirSync(screenshotDir, { recursive: true });
-    const image = await win.webContents.capturePage();
-    const size = image.getSize();
-    const bitmap = image.toBitmap();
-    const png = image.toPNG();
-    let minLuminance = 255;
-    let maxLuminance = 0;
-    const colors = new Set();
-    for (let offset = 0; offset < bitmap.length; offset += 4 * 97) {
-      const blue = bitmap[offset] ?? 0;
-      const green = bitmap[offset + 1] ?? 0;
-      const red = bitmap[offset + 2] ?? 0;
-      const luminance = Math.round((red + green + blue) / 3);
-      minLuminance = Math.min(minLuminance, luminance);
-      maxLuminance = Math.max(maxLuminance, luminance);
-      colors.add(`${red},${green},${blue}`);
-    }
-    const screenshot = {
-      width: size.width,
-      height: size.height,
-      bytes: png.length,
-      luminanceRange: maxLuminance - minLuminance,
-      sampledColors: colors.size,
-    };
-    if (size.width < 1000 || size.height < 700 || png.length < 10000 || screenshot.luminanceRange < 20 || colors.size < 32) {
-      throw new Error(`screenshot is blank or incomplete: ${JSON.stringify(screenshot)}`);
-    }
-    fs.writeFileSync(path.join(screenshotDir, 'react-shell.png'), png);
-
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, screenshot }, null, 2));
-    console.log(`Screenshot: ${path.join(screenshotDir, 'react-shell.png')}`);
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, dirtyCancelRetained, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {
@@ -338,4 +460,4 @@ app.whenReady().then(async () => {
   }
 });
 
-setTimeout(() => fail('timed out after 45 seconds'), 45000);
+setTimeout(() => fail('timed out after 90 seconds'), 90000);

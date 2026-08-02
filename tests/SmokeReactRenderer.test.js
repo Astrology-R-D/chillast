@@ -22,3 +22,13 @@ test('React smoke requires seeded profile content and captures main-process fail
   assert.match(source, /uncaughtException/);
   assert.match(source, /handler failure/);
 });
+
+test('React smoke verifies dirty navigation and all six profile screenshot variants', () => {
+  assert.match(source, /dirtyCancelRetained/);
+  assert.match(source, /dirtyDiscardNavigated/);
+  assert.match(source, /profileScreenshots/);
+  for (const name of [
+    'profile-light-compact-1440x920.png', 'profile-light-compact-1280x800.png', 'profile-light-compact-1100x720.png',
+    'profile-dark-comfortable-1440x920.png', 'profile-dark-comfortable-1280x800.png', 'profile-dark-comfortable-1100x720.png',
+  ]) assert.match(source, new RegExp(name.replaceAll('.', '\\.')));
+});

@@ -2,14 +2,11 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Gender, Profile, ProfileSaveInput } from '../../api/contracts';
 import { useI18n } from '../../i18n/I18nProvider';
+import { useOptionalDirtyNavigation, type DraftRegistration } from '../../shell/DirtyNavigationProvider';
 import { LocationPicker } from './LocationPicker';
 import { createDraft, daysInMonth, isProfileDraftDirty, parseTagText, toSaveInput, validateProfileDraft, type ProfileDraft, type ProfileFieldErrors } from './profileForm';
 
-export interface DraftRegistration {
-  dirty: boolean;
-  save(): Promise<boolean>;
-  discard(): void;
-}
+export type { DraftRegistration } from '../../shell/DirtyNavigationProvider';
 
 export interface ProfileFormProps {
   profile: Profile | null;
@@ -30,6 +27,7 @@ const padded = (field: NumericField, value: number) => field === 'year' ? String
 
 export function ProfileForm({ profile, onSave, onCancel, onDraftStateChange, onDirtyChange }: ProfileFormProps) {
   const { t } = useI18n();
+  const dirtyNavigation = useOptionalDirtyNavigation();
   const id = useId();
   const initial = createDraft(profile);
   const baselineRef = useRef(initial);
@@ -93,9 +91,12 @@ export function ProfileForm({ profile, onSave, onCancel, onDraftStateChange, onD
     baselineRef.current = next; setDraft(next); setErrors((current) => current.save ? { save: current.save } : {});
   }, [profile]);
   useEffect(() => {
-    draftStateHandlerRef.current({ dirty, save: saveRef.current, discard: discardRef.current });
+    const registration = { dirty, save: saveRef.current, discard: discardRef.current };
+    dirtyNavigation?.register(registration);
+    draftStateHandlerRef.current(registration);
     dirtyHandlerRef.current?.(dirty);
-  }, [dirty]);
+    return () => dirtyNavigation?.register(null);
+  }, [dirty, dirtyNavigation]);
 
   const patch = (value: Partial<ProfileDraft>) => {
     setDraft((current) => ({ ...current, ...value }));

@@ -43,11 +43,14 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
       const timer = setTimeout(() => {
         timedOut = true;
         child.kill();
-      }, 20000);
+      }, 40000);
       child.once('exit', () => clearTimeout(timer));
     });
 
-    if (timedOut) throw new Error(`${renderer} packaged executable timed out`);
+    if (timedOut) {
+      const pendingReport = fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : '(missing)';
+      throw new Error(`${renderer} packaged executable timed out\nreport: ${pendingReport}\nstdout: ${stdout}\nstderr: ${stderr}`);
+    }
     assert.equal(result.signal, null, `${renderer} exited by signal ${result.signal}`);
     assert.equal(result.code, 0, `${renderer} exit ${result.code}\n${stderr}`);
     assert.ok(fs.existsSync(reportPath), `${renderer} smoke report missing\n${stdout}\n${stderr}`);
@@ -58,6 +61,8 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
     assert.equal(report.routes, 6);
     assert.equal(report.title, 'CHILLAST');
     assert.deepEqual(report.errors, []);
+    if (renderer === 'react') assert.equal(report.closeHandshake, true);
+    else assert.equal(report.closeHandshake, undefined);
     return report;
   } finally {
     if (child && child.exitCode === null && child.signalCode === null) child.kill();

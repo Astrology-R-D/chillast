@@ -6,6 +6,7 @@ import type { Profile, ProfileSaveInput } from '../../api/contracts';
 import { useI18n } from '../../i18n/I18nProvider';
 import { profileWorkspaceStore, type ProfileWorkspaceState } from '../../stores/profileWorkspace';
 import type { RouteKey } from '../../shell/routes';
+import { useDirtyNavigation } from '../../shell/DirtyNavigationProvider';
 import { ProfileDetail } from './ProfileDetail';
 import { ProfileDirectory } from './ProfileDirectory';
 import { ProfileForm, type DraftRegistration } from './ProfileEditor';
@@ -40,6 +41,7 @@ const profilesEquivalent = (left: Profile, right: Profile) => profileFingerprint
 
 export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate, onCreate, onEdit, onFormRegistration }: ProfilePageProps) {
   const { t } = useI18n();
+  const dirtyNavigation = useDirtyNavigation();
   const queryClient = useQueryClient();
   const profiles = useProfiles();
   const save = useSaveProfile();
@@ -127,19 +129,20 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     return () => cancelAnimationFrame(frame);
   }, [deleteTarget, focusAfterDelete]);
 
-  const select = (id: string) => {
+  const commitSelection = (id: string) => {
     editorGenerationRef.current += 1;
     setSelectedId(id);
     setEditor(null); setEditorCommit(null); editorCommitRef.current = null;
     workspaceStore.getState().recordRecentUse(id);
   };
+  const select = (id: string) => { void dirtyNavigation.requestTransition(() => commitSelection(id)); };
   const selected = visibleProfiles?.find(({ id }) => id === selectedId) ?? null;
   const beginEditor = () => {
     editorGenerationRef.current += 1;
     editorTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     editorCommitRef.current = null; setEditorCommit(null); setEditorFocusReturn(null);
   };
-  const openCreate = () => { beginEditor(); setEditor({ mode: 'create' }); onCreate?.(); };
+  const openCreate = () => { void dirtyNavigation.requestTransition(() => { beginEditor(); setEditor({ mode: 'create' }); onCreate?.(); }); };
   const openEdit = (profile: Profile) => { beginEditor(); setEditor({ mode: 'edit', profile }); onEdit?.(profile); };
   const closeEditor = () => {
     editorGenerationRef.current += 1;
@@ -148,6 +151,7 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     setEditorFocusReturn({ origin: editorTriggerRef.current, selectedId });
     setEditor(null); setEditorCommit(null); editorCommitRef.current = null;
   };
+  const requestCloseEditor = () => { void dirtyNavigation.requestTransition(closeEditor); };
   const saveEditor = async (payload: ProfileSaveInput): Promise<void> => {
     const generation = editorGenerationRef.current;
     let committed = editorCommitRef.current;
@@ -250,8 +254,10 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     const intent = chartType === 'synastry'
       ? { route: 'relationship' as const, chartType, primaryProfileId: profile.id }
       : { route: 'personal' as const, chartType, primaryProfileId: profile.id };
-    workspaceStore.getState().openChart(intent);
-    if (workspaceStore.getState().chartIntent) onNavigate(intent.route);
+    void dirtyNavigation.requestTransition(() => {
+      workspaceStore.getState().openChart(intent);
+      if (workspaceStore.getState().chartIntent) onNavigate(intent.route);
+    });
   };
   const refreshDelete = async (deletedId: string) => {
     setDeleteError('');
@@ -323,7 +329,7 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   return <div ref={pageRef} className="profile-page">
     <ProfileDirectory profiles={visibleProfiles ?? []} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
     <section className="profile-page__surface">
-      {editor ? <ProfileForm key="profile-editor" profile={editorCommit?.profile ?? editor.profile ?? null} onSave={saveEditor} onCancel={closeEditor} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
+      {editor ? <ProfileForm key="profile-editor" profile={editorCommit?.profile ?? editor.profile ?? null} onSave={saveEditor} onCancel={requestCloseEditor} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
         : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => void duplicate(selected)}
         onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />

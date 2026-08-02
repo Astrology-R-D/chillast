@@ -10,8 +10,13 @@ import { ProfilePage } from '../features/profiles/ProfilePage';
 import { Navigation } from './Navigation';
 import { PanelLayout } from './PanelLayout';
 import { ROUTES, type RouteKey } from './routes';
+import { DirtyNavigationProvider, useDirtyNavigation } from './DirtyNavigationProvider';
 
 export function AppShell() {
+  return <DirtyNavigationProvider><AppShellInner /></DirtyNavigationProvider>;
+}
+
+function AppShellInner() {
   const { t } = useI18n();
   const [activeRoute, setActiveRoute] = useState<RouteKey>('profiles');
   const theme = usePreferences((state) => state.theme);
@@ -21,10 +26,12 @@ export function AppShell() {
   const route = ROUTES.find(({ key }) => key === activeRoute) ?? ROUTES[0];
   const PageIcon = route.icon;
   const title = t(route.titleKey);
+  const dirtyNavigation = useDirtyNavigation();
+  const navigate = (nextRoute: RouteKey) => { void dirtyNavigation.requestTransition(() => setActiveRoute(nextRoute)); };
 
   return (
     <PanelLayout
-      navigation={<Navigation active={activeRoute} onNavigate={setActiveRoute} />}
+      navigation={<Navigation active={activeRoute} onNavigate={navigate} />}
       ai={<AiStatusPanel />}
       labels={{
         openAi: t('shell.openAi'),

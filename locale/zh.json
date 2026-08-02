@@ -37,6 +37,15 @@
     "workspaceRegion": "工作区",
     "aiRegion": "AI 助手"
   },
+  "dirty": {
+    "title": "保存未完成的档案更改？",
+    "description": "当前档案包含未保存的更改。请先保存、放弃更改或取消操作。",
+    "save": "保存并继续",
+    "discard": "放弃更改",
+    "cancel": "取消",
+    "saving": "正在保存档案…",
+    "saveFailed": "档案未能保存，请修正错误后重试。"
+  },
   "appearance": {
     "system": "跟随系统",
     "light": "亮色",

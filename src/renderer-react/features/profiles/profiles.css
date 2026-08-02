@@ -96,3 +96,10 @@
   .location-picker__manual { grid-template-columns: minmax(0, 1fr); }
   .location-picker__coordinates { grid-template-columns: minmax(0, 1fr); }
 }
+@container (max-width: 759px) {
+  .profile-page { grid-template-columns: minmax(0, 1fr); height: auto; overflow: visible; }
+  .profile-directory { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+  .profile-page__surface { overflow: visible; }
+  .profile-detail__facts, .profile-detail__timestamps, .profile-form__names, .location-picker__manual, .location-picker__coordinates { grid-template-columns: minmax(0, 1fr); }
+  .profile-form__segments { grid-template-columns: repeat(3, minmax(72px, 1fr)); }
+}

@@ -7,6 +7,7 @@ import type { Profile } from '../../api/contracts';
 import { I18nProvider } from '../../i18n/I18nProvider';
 import { createProfileWorkspaceStore, PROFILE_WORKSPACE_KEY } from '../../stores/profileWorkspace';
 import { ProfilePage } from './ProfilePage';
+import { DirtyNavigationProvider } from '../../shell/DirtyNavigationProvider';
 import '../../styles/density.css';
 
 const alpha: Profile = {
@@ -41,17 +42,33 @@ function setup(
   storage = memoryStorage(),
 ) {
   const api = { profiles: { list, save: vi.fn(), remove: vi.fn() }, locations: { resolve: vi.fn().mockResolvedValue({ ok: true, data: { timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1987-02-02T20:05:00.000Z' } }) } };
+  Object.assign(api, { app: { onCloseRequested: vi.fn(() => () => {}), decideClose: vi.fn().mockResolvedValue({ ok: true, data: true }) } });
   vi.stubGlobal('mystApi', api);
   const store = createProfileWorkspaceStore(storage, Date.now);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const onNavigate = vi.fn();
   const view = render(
-    <QueryClientProvider client={client}><I18nProvider dictionary={locale}>
+    <QueryClientProvider client={client}><I18nProvider dictionary={locale}><DirtyNavigationProvider>
       <ProfilePage workspaceStore={store} onNavigate={onNavigate} />
-    </I18nProvider></QueryClientProvider>,
+    </DirtyNavigationProvider></I18nProvider></QueryClientProvider>,
   );
   return { ...view, api, store, client, onNavigate };
 }
+
+test('guards dirty profile selection and leaves the draft in place when canceled', async () => {
+  setup();
+  await screen.findByRole('heading', { name: '王晓明' });
+  await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
+  await userEvent.type(screen.getByRole('textbox', { name: '备注' }), '未保存');
+  await userEvent.click(screen.getByRole('button', { name: /^选择档案：Beatrice Longname/ }));
+  const dialog = screen.getByRole('alertdialog', { name: locale.dirty.title });
+  expect(screen.getByRole('form', { name: '编辑档案' })).toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole('button', { name: locale.dirty.cancel }));
+  expect((screen.getByRole('textbox', { name: '备注' }) as HTMLTextAreaElement).value).toContain('未保存');
+  await userEvent.click(screen.getByRole('button', { name: /^选择档案：Beatrice Longname/ }));
+  await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: locale.dirty.discard }));
+  expect(await screen.findByRole('heading', { name: 'Beatrice Longname' })).toBeInTheDocument();
+});
 
 test('selects a persisted valid primary initially and after refetch while retaining valid selection', async () => {
   const storage = memoryStorage();

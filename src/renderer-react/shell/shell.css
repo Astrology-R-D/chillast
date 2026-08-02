@@ -306,6 +306,7 @@
 }
 
 .workspace {
+  container-type: inline-size;
   min-width: 0;
   min-height: 100%;
 }

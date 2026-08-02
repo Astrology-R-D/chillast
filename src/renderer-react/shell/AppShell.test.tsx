@@ -26,6 +26,7 @@ const dictionary = {
     navigationRegion: '本地化导航区域', workspaceRegion: '本地化工作区域', aiRegion: '本地化 AI 区域',
   },
   appearance: { system: '跟随系统', light: '亮色', dark: '深色', compact: '紧凑', comfortable: '均衡' },
+  dirty: { title: '保存更改？', description: '存在未保存更改', save: '保存并继续', discard: '放弃更改', cancel: '取消', saving: '保存中', saveFailed: '保存失败' },
 };
 let stopSync: (() => void) | undefined;
 
@@ -40,6 +41,7 @@ beforeEach(() => {
       onStatusChanged: vi.fn(() => vi.fn()), initStatus: vi.fn(), onInitProgress: vi.fn(),
     },
     profiles: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), save: vi.fn(), remove: vi.fn() },
+    app: { onCloseRequested: vi.fn(() => () => {}), decideClose: vi.fn().mockResolvedValue({ ok: true, data: true }) },
   });
 });
 
