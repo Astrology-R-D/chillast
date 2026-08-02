@@ -150,7 +150,7 @@ test('supports directory search, sorting, selection, recent filtering, and prima
   expect(within(directory).getAllByRole('button', { name: /选择档案/ })).toHaveLength(1);
 });
 
-test('renders exact profile detail and opens validated chart intents before navigation', async () => {
+test('publishes chart intent and route together through one supplied shell transition', async () => {
   const { store, onNavigate } = setup();
   await screen.findByRole('heading', { name: '王晓明' });
   const detail = screen.getByRole('article', { name: '档案详情' });
@@ -161,11 +161,16 @@ test('renders exact profile detail and opens validated chart intents before navi
   expect(within(detail).getByText(/第一行/).textContent).toBe('第一行\n第二行');
   expect(within(detail).getByRole('list', { name: '标签' })).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '打开本命盘' }));
+  expect(store.getState().chartIntent).toBeNull();
+  expect(onNavigate).toHaveBeenCalledTimes(1);
+  expect(onNavigate).toHaveBeenCalledWith('personal', expect.any(Function));
+  act(() => onNavigate.mock.calls[0][1]());
   expect(store.getState().chartIntent).toEqual({ route: 'personal', chartType: 'natal', primaryProfileId: 'a' });
-  expect(onNavigate).toHaveBeenCalledWith('personal');
   await userEvent.click(screen.getByRole('button', { name: '打开比较盘' }));
+  expect(onNavigate).toHaveBeenCalledTimes(2);
+  act(() => onNavigate.mock.calls[1][1]());
   expect(store.getState().chartIntent?.chartType).toBe('synastry');
-  expect(onNavigate).toHaveBeenLastCalledWith('relationship');
+  expect(onNavigate).toHaveBeenLastCalledWith('relationship', expect.any(Function));
 });
 
 test('duplicates with a clean payload, mandatory refetch, localized nonblank name, and canonical selection', async () => {

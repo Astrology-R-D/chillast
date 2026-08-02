@@ -10,7 +10,7 @@ import './styles/global.css';
 import './shell/shell.css';
 
 const stopPreferenceSync = startPreferenceSync();
-window.addEventListener('beforeunload', stopPreferenceSync, { once: true });
+window.addEventListener('pagehide', stopPreferenceSync, { once: true });
 
 const rootElement = document.getElementById('root');
 

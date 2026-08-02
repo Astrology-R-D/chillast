@@ -10,13 +10,18 @@ runElectronSmokeController('chillast-react-smoke-', app);
 const root = path.join(__dirname, '..');
 const errors = [];
 const expectedProfileScreenshotNames = [
-  'profile-light-compact-1440x920.png',
-  'profile-light-compact-1280x800.png',
-  'profile-light-compact-1100x720.png',
-  'profile-dark-comfortable-1440x920.png',
-  'profile-dark-comfortable-1280x800.png',
-  'profile-dark-comfortable-1100x720.png',
+  'profile-1440x920-light-compact.png',
+  'profile-1280x800-light-compact.png',
+  'profile-1100x720-light-compact.png',
+  'profile-1440x920-dark-comfortable.png',
+  'profile-1280x800-dark-comfortable.png',
+  'profile-1100x720-dark-comfortable.png',
 ];
+const anchorProfile = {
+  id: 'anchor-profile', nameZh: '基础档案', nameEn: 'Anchor Profile', gender: 'other',
+  birthData: { year: 1988, month: 6, day: 7, hour: 8, minute: 9, location: { label: '杭州 / Hangzhou', latitude: 30.2741, longitude: 120.1551 } },
+  notes: 'Anchor', tags: ['Baseline'], createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z',
+};
 const seededProfile = {
   id: 'smoke-profile',
   nameZh: '烟测档案',
@@ -31,7 +36,7 @@ const seededProfile = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
-let smokeProfiles = [seededProfile];
+let smokeProfiles = [anchorProfile, seededProfile];
 const userDataDir = process.env.CHILLAST_SMOKE_USER_DATA;
 let win = null;
 let finished = false;
@@ -195,7 +200,7 @@ app.whenReady().then(async () => {
       const profileHeading = document.querySelector('.profile-detail h2');
       const profileRows = document.querySelectorAll('.profile-row');
       if (!window.mystApi || heading?.textContent !== '档案管理' || !nav || !main || !ai
-        || profileHeading?.textContent !== '烟测档案' || profileRows.length < 1) return { ready: false };
+        || profileHeading?.textContent !== '基础档案' || profileRows.length < 2) return { ready: false };
       const fontFaces = await document.fonts.load('400 13px "Maple Mono NF CN"', 'CHILLAST');
       const rect = (element) => {
         const value = element.getBoundingClientRect();
@@ -219,7 +224,7 @@ app.whenReady().then(async () => {
 
     if (!desktop.hasApi) throw new Error('window.mystApi is missing');
     if (desktop.routeButtons !== 6) throw new Error(`expected 6 routes, got ${desktop.routeButtons}`);
-    if (desktop.profileHeading !== '烟测档案' || desktop.profileRows < 1) throw new Error('seeded profile content did not load');
+    if (desktop.profileHeading !== '基础档案' || desktop.profileRows < 2) throw new Error('seeded profile content did not load');
     if (!['light', 'dark'].includes(desktop.theme)) throw new Error(`unresolved theme: ${desktop.theme}`);
     if (desktop.density !== 'compact') throw new Error(`unexpected density: ${desktop.density}`);
     if (!desktop.mapleFontLoaded) throw new Error('Maple regular font did not load');
@@ -232,6 +237,21 @@ app.whenReady().then(async () => {
     if (desktop.separators !== 2) throw new Error(`expected two separators, got ${desktop.separators}`);
     if (!desktop.narrowToolbarsHidden) throw new Error('narrow-only toolbars are visible on desktop');
 
+    await win.webContents.executeJavaScript(`(() => {
+      const search = document.querySelector('[type="search"]');
+      Object.getOwnPropertyDescriptor(search.constructor.prototype, 'value').set.call(search, 'Smoke');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    const initialSearchVerified = await poll(win, 'Smoke profile search', () => ({
+      ready: document.querySelectorAll('.profile-row').length === 1 && document.querySelector('.profile-row')?.textContent.includes('Smoke Profile'), value: true,
+    }));
+    await win.webContents.executeJavaScript(`document.querySelector('.profile-row').click()`);
+    await poll(win, 'Smoke profile selection', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '烟测档案' }));
+    await win.webContents.executeJavaScript(`document.querySelector('[aria-label="设为主档案"]').click()`);
+    const primaryMarkerVerified = await poll(win, 'visible primary marker', () => {
+      const row = document.querySelector('[data-profile-id="smoke-profile"]');
+      return { ready: Boolean(document.querySelector('.profile-detail__primary')?.textContent.includes('主档案') && row?.textContent.includes('主档案') && row?.getAttribute('aria-label')?.includes('主档案')), value: true };
+    });
     await win.webContents.executeJavaScript(`document.querySelectorAll('.profile-detail__commands button')[1].click()`);
     await poll(win, 'direct transit route', () => ({ ready: document.querySelector('h1')?.textContent === '个人星盘' }));
     await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
@@ -255,7 +275,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript(`document.querySelector('.location-picker__results [role="option"]').click()`);
     await poll(win, 'location resolution', () => ({ ready: document.querySelector('.location-picker__timezone')?.textContent.includes('Asia/Shanghai') }));
     await win.webContents.executeJavaScript(`document.querySelector('.profile-form button[type="submit"]').click()`);
-    await poll(win, 'created profile refetch', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '新建烟测档案' && document.querySelectorAll('.profile-row').length === 2 }));
+    await poll(win, 'created profile refetch', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '新建烟测档案' && document.querySelectorAll('.profile-row').length === 3 }));
 
     await win.webContents.executeJavaScript(`document.querySelector('.profile-detail__actions button').click()`);
     await poll(win, 'edit form', () => ({ ready: Boolean(document.querySelector('.profile-form [name="notes"]')) }));
@@ -270,16 +290,32 @@ app.whenReady().then(async () => {
     await poll(win, 'dirty cancel retained', () => ({ ready: document.querySelector('.profile-form [name="notes"]')?.value === '未保存烟测备注' && document.querySelector('h1')?.textContent === '档案管理' }));
     await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[1].click()`);
     await poll(win, 'dirty dialog repeated', () => ({ ready: Boolean(document.querySelector('.dirty-navigation__dialog')) }));
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '保存并继续').click()`);
+    const dirtySaveNavigated = await poll(win, 'dirty save navigation', () => ({ ready: document.querySelector('h1')?.textContent === '个人星盘', value: true }));
+    if (smokeProfiles.find(({ id }) => id === 'smoke-copy-2')?.notes !== '未保存烟测备注') throw new Error('dirty save did not update backend before navigation');
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+    await poll(win, 'saved profile return', () => ({ ready: Boolean(document.querySelector('[data-profile-id="smoke-copy-2"]')) }));
+    await win.webContents.executeJavaScript(`document.querySelector('[data-profile-id="smoke-copy-2"]').click()`);
+    await poll(win, 'saved profile selected', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '新建烟测档案' }));
+    await win.webContents.executeJavaScript(`document.querySelector('.profile-detail__actions button').click()`);
+    await poll(win, 'discard edit form', () => ({ ready: Boolean(document.querySelector('.profile-form [name="notes"]')) }));
+    await win.webContents.executeJavaScript(`(() => {
+      const element = document.querySelector('.profile-form [name="notes"]');
+      Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value').set.call(element, '应放弃烟测备注');
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelectorAll('.shell-nav__button')[1].click();
+    })()`);
+    await poll(win, 'dirty discard dialog', () => ({ ready: Boolean(document.querySelector('.dirty-navigation__dialog')) }));
     await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '放弃更改').click()`);
     const dirtyDiscardNavigated = await poll(win, 'dirty discard navigation', () => ({ ready: document.querySelector('h1')?.textContent === '个人星盘', value: true }));
     await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
     await poll(win, 'profile after discard', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '烟测档案' }));
     await win.webContents.executeJavaScript(`document.querySelectorAll('.profile-detail__actions button')[1].click()`);
-    await poll(win, 'duplicate profile', () => ({ ready: document.querySelectorAll('.profile-row').length === 3 }));
+    await poll(win, 'duplicate profile', () => ({ ready: document.querySelectorAll('.profile-row').length === 4 }));
     await win.webContents.executeJavaScript(`document.querySelector('.profile-detail__actions button:last-child').click()`);
     await poll(win, 'delete dialog', () => ({ ready: Boolean(document.querySelector('.profile-dialog')) }));
     await win.webContents.executeJavaScript(`document.querySelector('.profile-dialog__actions button:last-child').click()`);
-    await poll(win, 'delete duplicate', () => ({ ready: document.querySelectorAll('.profile-row').length === 2 && !document.querySelector('.profile-dialog') }));
+    await poll(win, 'delete duplicate', () => ({ ready: document.querySelectorAll('.profile-row').length === 3 && !document.querySelector('.profile-dialog') }));
 
     await win.webContents.executeJavaScript(`
       document.querySelectorAll('.shell-nav__button')[1].click();
@@ -373,6 +409,7 @@ app.whenReady().then(async () => {
 
     const screenshotDir = path.join(__dirname, 'screenshots');
     fs.mkdirSync(screenshotDir, { recursive: true });
+    for (const file of fs.readdirSync(screenshotDir)) if (/^profile-.*\.png$/.test(file)) fs.rmSync(path.join(screenshotDir, file));
     const profileScreenshots = [];
     let screenshotIndex = 0;
     for (const appearance of [
@@ -405,8 +442,8 @@ app.whenReady().then(async () => {
         const geometry = await poll(win, `profile geometry ${width}x${height}`, () => {
           const page = document.querySelector('.profile-page');
           const directory = document.querySelector('.profile-directory');
-          const surface = document.querySelector('.profile-page__surface');
-          if (!page || !directory || !surface || document.querySelector('h1')?.textContent !== '档案管理'
+          const detail = document.querySelector('.profile-detail');
+          if (!page || !directory || !detail || document.querySelector('h1')?.textContent !== '档案管理'
             || document.querySelector('.profile-detail h2')?.textContent !== '烟测档案'
             || document.querySelectorAll('.profile-row').length !== 1
             || document.documentElement.dataset.theme !== window.__smokeExpectedTheme
@@ -416,13 +453,13 @@ app.whenReady().then(async () => {
               rows: document.querySelectorAll('.profile-row').length,
               theme: document.documentElement.dataset.theme,
               density: document.documentElement.dataset.density,
-              page: Boolean(page), directory: Boolean(directory), surface: Boolean(surface),
+              page: Boolean(page), directory: Boolean(directory), detail: Boolean(detail),
             } };
           const pageRect = page.getBoundingClientRect();
           const directoryRect = directory.getBoundingClientRect();
-          const surfaceRect = surface.getBoundingClientRect();
-          const sideBySide = directoryRect.right <= surfaceRect.left + 1;
-          const stacked = directoryRect.bottom <= surfaceRect.top + 1;
+          const detailRect = detail.getBoundingClientRect();
+          const sideBySide = directoryRect.right <= detailRect.left + 1;
+          const stacked = directoryRect.bottom <= detailRect.top + 1;
           const controlsFit = Array.from(document.querySelectorAll('[data-profile-control]')).every((element) => element.scrollWidth <= element.clientWidth + 1);
           const labelsFit = Array.from(document.querySelectorAll('.profile-page label, .profile-page h2, .profile-page h3')).every((element) => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1);
           return { ready: true, value: { pageWidth: pageRect.width, sideBySide, stacked, controlsFit, labelsFit, bodyOverflow: document.body.scrollWidth - document.body.clientWidth } };
@@ -437,7 +474,7 @@ app.whenReady().then(async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         const image = (await win.webContents.capturePage()).resize({ width, height, quality: 'best' });
         const metrics = imageMetrics(image);
-        const computedName = `profile-${appearance.theme}-${appearance.density}-${width}x${height}.png`;
+        const computedName = `profile-${width}x${height}-${appearance.theme}-${appearance.density}.png`;
         const name = expectedProfileScreenshotNames[screenshotIndex++];
         if (name !== computedName) throw new Error(`unexpected screenshot matrix order: ${computedName}`);
         if (metrics.width !== width || metrics.height !== height || metrics.bytes < 10000 || metrics.luminanceRange < 20 || metrics.sampledColors < 32) {
@@ -452,7 +489,7 @@ app.whenReady().then(async () => {
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, dirtyCancelRetained, dirtyDiscardNavigated, profileScreenshots }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, initialSearchVerified, primaryMarkerVerified, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {

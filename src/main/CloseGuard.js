@@ -1,10 +1,14 @@
 'use strict';
 
 class CloseGuard {
-  constructor({ win, timeoutMs = 15000, diagnostic = () => {} }) {
+  constructor({ win, timeoutMs = 15000, diagnostic = () => {}, onStage = () => {}, schedule = (callback) => setTimeout(callback, 0), cancelSchedule = clearTimeout }) {
     this.win = win;
+    this.webContents = win.webContents;
     this.timeoutMs = timeoutMs;
     this.diagnostic = diagnostic;
+    this.onStage = onStage;
+    this.schedule = schedule;
+    this.cancelSchedule = cancelSchedule;
     this.pending = false;
     this.approved = false;
     this.timer = null;
@@ -19,17 +23,19 @@ class CloseGuard {
     this.installed = true;
     this.win.on('close', this._onClose);
     this.win.on('unresponsive', this._onRendererUnavailable);
-    this.win.webContents.on('render-process-gone', this._onRendererUnavailable);
-    this.win.webContents.on('destroyed', this._onRendererUnavailable);
+    this.webContents.on('render-process-gone', this._onRendererUnavailable);
+    this.webContents.on('destroyed', this._onRendererUnavailable);
   }
 
   _onClose(event) {
-    if (this.approved || this.win.webContents.isDestroyed()) return;
+    if (this.approved || this.webContents.isDestroyed()) return;
     event.preventDefault();
     if (this.pending) return;
     this.pending = true;
+    this.onStage('request');
     try {
-      this.win.webContents.send('app:closeRequested');
+      this.webContents.send('app:closeRequested');
+      this.onStage('request-sent');
     } catch (_) {
       this._forceClose();
       return;
@@ -44,6 +50,7 @@ class CloseGuard {
   decide(decision) {
     if (decision !== 'proceed' && decision !== 'cancel') throw new Error('Invalid close decision');
     if (!this.pending) return false;
+    this.onStage(`decision-${decision}`);
     this._clearPending();
     if (decision === 'cancel') return true;
     this._forceClose();
@@ -60,11 +67,17 @@ class CloseGuard {
     this._clearPending();
     if (this.approved || this.win.isDestroyed()) return;
     this.approved = true;
-    this.closeTask = setImmediate(() => {
+    this.onStage('close-scheduled');
+    this.closeTask = this.schedule(() => {
       this.closeTask = null;
       if (this.win.isDestroyed()) return;
-      if (typeof this.win.destroy === 'function') this.win.destroy();
-      else this.win.close();
+      if (this.webContents.isDestroyed()) {
+        this.onStage('destroy');
+        this.win.destroy();
+      } else {
+        this.onStage('close');
+        this.webContents.close({ waitForBeforeUnload: false });
+      }
     });
   }
 
@@ -74,14 +87,14 @@ class CloseGuard {
 
   dispose() {
     this._clearPending();
-    if (this.closeTask) clearImmediate(this.closeTask);
+    if (this.closeTask) this.cancelSchedule(this.closeTask);
     this.closeTask = null;
     if (!this.installed) return;
     this.installed = false;
     this.win.removeListener('close', this._onClose);
     this.win.removeListener('unresponsive', this._onRendererUnavailable);
-    this.win.webContents.removeListener('render-process-gone', this._onRendererUnavailable);
-    this.win.webContents.removeListener('destroyed', this._onRendererUnavailable);
+    this.webContents.removeListener('render-process-gone', this._onRendererUnavailable);
+    this.webContents.removeListener('destroyed', this._onRendererUnavailable);
   }
 }
 

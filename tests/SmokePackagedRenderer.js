@@ -43,13 +43,15 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
       const timer = setTimeout(() => {
         timedOut = true;
         child.kill();
-      }, 40000);
+      }, 20000);
       child.once('exit', () => clearTimeout(timer));
     });
 
     if (timedOut) {
       const pendingReport = fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : '(missing)';
-      throw new Error(`${renderer} packaged executable timed out\nreport: ${pendingReport}\nstdout: ${stdout}\nstderr: ${stderr}`);
+      const stagePath = `${reportPath}.stages`;
+      const stages = fs.existsSync(stagePath) ? fs.readFileSync(stagePath, 'utf8') : '(missing)';
+      throw new Error(`${renderer} packaged executable timed out\nreport: ${pendingReport}\nstages: ${stages}\nstdout: ${stdout}\nstderr: ${stderr}`);
     }
     assert.equal(result.signal, null, `${renderer} exited by signal ${result.signal}`);
     assert.equal(result.code, 0, `${renderer} exit ${result.code}\n${stderr}`);
@@ -61,7 +63,11 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
     assert.equal(report.routes, 6);
     assert.equal(report.title, 'CHILLAST');
     assert.deepEqual(report.errors, []);
-    if (renderer === 'react') assert.equal(report.closeHandshake, true);
+    if (renderer === 'react') {
+      assert.equal(report.closeHandshake, true);
+      assert.equal(report.closeStage, 'closed');
+      assert.deepEqual(report.closeStages, ['request', 'request-sent', 'decision-proceed', 'close-scheduled', 'close', 'closed', 'app-exit']);
+    }
     else assert.equal(report.closeHandshake, undefined);
     return report;
   } finally {

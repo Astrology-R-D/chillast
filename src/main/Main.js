@@ -166,17 +166,31 @@ class Main {
 
   _handleCloseDecision(decision) {
     if (decision !== 'proceed' && decision !== 'cancel') throw new Error('Invalid close decision');
-    if (this.pendingSmokeCloseReport) this._writePendingSmokeStage(`decision-${decision}`);
-    const accepted = this.closeGuard ? this.closeGuard.decide(decision) : false;
-    if (accepted && decision === 'proceed' && this.pendingSmokeCloseReport) this._writePendingSmokeStage('approved', true);
-    return accepted;
+    return this.closeGuard ? this.closeGuard.decide(decision) : false;
   }
 
-  _writePendingSmokeStage(stage, approved = false) {
+  _recordCloseStage(stage) {
     if (!this.pendingSmokeCloseReport) return;
-    const { path: reportPath, report } = this.pendingSmokeCloseReport;
-    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
-    fs.writeFileSync(reportPath, JSON.stringify({ ...report, closeHandshake: approved, closeStage: stage }, null, 2), 'utf8');
+    this.pendingSmokeCloseReport.report.closeStages.push(stage);
+    const stagePath = `${this.pendingSmokeCloseReport.path}.stages`;
+    fs.writeFileSync(stagePath, JSON.stringify(this.pendingSmokeCloseReport.report.closeStages), 'utf8');
+  }
+
+  _handleWindowClosed() {
+    this._recordCloseStage('closed');
+    this.closeGuard?.dispose();
+    this.closeGuard = null;
+    this.mainWindow = null;
+    if (!this.pendingSmokeCloseReport) return;
+    this._recordCloseStage('app-exit');
+    const pendingReport = this.pendingSmokeCloseReport;
+    this.pendingSmokeCloseReport = null;
+    try { fs.rmSync(`${pendingReport.path}.stages`, { force: true }); } catch (_) {}
+    this._writeSmokeReport(pendingReport.path, {
+      ...pendingReport.report,
+      closeHandshake: true,
+      closeStage: 'closed',
+    }, pendingReport.exitCode);
   }
 
   createWindow() {
@@ -219,6 +233,7 @@ class Main {
             void dialog.showMessageBox(this.mainWindow, { type: 'warning', title: 'CHILLAST', message });
           }
         },
+        onStage: (stage) => this._recordCloseStage(stage),
       });
       this.closeGuard.install();
     }
@@ -264,16 +279,7 @@ class Main {
     });
     this.mainWindow.once('ready-to-show', () => this.mainWindow.show());
 
-    this.mainWindow.on('closed', () => {
-      this.closeGuard?.dispose();
-      this.closeGuard = null;
-      this.mainWindow = null;
-      if (this.pendingSmokeCloseReport) {
-        const pendingReport = this.pendingSmokeCloseReport;
-        this.pendingSmokeCloseReport = null;
-        this._writeSmokeReport(pendingReport.path, { ...pendingReport.report, closeHandshake: true }, pendingReport.exitCode);
-      }
-    });
+    this.mainWindow.on('closed', () => this._handleWindowClosed());
   }
 
   _captureSmokeErrors(webContents) {
@@ -319,8 +325,7 @@ class Main {
           };
           const exitCode = this.smokeErrors.length ? 1 : 0;
           if (rendererTarget.kind !== 'legacy') {
-            this.pendingSmokeCloseReport = { path: reportPath, report, exitCode };
-            this._writePendingSmokeStage('requested');
+            this.pendingSmokeCloseReport = { path: reportPath, report: { ...report, closeStages: [] }, exitCode };
             this.mainWindow.close();
           } else {
             this._writeSmokeReport(reportPath, report, exitCode);

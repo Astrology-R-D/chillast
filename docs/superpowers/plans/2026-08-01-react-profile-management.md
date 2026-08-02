@@ -1699,7 +1699,7 @@ Add browser probes that: wait for `烟测档案`; search `Smoke`; select the row
 
 - [ ] **Step 12: Add responsive and visual assertions for the actual profile page**
 
-Capture profile screenshots at `1440x920`, `1280x800`, and `1100x720` in light/compact and dark/comfortable combinations. For each capture assert: non-zero directory/detail widths; directory right edge does not pass detail left edge by more than one pixel; no element with `[data-profile-control]` has scroll width greater than client width; screenshot PNG exceeds 10 KB; sampled luminance range exceeds 20; at least 32 sampled RGB colors exist. Save deterministic files under `tests/screenshots/profile-<width>x<height>-<theme>-<density>.png`.
+Capture profile screenshots at `1440x920`, `1280x800`, and `1100x720` in light/compact and dark/comfortable combinations. For each capture assert non-zero directory/detail widths and use the central profile feature width as the responsive authority: at `>= 760px`, require side-by-side geometry with directory right `<=` detail left (one-pixel tolerance); below `760px`, require stacked geometry with directory bottom `<=` detail top (one-pixel tolerance). Also require every `[data-profile-control]` scroll width to fit its client width, exact PNG dimensions, PNG size above 10 KB, sampled luminance range above 20, and at least 32 sampled RGB colors. Save deterministic files under `tests/screenshots/profile-<width>x<height>-<theme>-<density>.png`.
 
 Run: `npm run smoke:react`
 

@@ -15,7 +15,7 @@ import './profiles.css';
 
 interface ProfilePageProps {
   workspaceStore?: StoreApi<ProfileWorkspaceState>;
-  onNavigate(route: RouteKey): void;
+  onNavigate(route: RouteKey, beforeNavigate?: () => void): void;
   onCreate?: () => void;
   onEdit?: (profile: Profile) => void;
   onFormRegistration?: (registration: DraftRegistration) => void;
@@ -250,13 +250,13 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     if (!payload.nameZh && !payload.nameEn) payload.nameZh = t('profiles.unnamedCopy');
     void runDuplicate(payload);
   };
+  const requestDuplicate = (profile: Profile) => { void dirtyNavigation.requestTransition(() => duplicate(profile)); };
   const openChart = (profile: Profile, chartType: 'natal' | 'transit' | 'synastry') => {
     const intent = chartType === 'synastry'
       ? { route: 'relationship' as const, chartType, primaryProfileId: profile.id }
       : { route: 'personal' as const, chartType, primaryProfileId: profile.id };
-    void dirtyNavigation.requestTransition(() => {
+    onNavigate(intent.route, () => {
       workspaceStore.getState().openChart(intent);
-      if (workspaceStore.getState().chartIntent) onNavigate(intent.route);
     });
   };
   const refreshDelete = async (deletedId: string) => {
@@ -309,6 +309,10 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     if (deletePending || deleteSyncId) return;
     setDeleteTarget(null); setDeleteError(''); deleteTrigger.current?.focus();
   };
+  const requestDelete = (profile: Profile) => {
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    void dirtyNavigation.requestTransition(() => { deleteTrigger.current = origin; setDeleteTarget(profile); });
+  };
   const trapFocus = (event: React.KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); closeDelete(); return; }
     if (event.key !== 'Tab') return;
@@ -330,8 +334,8 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
     <ProfileDirectory profiles={visibleProfiles ?? []} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
     <section className="profile-page__surface">
       {editor ? <ProfileForm key="profile-editor" profile={editorCommit?.profile ?? editor.profile ?? null} onSave={saveEditor} onCancel={requestCloseEditor} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
-        : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => void duplicate(selected)}
-        onDelete={() => { deleteTrigger.current = document.activeElement as HTMLElement; setDeleteTarget(selected); }}
+        : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => requestDuplicate(selected)}
+        onDelete={() => requestDelete(selected)}
         onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />
         : <div className="profile-page__blank">{t('profiles.selectPrompt')}</div>}
       {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={duplicatePhase !== 'idle'} onClick={() => duplicateSavedId ? refreshDuplicate(duplicateSavedId) : duplicatePayload && void runDuplicate(duplicatePayload)}>{t(duplicateSavedId ? 'profiles.retryRefresh' : 'profiles.retry')}</button></div>}

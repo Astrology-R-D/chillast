@@ -27,7 +27,9 @@ function AppShellInner() {
   const PageIcon = route.icon;
   const title = t(route.titleKey);
   const dirtyNavigation = useDirtyNavigation();
-  const navigate = (nextRoute: RouteKey) => { void dirtyNavigation.requestTransition(() => setActiveRoute(nextRoute)); };
+  const navigate = (nextRoute: RouteKey, beforeNavigate?: () => void) => {
+    void dirtyNavigation.requestTransition(() => { beforeNavigate?.(); setActiveRoute(nextRoute); });
+  };
 
   return (
     <PanelLayout
@@ -70,7 +72,7 @@ function AppShellInner() {
             </label>
           </div>
         </header>
-        {activeRoute === 'profiles' ? <ProfilePage onNavigate={setActiveRoute} /> :
+        {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} /> :
           <section className="workspace__placeholder" aria-labelledby="workspace-title">
             <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
             <p>{t('shell.placeholder', { title })}</p>

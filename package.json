@@ -18,7 +18,7 @@
     "test:renderer": "vitest run",
     "test:renderer:watch": "vitest",
     "test:loader": "node --test tests/RendererLoader.test.js",
-    "test:security": "node --test tests/RendererLoader.test.js tests/IpcRouterSecurity.test.js tests/LocationResolver.test.js tests/MainCloseDecision.test.js tests/MainPolicy.test.js",
+    "test:security": "node --test tests/CloseGuard.test.js tests/RendererLoader.test.js tests/IpcRouterSecurity.test.js tests/LocationResolver.test.js tests/MainCloseDecision.test.js tests/MainPolicy.test.js",
     "test:preload": "node --test tests/PreloadSubscriptions.test.js",
     "check:unicode-casefold": "node tools/generate-unicode-case-folding.mjs --check",
     "typecheck": "tsc -p tsconfig.renderer.json --noEmit",

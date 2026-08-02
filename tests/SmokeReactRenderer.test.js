@@ -6,6 +6,12 @@ const path = require('node:path');
 const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, 'SmokeReactRenderer.js'), 'utf8');
+const rendererEntry = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer-react', 'main.tsx'), 'utf8');
+
+test('React entry cleanup cannot cancel the native close handshake', () => {
+  assert.doesNotMatch(rendererEntry, /beforeunload/);
+  assert.match(rendererEntry, /pagehide/);
+});
 
 test('React smoke registers the complete profile and location bridge before loading', () => {
   for (const channel of [
@@ -24,11 +30,16 @@ test('React smoke requires seeded profile content and captures main-process fail
 });
 
 test('React smoke verifies dirty navigation and all six profile screenshot variants', () => {
+  assert.match(source, /initialSearchVerified/);
+  assert.match(source, /primaryMarkerVerified/);
   assert.match(source, /dirtyCancelRetained/);
+  assert.match(source, /dirtySaveNavigated/);
   assert.match(source, /dirtyDiscardNavigated/);
   assert.match(source, /profileScreenshots/);
   for (const name of [
-    'profile-light-compact-1440x920.png', 'profile-light-compact-1280x800.png', 'profile-light-compact-1100x720.png',
-    'profile-dark-comfortable-1440x920.png', 'profile-dark-comfortable-1280x800.png', 'profile-dark-comfortable-1100x720.png',
+    'profile-1440x920-light-compact.png', 'profile-1280x800-light-compact.png', 'profile-1100x720-light-compact.png',
+    'profile-1440x920-dark-comfortable.png', 'profile-1280x800-dark-comfortable.png', 'profile-1100x720-dark-comfortable.png',
   ]) assert.match(source, new RegExp(name.replaceAll('.', '\\.')));
+  assert.match(source, /pageWidth >= 760 \? !geometry\.sideBySide : !geometry\.stacked/);
+  assert.match(source, /document\.querySelector\('\.profile-detail'\)/);
 });
