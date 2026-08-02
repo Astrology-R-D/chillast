@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18nProvider';
@@ -70,7 +70,24 @@ function seedEditableProfile() {
   return api.profiles.save;
 }
 
-afterEach(() => stopSync?.());
+function expectNoReactActWarnings() {
+  const warnings: string[] = [];
+  const originalError = console.error;
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    const message = args.map(String).join(' ');
+    if (/suspended inside an `act` scope|not wrapped in act/i.test(message)) warnings.push(message);
+    originalError(...args);
+  });
+  return () => {
+    errorSpy.mockRestore();
+    expect(warnings).toEqual([]);
+  };
+}
+
+afterEach(() => {
+  stopSync?.();
+  vi.restoreAllMocks();
+});
 
 test('navigates localized placeholders and keeps route state across shell breakpoints', async () => {
   const media = createMatchMediaController(false);
@@ -125,35 +142,39 @@ test('persists theme and density selectors and updates the document', async () =
 });
 
 test('dirty shell navigation cancels in place and discards before navigating', async () => {
+  const assertNoActWarnings = expectNoReactActWarnings();
   seedEditableProfile();
   vi.stubGlobal('matchMedia', createMatchMediaController(false).matchMedia);
   const user = userEvent.setup();
-  await act(async () => { renderShell(); });
+  renderShell();
   await screen.findByRole('heading', { name: '烟测档案' });
   await user.click(screen.getByRole('button', { name: '编辑档案' }));
   await user.type(screen.getByRole('textbox', { name: '备注' }), '未保存');
-  await user.click(screen.getByRole('button', { name: '个人星盘' }));
+  await act(async () => { await user.click(screen.getByRole('button', { name: '个人星盘' })); });
   await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: locale.dirty.cancel }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('档案管理');
   expect(screen.getByRole('form', { name: '编辑档案' })).toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: '个人星盘' }));
-  await act(async () => {
-    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: locale.dirty.discard }));
-  });
+  await act(async () => { await user.click(screen.getByRole('button', { name: '个人星盘' })); });
+  await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: locale.dirty.discard }));
   expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  assertNoActWarnings();
 });
 
 test('dirty shell navigation saves the backend update before continuing', async () => {
+  const assertNoActWarnings = expectNoReactActWarnings();
   const save = seedEditableProfile();
   vi.stubGlobal('matchMedia', createMatchMediaController(false).matchMedia);
   const user = userEvent.setup();
-  await act(async () => { renderShell(); });
+  renderShell();
   await screen.findByRole('heading', { name: '烟测档案' });
   await user.click(screen.getByRole('button', { name: '编辑档案' }));
   const notes = screen.getByRole('textbox', { name: '备注' });
   await user.clear(notes); await user.type(notes, '已保存后导航');
-  await user.click(screen.getByRole('button', { name: '个人星盘' }));
+  await act(async () => { await user.click(screen.getByRole('button', { name: '个人星盘' })); });
   await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: locale.dirty.save }));
   expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
-  expect(save).toHaveBeenCalledWith(expect.objectContaining({ notes: '已保存后导航' }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ notes: '已保存后导航' })));
+  assertNoActWarnings();
 });
