@@ -127,6 +127,20 @@ test('accepts proportional differences that exceed one pixel and the legacy abso
   assert.equal(metrics.actualScaleY, 3);
 });
 
+test('accepts a one-pixel scale difference that exceeds proportional tolerance', () => {
+  const image = nativeImageMock({
+    scaleFactors: [1.5], logicalWidth: 80, logicalHeight: 80, fixedSize: { width: 121, height: 120 },
+  });
+
+  const metrics = imageMetrics(image, { logicalWidth: 80, logicalHeight: 80, requestedScaleFactor: 1.5 });
+
+  assert.equal(metrics.actualScaleX, 1.5125);
+  assert.equal(metrics.actualScaleY, 1.5);
+  const scaleDifference = Math.abs(metrics.actualScaleX - metrics.actualScaleY);
+  assert.ok(scaleDifference > ((metrics.actualScaleX + metrics.actualScaleY) / 2) * 0.005);
+  assert.ok(scaleDifference <= 1 / 80);
+});
+
 test('rejects an extreme measured scale outside the supported range', () => {
   const image = nativeImageMock({
     scaleFactors: [3], logicalWidth: 100, logicalHeight: 100, fixedSize: { width: 500, height: 500 },
