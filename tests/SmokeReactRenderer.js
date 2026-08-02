@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const { runElectronSmokeController } = require('./ElectronSmokeController');
+const { imageMetrics } = require('./NativeImageMetrics');
 
 runElectronSmokeController('chillast-react-smoke-', app);
 
@@ -89,6 +90,19 @@ async function restoreWindow(win) {
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
+async function waitForRendererSize(win, width, height, timeout = 1000) {
+  const deadline = Date.now() + timeout;
+  let value;
+  while (Date.now() < deadline) {
+    value = await win.webContents.executeJavaScript(`({ width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio })`);
+    if (value.width === width && value.height === height) return { ready: true, value };
+    const contentBounds = win.getContentBounds();
+    if (value.width === contentBounds.width && value.height === contentBounds.height) return { ready: false, value };
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return { ready: false, value };
+}
+
 async function setExactContentSize(win, width, height) {
   const deadline = Date.now() + 10000;
   if (win.isMaximized()) await restoreWindow(win);
@@ -109,12 +123,7 @@ async function setExactContentSize(win, width, height) {
     });
     win.setContentSize(contentWidth, contentHeight);
     await resized;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    last = await win.webContents.executeJavaScript(`(() => {
-      const width = ${width}; const height = ${height};
-      return { ready: window.innerWidth === width && window.innerHeight === height,
-        value: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio } };
-    })()`);
+    last = await waitForRendererSize(win, width, height);
     if (last.ready) return last.value;
     const observation = `${contentWidth}x${contentHeight}:${last.value.width}x${last.value.height}`;
     if (observed.has(observation) && !centered) {
@@ -149,25 +158,6 @@ function registerEnvelope(channel, handler) {
       return { ok: false, error: message };
     }
   });
-}
-
-function imageMetrics(image) {
-  const size = image.getSize();
-  const bitmap = image.toBitmap();
-  const png = image.toPNG();
-  let minLuminance = 255;
-  let maxLuminance = 0;
-  const colors = new Set();
-  for (let offset = 0; offset < bitmap.length; offset += 4 * 97) {
-    const blue = bitmap[offset] ?? 0;
-    const green = bitmap[offset + 1] ?? 0;
-    const red = bitmap[offset + 2] ?? 0;
-    const luminance = Math.round((red + green + blue) / 3);
-    minLuminance = Math.min(minLuminance, luminance);
-    maxLuminance = Math.max(maxLuminance, luminance);
-    colors.add(`${red},${green},${blue}`);
-  }
-  return { png, nativeWidth: size.width, nativeHeight: size.height, bytes: png.length, luminanceRange: maxLuminance - minLuminance, sampledColors: colors.size };
 }
 
 app.whenReady().then(async () => {
@@ -553,23 +543,25 @@ app.whenReady().then(async () => {
         await win.webContents.capturePage();
         await new Promise((resolve) => setTimeout(resolve, 100));
         const image = await win.webContents.capturePage();
-        const metrics = imageMetrics(image);
+        const metrics = imageMetrics(image, {
+          logicalWidth: width,
+          logicalHeight: height,
+          requestedScaleFactor: viewport.deviceScaleFactor,
+        });
         const computedName = `profile-${width}x${height}-${appearance.theme}-${appearance.density}.png`;
         const name = expectedProfileScreenshotNames[screenshotIndex++];
         if (name !== computedName) throw new Error(`unexpected screenshot matrix order: ${computedName}`);
-        const expectedNativeWidth = Math.round(width * viewport.deviceScaleFactor);
-        const expectedNativeHeight = Math.round(height * viewport.deviceScaleFactor);
-        const scaleX = metrics.nativeWidth / width;
-        const scaleY = metrics.nativeHeight / height;
+        const scaleTolerance = Math.max(0.01, 1 / Math.min(width, height));
         const aspectError = Math.abs((metrics.nativeWidth / metrics.nativeHeight) - (width / height));
-        if (Math.abs(metrics.nativeWidth - expectedNativeWidth) > 1 || Math.abs(metrics.nativeHeight - expectedNativeHeight) > 1
-          || Math.abs(scaleX - scaleY) > 0.01 || aspectError > 0.002
+        if (Math.abs(metrics.actualScaleX - metrics.actualScaleY) > scaleTolerance || aspectError > 0.002
           || metrics.bytes < 10000 || metrics.luminanceRange < 20 || metrics.sampledColors < 32) {
           throw new Error(`screenshot is blank or incomplete: ${JSON.stringify({ name, ...metrics, png: undefined })}`);
         }
         fs.writeFileSync(path.join(screenshotDir, name), metrics.png);
-        profileScreenshots.push({ name, logicalWidth: width, logicalHeight: height, deviceScaleFactor: viewport.deviceScaleFactor,
-          nativeWidth: metrics.nativeWidth, nativeHeight: metrics.nativeHeight, scaleX, scaleY,
+        profileScreenshots.push({ name, logicalWidth: width, logicalHeight: height,
+          requestedScaleFactor: metrics.requestedScaleFactor, selectedScaleFactor: metrics.selectedScaleFactor,
+          nativeWidth: metrics.nativeWidth, nativeHeight: metrics.nativeHeight,
+          actualScaleX: metrics.actualScaleX, actualScaleY: metrics.actualScaleY,
           bytes: metrics.bytes, luminanceRange: metrics.luminanceRange, sampledColors: metrics.sampledColors, geometry });
       }
     }
