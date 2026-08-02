@@ -22,7 +22,7 @@ This plan exports for plan 4:
 - `ChartSelectionTarget = { identity: ChartIdentity; tab: 'planets' | 'houses' | 'aspects' }`.
 - `selectionTargetForIdentity(result, identity)` from `chartSelection.ts`.
 - `InteractiveChart`, accepting `onRevealSelection(target)` for chart-to-table linkage.
-- `focusChartIdentity(identity)` through the existing Zustand store for table-to-chart linkage.
+- `setFocus(identity)` through the existing Zustand store for table-to-chart linkage.
 - `serializeChartSvg(svg, options)` and `downloadSvg(svg, filename, options)` from `svgExport.ts`.
 
 Plan 4 connects `onRevealSelection` to virtual table row reveal and invokes
