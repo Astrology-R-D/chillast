@@ -551,10 +551,7 @@ app.whenReady().then(async () => {
         const computedName = `profile-${width}x${height}-${appearance.theme}-${appearance.density}.png`;
         const name = expectedProfileScreenshotNames[screenshotIndex++];
         if (name !== computedName) throw new Error(`unexpected screenshot matrix order: ${computedName}`);
-        const scaleTolerance = Math.max(0.01, 1 / Math.min(width, height));
-        const aspectError = Math.abs((metrics.nativeWidth / metrics.nativeHeight) - (width / height));
-        if (Math.abs(metrics.actualScaleX - metrics.actualScaleY) > scaleTolerance || aspectError > 0.002
-          || metrics.bytes < 10000 || metrics.luminanceRange < 20 || metrics.sampledColors < 32) {
+        if (metrics.bytes < 10000 || metrics.luminanceRange < 20 || metrics.sampledColors < 32) {
           throw new Error(`screenshot is blank or incomplete: ${JSON.stringify({ name, ...metrics, png: undefined })}`);
         }
         fs.writeFileSync(path.join(screenshotDir, name), metrics.png);

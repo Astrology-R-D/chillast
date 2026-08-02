@@ -116,14 +116,14 @@ test('rejects a representation whose native dimensions imply inconsistent x and 
   );
 });
 
-test('accepts one-pixel rounding differences using tolerance proportional to actual scale', () => {
+test('accepts proportional differences that exceed one pixel and the legacy absolute tolerance', () => {
   const image = nativeImageMock({
-    scaleFactors: [3], logicalWidth: 100, logicalHeight: 100, fixedSize: { width: 301, height: 300 },
+    scaleFactors: [3], logicalWidth: 250, logicalHeight: 250, fixedSize: { width: 753, height: 750 },
   });
 
-  const metrics = imageMetrics(image, { logicalWidth: 100, logicalHeight: 100, requestedScaleFactor: 3 });
+  const metrics = imageMetrics(image, { logicalWidth: 250, logicalHeight: 250, requestedScaleFactor: 3 });
 
-  assert.equal(metrics.actualScaleX, 3.01);
+  assert.equal(metrics.actualScaleX, 3.012);
   assert.equal(metrics.actualScaleY, 3);
 });
 

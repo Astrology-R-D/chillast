@@ -61,5 +61,8 @@ test('React smoke captures exact logical viewports as untouched native-DPI image
   assert.match(source, /selectedScaleFactor/);
   assert.match(source, /actualScaleX/);
   assert.match(source, /actualScaleY/);
+  assert.doesNotMatch(source, /const scaleTolerance/);
+  assert.doesNotMatch(source, /const aspectError/);
+  assert.doesNotMatch(source, /metrics\.actualScaleX - metrics\.actualScaleY/);
   assert.doesNotMatch(source, /\.resize\(\{\s*width/);
 });
