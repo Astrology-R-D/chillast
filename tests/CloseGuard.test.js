@@ -62,6 +62,24 @@ test('intercepts one close until a strict renderer decision arrives', async () =
   assert.throws(() => f.guard.decide('later'), /invalid close decision/i);
 });
 
+test('keeps edits pending while unresponsive and accepts a later renderer decision', async () => {
+  const f = fixture(); f.guard.install();
+  f.win.emit('close', { preventDefault() {} });
+  f.win.emit('unresponsive');
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(f.diagnostics.length, 1);
+  assert.equal(f.closes.length, 0);
+  assert.equal(f.destroys(), 0);
+  assert.equal(f.guard.decide('cancel'), true);
+
+  f.win.emit('close', { preventDefault() {} });
+  f.win.emit('unresponsive');
+  assert.equal(f.guard.decide('proceed'), true);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(f.closes.length, 1);
+  assert.equal(f.destroys(), 0);
+});
+
 test('allows safe closure when renderer is unavailable and cleans listeners', async () => {
   const f = fixture(); f.guard.install();
   f.win.emit('close', { preventDefault() {} });

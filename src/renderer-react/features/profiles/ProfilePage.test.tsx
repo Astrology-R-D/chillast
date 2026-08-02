@@ -553,15 +553,20 @@ test('focuses the saved profile row after a successful edit save', async () => {
   expect(document.body).not.toHaveFocus();
 });
 
-test('ignores a save completion after selecting out of the editor', async () => {
+test('waits for a direct save completion before selecting out of the editor', async () => {
   const pending = deferred<{ ok: true; data: Profile }>();
-  const { api } = setup();
+  const saved = { ...alpha, nameZh: '迟到结果' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha, beta] }).mockResolvedValueOnce({ ok: true, data: [saved, beta] });
+  const { api } = setup(list);
   api.profiles.save.mockReturnValue(pending.promise);
   await screen.findByRole('heading', { name: '王晓明' });
   await userEvent.click(screen.getByRole('button', { name: '编辑档案' }));
   await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
   await userEvent.click(screen.getByRole('button', { name: /^选择档案：Beatrice Longname/ }));
-  await act(async () => pending.resolve({ ok: true, data: { ...alpha, nameZh: '迟到结果' } }));
+  const dialog = screen.getByRole('alertdialog');
+  for (const button of within(dialog).getAllByRole('button')) expect(button).toBeDisabled();
+  expect(screen.queryByRole('heading', { name: 'Beatrice Longname' })).not.toBeInTheDocument();
+  await act(async () => pending.resolve({ ok: true, data: saved }));
   expect(await screen.findByRole('heading', { name: 'Beatrice Longname' })).toBeInTheDocument();
   expect(screen.queryByRole('form', { name: '编辑档案' })).not.toBeInTheDocument();
 });

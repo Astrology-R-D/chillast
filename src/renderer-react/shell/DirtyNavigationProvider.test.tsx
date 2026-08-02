@@ -86,6 +86,65 @@ test('handles native close through the same dialog and cancels a pending request
   expect(decide).toHaveBeenLastCalledWith('cancel');
 });
 
+test('cancels a native close immediately while an in-app dirty request continues', async () => {
+  let requestClose!: () => void;
+  vi.spyOn(apiClient, 'onCloseRequested').mockImplementation((callback) => { requestClose = callback; return () => {}; });
+  const decide = vi.spyOn(apiClient, 'decideClose').mockResolvedValue(true);
+  decide.mockClear();
+  const registration = { dirty: true, busy: false, save: vi.fn().mockResolvedValue(true), discard: vi.fn() };
+  view(registration);
+  await userEvent.click(screen.getByRole('button', { name: 'leave' }));
+  act(() => requestClose());
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+  expect(decide).toHaveBeenCalledWith('cancel');
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: locale.dirty.discard }));
+  expect(screen.getByText('ran')).toBeInTheDocument();
+  expect(decide).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ['success', true],
+  ['failure', false],
+] as const)('waits for a busy direct save before allowing %s navigation', async (_outcome, saved) => {
+  vi.spyOn(apiClient, 'onCloseRequested').mockReturnValue(() => {});
+  const pending = deferred<boolean>();
+  const backendMutation = vi.fn(() => pending.promise);
+  const inFlight = backendMutation();
+  let busy = true;
+  const registration: DraftRegistration = {
+    dirty: true,
+    get busy() { return busy; },
+    save: vi.fn(() => inFlight),
+    discard: vi.fn(),
+  };
+  view(registration);
+  await userEvent.click(screen.getByRole('button', { name: 'leave' }));
+  const dialog = screen.getByRole('alertdialog');
+  expect(within(dialog).getByRole('status')).toHaveFocus();
+  for (const button of within(dialog).getAllByRole('button')) expect(button).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole('button', { name: locale.dirty.discard }));
+  expect(registration.discard).not.toHaveBeenCalled();
+  expect(screen.queryByText('ran')).not.toBeInTheDocument();
+
+  busy = false;
+  await act(async () => pending.resolve(saved));
+  expect(backendMutation).toHaveBeenCalledOnce();
+  if (saved) {
+    expect(await screen.findByText('ran')).toBeInTheDocument();
+    expect(registration.discard).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'leave' }));
+    for (const button of within(screen.getByRole('alertdialog')).getAllByRole('button')) expect(button).toBeEnabled();
+  } else {
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument();
+    for (const button of within(dialog).getAllByRole('button')) expect(button).toBeEnabled();
+    await userEvent.click(within(dialog).getByRole('button', { name: locale.dirty.discard }));
+    expect(registration.discard).toHaveBeenCalledOnce();
+    expect(screen.getByText('ran')).toBeInTheDocument();
+    expect(backendMutation).toHaveBeenCalledOnce();
+  }
+});
+
 test('clean native close proceeds without opening a dialog', async () => {
   let requestClose!: () => void;
   vi.spyOn(apiClient, 'onCloseRequested').mockImplementation((callback) => { requestClose = callback; return () => {}; });

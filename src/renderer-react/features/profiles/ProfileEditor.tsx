@@ -37,6 +37,7 @@ export function ProfileForm({ profile, onSave, onCancel, onDraftStateChange, onD
   const dirtyHandlerRef = useRef(onDirtyChange);
   const formRef = useRef<HTMLFormElement | null>(null);
   const pendingRef = useRef(false);
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const [draft, setDraftState] = useState(initial);
   const [errors, setErrors] = useState<ProfileFieldErrors>({});
   const [pending, setPending] = useState(false);
@@ -60,26 +61,31 @@ export function ProfileForm({ profile, onSave, onCancel, onDraftStateChange, onD
   };
 
   const saveRef = useRef<() => Promise<boolean>>(null!);
-  if (!saveRef.current) saveRef.current = async () => {
-    if (pendingRef.current) return false;
+  if (!saveRef.current) saveRef.current = () => {
+    if (savePromiseRef.current) return savePromiseRef.current;
     const submitted = { ...draftRef.current };
     const nextErrors = validateProfileDraft(submitted);
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors); focusFirstError(nextErrors);
-      return false;
+      return Promise.resolve(false);
     }
     pendingRef.current = true; setPending(true); setErrors({});
-    try {
-      await saveHandlerRef.current(toSaveInput(submitted));
-      baselineRef.current = submitted;
-      setDraft({ ...submitted });
-      return true;
-    } catch (error) {
-      setErrors({ save: error instanceof Error ? error.message : String(error) });
-      return false;
-    } finally {
-      pendingRef.current = false; setPending(false);
-    }
+    const saving = (async () => {
+      try {
+        await saveHandlerRef.current(toSaveInput(submitted));
+        baselineRef.current = submitted;
+        setDraft({ ...submitted });
+        return true;
+      } catch (error) {
+        setErrors({ save: error instanceof Error ? error.message : String(error) });
+        return false;
+      } finally {
+        savePromiseRef.current = null;
+        pendingRef.current = false; setPending(false);
+      }
+    })();
+    savePromiseRef.current = saving;
+    return saving;
   };
   const discardRef = useRef<() => void>(null!);
   if (!discardRef.current) discardRef.current = () => {
@@ -91,7 +97,7 @@ export function ProfileForm({ profile, onSave, onCancel, onDraftStateChange, onD
     baselineRef.current = next; setDraft(next); setErrors((current) => current.save ? { save: current.save } : {});
   }, [profile]);
   useEffect(() => {
-    const registration = { dirty, save: saveRef.current, discard: discardRef.current };
+    const registration: DraftRegistration = { dirty, get busy() { return pendingRef.current; }, save: saveRef.current, discard: discardRef.current };
     dirtyNavigation?.register(registration);
     draftStateHandlerRef.current(registration);
     dirtyHandlerRef.current?.(dirty);

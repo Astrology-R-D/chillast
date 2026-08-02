@@ -43,3 +43,18 @@ test('React smoke verifies dirty navigation and all six profile screenshot varia
   assert.match(source, /pageWidth >= 760 \? !geometry\.sideBySide : !geometry\.stacked/);
   assert.match(source, /document\.querySelector\('\.profile-detail'\)/);
 });
+
+test('React smoke captures exact logical viewports as untouched native-DPI images', () => {
+  assert.match(source, /setExactContentSize/);
+  assert.match(source, /if \(win\.isMaximized\(\)\) await restoreWindow\(win\)/);
+  assert.match(source, /win\.center\(\)/);
+  assert.doesNotMatch(source, /win\.setPosition\(/);
+  assert.match(source, /window\.innerWidth === width && window\.innerHeight === height/);
+  assert.match(source, /document\.querySelector\('\.dirty-navigation__background'\)/);
+  assert.match(source, /document\.querySelector\('\.shell'\)/);
+  assert.match(source, /deviceScaleFactor/);
+  assert.match(source, /nativeWidth/);
+  assert.match(source, /nativeHeight/);
+  assert.match(source, /Math\.round\(width \* viewport\.deviceScaleFactor\)/);
+  assert.doesNotMatch(source, /\.resize\(\{\s*width/);
+});

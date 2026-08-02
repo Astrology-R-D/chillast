@@ -94,11 +94,17 @@ test('reflects backend failure through errors.save and retries the currently dis
 
 test('disables all editable controls while save is pending', async () => {
   const pending = deferred<void>(); let registration!: DraftRegistration;
-  view({ onSave: vi.fn().mockReturnValue(pending.promise), onDraftStateChange: (value) => { registration = value; } });
-  const saving = registration.save();
+  const onSave = vi.fn().mockReturnValue(pending.promise);
+  view({ onSave, onDraftStateChange: (value) => { registration = value; } });
+  await userEvent.click(screen.getByRole('button', { name: locale.form.save }));
   await screen.findByRole('status');
+  const saving = registration.save();
+  expect(registration.save()).toBe(saving);
+  expect(onSave).toHaveBeenCalledOnce();
+  await waitFor(() => expect(registration.busy).toBe(true));
   for (const control of document.querySelectorAll('.profile-form input, .profile-form textarea, .profile-form select')) expect(control).toBeDisabled();
   await act(async () => pending.resolve()); await saving;
+  await waitFor(() => expect(registration.busy).toBe(false));
 });
 
 test('preserves typed invalid segments through blur and validates without coercion', async () => {

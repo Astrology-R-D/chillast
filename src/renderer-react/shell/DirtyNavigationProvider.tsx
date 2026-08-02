@@ -5,6 +5,7 @@ import './dirty-navigation.css';
 
 export interface DraftRegistration {
   dirty: boolean;
+  busy?: boolean;
   save(): Promise<boolean>;
   discard(): void;
 }
@@ -64,10 +65,21 @@ export function DirtyNavigationProvider({ children }: { children: ReactNode }) {
       restoreFocus(request.origin);
     }
   };
+  const waitForCurrentSave = (request: PendingRequest, registration: DraftRegistration) => {
+    setSaving(true);
+    void registration.save().then(async (saved) => {
+      if (pendingRef.current !== request) return;
+      if (saved) { setSaving(false); await finish(true); }
+      else { setSaving(false); setError(t('dirty.saveFailed')); }
+    }).catch((reason) => {
+      if (pendingRef.current !== request) return;
+      setSaving(false); setError(reason instanceof Error ? reason.message : String(reason));
+    });
+  };
   const open = (action: TransitionAction | null, native: boolean): Promise<boolean> => {
     if (pendingRef.current) return Promise.resolve(false);
     const registration = registrationRef.current;
-    if (!registration?.dirty) {
+    if (!registration?.dirty && !registration?.busy) {
       if (native) return apiClient.decideClose('proceed');
       return Promise.resolve(action?.()).then(() => true);
     }
@@ -75,6 +87,7 @@ export function DirtyNavigationProvider({ children }: { children: ReactNode }) {
       const request = { action, native, origin: document.activeElement instanceof HTMLElement ? document.activeElement : null, resolve };
       pendingRef.current = request;
       setError(''); setPending(request);
+      if (registration?.busy) waitForCurrentSave(request, registration);
     });
   };
   const api = useMemo<DirtyNavigationApi>(() => ({
@@ -83,7 +96,13 @@ export function DirtyNavigationProvider({ children }: { children: ReactNode }) {
   }), []);
 
   useLayoutEffect(() => {
-    const cleanup = apiClient.onCloseRequested(() => { void open(null, true); });
+    const cleanup = apiClient.onCloseRequested(() => {
+      if (pendingRef.current && !pendingRef.current.native) {
+        void apiClient.decideClose('cancel').catch(() => false);
+        return;
+      }
+      void open(null, true);
+    });
     return () => {
       cleanup();
       if (pendingRef.current?.native) void apiClient.decideClose('cancel').catch(() => false);

@@ -3,6 +3,16 @@ import { resolve } from 'node:path';
 import { expect, test } from 'vitest';
 
 const css = readFileSync(resolve(process.cwd(), 'src/renderer-react/shell/shell.css'), 'utf8');
+const dirtyCss = readFileSync(resolve(process.cwd(), 'src/renderer-react/shell/dirty-navigation.css'), 'utf8');
+
+test('keeps the dirty-navigation background fitted to and clipped by the root', () => {
+  const background = dirtyCss.match(/\.dirty-navigation__background\s*\{([^}]*)\}/)?.[1] ?? '';
+  expect(background).toMatch(/width:\s*100%/);
+  expect(background).toMatch(/height:\s*100%/);
+  expect(background).toMatch(/min-width:\s*0/);
+  expect(background).toMatch(/min-height:\s*0/);
+  expect(background).toMatch(/overflow:\s*hidden/);
+});
 
 test('uses an opaque panel fallback and enables translucency only with backdrop support', () => {
   const panelBlock = css.match(

@@ -15,16 +15,17 @@ class CloseGuard {
     this.closeTask = null;
     this.installed = false;
     this._onClose = this._onClose.bind(this);
-    this._onRendererUnavailable = this._onRendererUnavailable.bind(this);
+    this._onUnresponsive = this._onUnresponsive.bind(this);
+    this._onRendererGone = this._onRendererGone.bind(this);
   }
 
   install() {
     if (this.installed) return;
     this.installed = true;
     this.win.on('close', this._onClose);
-    this.win.on('unresponsive', this._onRendererUnavailable);
-    this.webContents.on('render-process-gone', this._onRendererUnavailable);
-    this.webContents.on('destroyed', this._onRendererUnavailable);
+    this.win.on('unresponsive', this._onUnresponsive);
+    this.webContents.on('render-process-gone', this._onRendererGone);
+    this.webContents.on('destroyed', this._onRendererGone);
   }
 
   _onClose(event) {
@@ -81,7 +82,11 @@ class CloseGuard {
     });
   }
 
-  _onRendererUnavailable() {
+  _onUnresponsive() {
+    this.diagnostic('The application is not responding. Your edits remain protected; wait for it to recover.');
+  }
+
+  _onRendererGone() {
     this._forceClose();
   }
 
@@ -92,9 +97,9 @@ class CloseGuard {
     if (!this.installed) return;
     this.installed = false;
     this.win.removeListener('close', this._onClose);
-    this.win.removeListener('unresponsive', this._onRendererUnavailable);
-    this.webContents.removeListener('render-process-gone', this._onRendererUnavailable);
-    this.webContents.removeListener('destroyed', this._onRendererUnavailable);
+    this.win.removeListener('unresponsive', this._onUnresponsive);
+    this.webContents.removeListener('render-process-gone', this._onRendererGone);
+    this.webContents.removeListener('destroyed', this._onRendererGone);
   }
 }
 

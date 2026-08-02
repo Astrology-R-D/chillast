@@ -77,6 +77,68 @@ async function poll(win, description, probe, timeout = 10000) {
   throw new Error(`${description} timed out; last result: ${JSON.stringify(last)}`);
 }
 
+async function restoreWindow(win) {
+  const restored = new Promise((resolve) => {
+    let timer;
+    const done = () => { clearTimeout(timer); win.removeListener('unmaximize', done); resolve(); };
+    win.once('unmaximize', done);
+    timer = setTimeout(done, 500);
+  });
+  win.unmaximize();
+  await restored;
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+async function setExactContentSize(win, width, height) {
+  const deadline = Date.now() + 10000;
+  if (win.isMaximized()) await restoreWindow(win);
+  const current = await win.webContents.executeJavaScript(`({ width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio })`);
+  if (current.width === width && current.height === height) return current;
+  let centered = false;
+  let contentWidth = width;
+  let contentHeight = height;
+  let last;
+  const observed = new Set();
+  while (Date.now() < deadline) {
+    if (win.isMaximized()) await restoreWindow(win);
+    const resized = new Promise((resolve) => {
+      let timer;
+      const done = () => { clearTimeout(timer); win.removeListener('resize', done); resolve(); };
+      win.once('resize', done);
+      timer = setTimeout(done, 300);
+    });
+    win.setContentSize(contentWidth, contentHeight);
+    await resized;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    last = await win.webContents.executeJavaScript(`(() => {
+      const width = ${width}; const height = ${height};
+      return { ready: window.innerWidth === width && window.innerHeight === height,
+        value: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio } };
+    })()`);
+    if (last.ready) return last.value;
+    const observation = `${contentWidth}x${contentHeight}:${last.value.width}x${last.value.height}`;
+    if (observed.has(observation) && !centered) {
+      win.center(); centered = true;
+      contentWidth = width; contentHeight = height; observed.clear();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      continue;
+    }
+    observed.add(observation);
+    const widthDelta = width - last.value.width;
+    const heightDelta = height - last.value.height;
+    contentWidth = Math.abs(widthDelta) <= 8 ? contentWidth + widthDelta : width;
+    contentHeight = Math.abs(heightDelta) <= 8 ? contentHeight + heightDelta : height;
+  }
+  const nativeState = {
+    bounds: win.getBounds(),
+    contentBounds: win.getContentBounds(),
+    position: win.getPosition(),
+    maximized: win.isMaximized(),
+    fullScreen: win.isFullScreen(),
+  };
+  throw new Error(`exact viewport ${width}x${height} timed out; last result: ${JSON.stringify({ last, nativeState })}`);
+}
+
 function registerEnvelope(channel, handler) {
   ipcMain.handle(channel, async (_event, ...args) => {
     try {
@@ -105,7 +167,7 @@ function imageMetrics(image) {
     maxLuminance = Math.max(maxLuminance, luminance);
     colors.add(`${red},${green},${blue}`);
   }
-  return { png, width: size.width, height: size.height, bytes: png.length, luminanceRange: maxLuminance - minLuminance, sampledColors: colors.size };
+  return { png, nativeWidth: size.width, nativeHeight: size.height, bytes: png.length, luminanceRange: maxLuminance - minLuminance, sampledColors: colors.size };
 }
 
 app.whenReady().then(async () => {
@@ -347,7 +409,7 @@ app.whenReady().then(async () => {
       return { ready: Math.abs(width - baseline.width) > 1, value: { width, value } };
     });
 
-    win.setContentSize(1100, 720);
+    await setExactContentSize(win, 1100, 720);
     const narrow = await poll(win, 'narrow shell', () => {
       const shell = document.querySelector('.shell--narrow');
       const nav = document.querySelector('.shell__navigation');
@@ -386,7 +448,7 @@ app.whenReady().then(async () => {
       return { ready: (!dialog || dialog.hidden) && document.activeElement === opener };
     });
 
-    win.setContentSize(1440, 920);
+    await setExactContentSize(win, 1440, 920);
     const restored = await poll(win, 'desktop restoration', () => {
       const shell = document.querySelector('.shell--desktop');
       const nav = document.querySelector('.shell__navigation');
@@ -419,7 +481,7 @@ app.whenReady().then(async () => {
       for (const [width, height] of [[1440, 920], [1280, 800], [1100, 720]]) {
         errors.push(...await win.webContents.executeJavaScript('window.__smokeErrors || []'));
         smokeProfiles = [seededProfile];
-        win.setContentSize(width, height);
+        await setExactContentSize(win, width, height);
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('renderer reload timed out')), 10000);
           win.webContents.once('did-finish-load', () => { clearTimeout(timeout); resolve(); });
@@ -428,6 +490,7 @@ app.whenReady().then(async () => {
         await poll(win, `reloaded profile shell ${width}x${height}`, () => ({
           ready: Boolean(document.querySelector('.workspace__appearance select') && document.querySelector('.profile-detail h2')),
         }));
+        const viewport = await setExactContentSize(win, width, height);
         await win.webContents.executeJavaScript(`(() => {
           window.__smokeErrors = [];
           window.__smokeExpectedTheme = '${appearance.theme}';
@@ -443,7 +506,10 @@ app.whenReady().then(async () => {
           const page = document.querySelector('.profile-page');
           const directory = document.querySelector('.profile-directory');
           const detail = document.querySelector('.profile-detail');
-          if (!page || !directory || !detail || document.querySelector('h1')?.textContent !== '档案管理'
+          const root = document.getElementById('root');
+          const background = document.querySelector('.dirty-navigation__background');
+          const shell = document.querySelector('.shell');
+          if (!page || !directory || !detail || !root || !background || !shell || document.querySelector('h1')?.textContent !== '档案管理'
             || document.querySelector('.profile-detail h2')?.textContent !== '烟测档案'
             || document.querySelectorAll('.profile-row').length !== 1
             || document.documentElement.dataset.theme !== window.__smokeExpectedTheme
@@ -453,8 +519,12 @@ app.whenReady().then(async () => {
               rows: document.querySelectorAll('.profile-row').length,
               theme: document.documentElement.dataset.theme,
               density: document.documentElement.dataset.density,
-              page: Boolean(page), directory: Boolean(directory), detail: Boolean(detail),
+              page: Boolean(page), directory: Boolean(directory), detail: Boolean(detail), root: Boolean(root), background: Boolean(background), shell: Boolean(shell),
             } };
+          const rect = (element) => {
+            const value = element.getBoundingClientRect();
+            return { left: value.left, top: value.top, width: value.width, height: value.height };
+          };
           const pageRect = page.getBoundingClientRect();
           const directoryRect = directory.getBoundingClientRect();
           const detailRect = detail.getBoundingClientRect();
@@ -462,9 +532,19 @@ app.whenReady().then(async () => {
           const stacked = directoryRect.bottom <= detailRect.top + 1;
           const controlsFit = Array.from(document.querySelectorAll('[data-profile-control]')).every((element) => element.scrollWidth <= element.clientWidth + 1);
           const labelsFit = Array.from(document.querySelectorAll('.profile-page label, .profile-page h2, .profile-page h3')).every((element) => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1);
-          return { ready: true, value: { pageWidth: pageRect.width, sideBySide, stacked, controlsFit, labelsFit, bodyOverflow: document.body.scrollWidth - document.body.clientWidth } };
+          return { ready: true, value: {
+            logicalWidth: window.innerWidth, logicalHeight: window.innerHeight, deviceScaleFactor: window.devicePixelRatio,
+            root: rect(root), background: rect(background), shell: rect(shell),
+            pageWidth: pageRect.width, sideBySide, stacked, controlsFit, labelsFit, bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+          } };
         });
-        if ((geometry.pageWidth >= 760 ? !geometry.sideBySide : !geometry.stacked) || !geometry.controlsFit || !geometry.labelsFit || geometry.bodyOverflow > 1) {
+        const fillsViewport = ['root', 'background', 'shell'].every((name) => {
+          const bounds = geometry[name];
+          return Math.abs(bounds.left) <= 1 && Math.abs(bounds.top) <= 1
+            && Math.abs(bounds.width - width) <= 1 && Math.abs(bounds.height - height) <= 1;
+        });
+        if (geometry.logicalWidth !== width || geometry.logicalHeight !== height || !fillsViewport
+          || (geometry.pageWidth >= 760 ? !geometry.sideBySide : !geometry.stacked) || !geometry.controlsFit || !geometry.labelsFit || geometry.bodyOverflow > 1) {
           throw new Error(`invalid profile geometry: ${JSON.stringify({ width, height, ...appearance, ...geometry })}`);
         }
         win.showInactive();
@@ -472,16 +552,25 @@ app.whenReady().then(async () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
         await win.webContents.capturePage();
         await new Promise((resolve) => setTimeout(resolve, 100));
-        const image = (await win.webContents.capturePage()).resize({ width, height, quality: 'best' });
+        const image = await win.webContents.capturePage();
         const metrics = imageMetrics(image);
         const computedName = `profile-${width}x${height}-${appearance.theme}-${appearance.density}.png`;
         const name = expectedProfileScreenshotNames[screenshotIndex++];
         if (name !== computedName) throw new Error(`unexpected screenshot matrix order: ${computedName}`);
-        if (metrics.width !== width || metrics.height !== height || metrics.bytes < 10000 || metrics.luminanceRange < 20 || metrics.sampledColors < 32) {
+        const expectedNativeWidth = Math.round(width * viewport.deviceScaleFactor);
+        const expectedNativeHeight = Math.round(height * viewport.deviceScaleFactor);
+        const scaleX = metrics.nativeWidth / width;
+        const scaleY = metrics.nativeHeight / height;
+        const aspectError = Math.abs((metrics.nativeWidth / metrics.nativeHeight) - (width / height));
+        if (Math.abs(metrics.nativeWidth - expectedNativeWidth) > 1 || Math.abs(metrics.nativeHeight - expectedNativeHeight) > 1
+          || Math.abs(scaleX - scaleY) > 0.01 || aspectError > 0.002
+          || metrics.bytes < 10000 || metrics.luminanceRange < 20 || metrics.sampledColors < 32) {
           throw new Error(`screenshot is blank or incomplete: ${JSON.stringify({ name, ...metrics, png: undefined })}`);
         }
         fs.writeFileSync(path.join(screenshotDir, name), metrics.png);
-        profileScreenshots.push({ name, width: metrics.width, height: metrics.height, bytes: metrics.bytes, luminanceRange: metrics.luminanceRange, sampledColors: metrics.sampledColors, geometry });
+        profileScreenshots.push({ name, logicalWidth: width, logicalHeight: height, deviceScaleFactor: viewport.deviceScaleFactor,
+          nativeWidth: metrics.nativeWidth, nativeHeight: metrics.nativeHeight, scaleX, scaleY,
+          bytes: metrics.bytes, luminanceRange: metrics.luminanceRange, sampledColors: metrics.sampledColors, geometry });
       }
     }
 
