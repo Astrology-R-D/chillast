@@ -52,12 +52,20 @@ export function DirtyNavigationProvider({ children }: { children: ReactNode }) {
   const finish = async (proceed: boolean, discard = false) => {
     const request = pendingRef.current;
     if (!request) return;
+    if (request.native) {
+      try {
+        const accepted = await apiClient.decideClose(proceed ? 'proceed' : 'cancel');
+        if (!accepted) { setError(t('dirty.closeFailed')); return; }
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+        return;
+      }
+    }
     pendingRef.current = null;
     setPending(null); setError('');
-    if (discard) registrationRef.current?.discard();
     try {
-      if (request.native) await apiClient.decideClose(proceed ? 'proceed' : 'cancel');
-      else if (proceed && request.action) await request.action();
+      if (discard) registrationRef.current?.discard();
+      if (!request.native && proceed && request.action) await request.action();
       request.resolve(proceed);
     } catch {
       request.resolve(false);

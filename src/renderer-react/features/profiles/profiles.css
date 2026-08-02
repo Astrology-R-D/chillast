@@ -1,4 +1,5 @@
 .profile-page { display: grid; grid-template-columns: minmax(280px, 34%) minmax(0, 1fr); height: calc(100vh - var(--header-height)); min-height: 0; overflow: hidden; }
+.profile-page__background { display: contents; }
 .profile-directory { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid var(--border-subtle); background: var(--surface-raised); }
 .profile-directory__heading { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border-subtle); }
 [data-profile-control] { height: var(--control-height); min-height: var(--control-height); }

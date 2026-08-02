@@ -241,11 +241,10 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   };
   const duplicate = (profile: Profile) => {
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...input } = profile;
-    const suffix = t('profiles.copySuffix');
     const payload: ProfileSaveInput = {
       ...input,
-      nameZh: input.nameZh.trim() ? `${input.nameZh}${suffix}` : '',
-      nameEn: input.nameEn.trim() ? `${input.nameEn}${suffix}` : '',
+      nameZh: input.nameZh.trim() ? `${input.nameZh}${t('profiles.copySuffixZh')}` : '',
+      nameEn: input.nameEn.trim() ? `${input.nameEn}${t('profiles.copySuffixEn')}` : '',
     };
     if (!payload.nameZh && !payload.nameEn) payload.nameZh = t('profiles.unnamedCopy');
     void runDuplicate(payload);
@@ -331,15 +330,17 @@ export function ProfilePage({ workspaceStore = profileWorkspaceStore, onNavigate
   if (profiles.isPending) return <div className="profile-state" role="status">{t('profiles.loading')}</div>;
   if (profiles.isError && !profiles.data) return <div className="profile-state" role="alert"><p>{t('profiles.loadFailed', { message: profiles.error.message })}</p><button data-profile-control type="button" onClick={() => profiles.refetch()}>{t('profiles.retry')}</button></div>;
   return <div ref={pageRef} className="profile-page">
-    <ProfileDirectory profiles={visibleProfiles ?? []} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
-    <section className="profile-page__surface">
-      {editor ? <ProfileForm key="profile-editor" profile={editorCommit?.profile ?? editor.profile ?? null} onSave={saveEditor} onCancel={requestCloseEditor} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
-        : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => requestDuplicate(selected)}
-        onDelete={() => requestDelete(selected)}
-        onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />
-        : <div className="profile-page__blank">{t('profiles.selectPrompt')}</div>}
-      {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={duplicatePhase !== 'idle'} onClick={() => duplicateSavedId ? refreshDuplicate(duplicateSavedId) : duplicatePayload && void runDuplicate(duplicatePayload)}>{t(duplicateSavedId ? 'profiles.retryRefresh' : 'profiles.retry')}</button></div>}
-    </section>
+    <div className="profile-page__background" inert={Boolean(deleteTarget)} aria-hidden={deleteTarget ? true : undefined}>
+      <ProfileDirectory profiles={visibleProfiles ?? []} selectedId={selectedId} primaryId={primaryId} recents={recents} onSelect={select} onCreate={openCreate} />
+      <section className="profile-page__surface">
+        {editor ? <ProfileForm key="profile-editor" profile={editorCommit?.profile ?? editor.profile ?? null} onSave={saveEditor} onCancel={requestCloseEditor} onDraftStateChange={(registration) => onFormRegistration?.(registration)} />
+          : selected ? <ProfileDetail key={selected.id} profile={selected} primary={selected.id === primaryId} pending={duplicatePhase !== 'idle'} onEdit={() => openEdit(selected)} onCopy={() => requestDuplicate(selected)}
+          onDelete={() => requestDelete(selected)}
+          onSetPrimary={() => workspaceStore.getState().setPrimaryProfile(selected.id)} onChart={(type) => openChart(selected, type)} />
+          : <div className="profile-page__blank">{t('profiles.selectPrompt')}</div>}
+        {duplicateError && <div className="profile-duplicate-error" role="alert"><span>{duplicateError}</span><button data-profile-control type="button" disabled={duplicatePhase !== 'idle'} onClick={() => duplicateSavedId ? refreshDuplicate(duplicateSavedId) : duplicatePayload && void runDuplicate(duplicatePayload)}>{t(duplicateSavedId ? 'profiles.retryRefresh' : 'profiles.retry')}</button></div>}
+      </section>
+    </div>
     {deleteTarget && <div className="profile-dialog-backdrop"><div className="profile-dialog" role="alertdialog" aria-modal="true" aria-labelledby="profile-delete-title" aria-describedby="profile-delete-description" onKeyDown={trapFocus}>
       <h2 id="profile-delete-title">{t('profiles.deleteTitle')}</h2><p id="profile-delete-description">{t('profiles.deleteConfirm', { name: deleteTarget.nameZh || deleteTarget.nameEn })}</p>
       {deletePending && <p ref={deleteStatusRef} role="status" tabIndex={-1} aria-busy="true">{t('profiles.deletePending')}</p>}

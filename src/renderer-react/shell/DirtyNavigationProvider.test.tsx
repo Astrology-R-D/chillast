@@ -171,6 +171,45 @@ test.each([
   else expect(registration.discard).toHaveBeenCalledOnce();
 });
 
+test('keeps a native discard pending when the close guard no longer accepts the decision', async () => {
+  let requestClose!: () => void;
+  vi.spyOn(apiClient, 'onCloseRequested').mockImplementation((callback) => { requestClose = callback; return () => {}; });
+  const decide = vi.spyOn(apiClient, 'decideClose').mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  decide.mockClear();
+  const registration = { dirty: true, save: vi.fn().mockResolvedValue(true), discard: vi.fn() };
+  view(registration);
+
+  act(() => requestClose());
+  const dialog = screen.getByRole('alertdialog');
+  await userEvent.click(within(dialog).getByRole('button', { name: locale.dirty.discard }));
+
+  expect(dialog).toBeInTheDocument();
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(locale.dirty.closeFailed);
+  expect(registration.discard).not.toHaveBeenCalled();
+
+  act(() => requestClose());
+  await userEvent.click(within(dialog).getByRole('button', { name: locale.dirty.discard }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  expect(registration.discard).toHaveBeenCalledOnce();
+  expect(decide).toHaveBeenCalledTimes(2);
+});
+
+test('keeps the native dialog and draft when close-decision IPC rejects', async () => {
+  let requestClose!: () => void;
+  vi.spyOn(apiClient, 'onCloseRequested').mockImplementation((callback) => { requestClose = callback; return () => {}; });
+  vi.spyOn(apiClient, 'decideClose').mockRejectedValue(new Error('IPC unavailable'));
+  const registration = { dirty: true, save: vi.fn().mockResolvedValue(true), discard: vi.fn() };
+  view(registration);
+
+  act(() => requestClose());
+  const dialog = screen.getByRole('alertdialog');
+  await userEvent.click(within(dialog).getByRole('button', { name: locale.dirty.discard }));
+
+  expect(dialog).toBeInTheDocument();
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('IPC unavailable');
+  expect(registration.discard).not.toHaveBeenCalled();
+});
+
 test('provider owns the close subscription without a beforeunload draft guard', () => {
   expect(providerSource).toContain('onCloseRequested');
   expect(providerSource).not.toContain('beforeunload');

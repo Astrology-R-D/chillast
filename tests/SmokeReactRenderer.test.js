@@ -35,6 +35,15 @@ test('React smoke verifies dirty navigation and all six profile screenshot varia
   assert.match(source, /dirtyCancelRetained/);
   assert.match(source, /dirtySaveNavigated/);
   assert.match(source, /dirtyDiscardNavigated/);
+  assert.match(source, /nativeCloseTimedOut/);
+  assert.match(source, /nativeCloseRejectedRetained/);
+  assert.match(source, /nativeCloseIpcRejectedRetained/);
+  assert.match(source, /nativeCloseRetryCanceled/);
+  assert.match(source, /new CloseGuard\(/);
+  assert.match(source, /new IpcRouter\(/);
+  assert.match(source, /closeRouter\._handle\('app:closeDecision'/);
+  assert.match(source, /win\.close\(\)/);
+  assert.match(source, /\.profile-page__background/);
   assert.match(source, /profileScreenshots/);
   for (const name of [
     'profile-1440x920-light-compact.png', 'profile-1280x800-light-compact.png', 'profile-1100x720-light-compact.png',

@@ -174,22 +174,35 @@ test('publishes chart intent and route together through one supplied shell trans
 });
 
 test('duplicates with a clean payload, mandatory refetch, localized nonblank name, and canonical selection', async () => {
-  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）', updatedAt: '2026-08-02T12:00:00.000Z' };
+  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname Copy', updatedAt: '2026-08-02T12:00:00.000Z' };
   const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [beta] }).mockResolvedValueOnce({ ok: true, data: [beta, copied] });
   const { api } = setup(list);
   api.profiles.save.mockResolvedValue({ ok: true, data: { ...copied, updatedAt: beta.updatedAt } });
   await screen.findByRole('heading', { name: 'Beatrice Longname' });
   await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
   await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
-  expect(api.profiles.save).toHaveBeenCalledWith(expect.objectContaining({ nameZh: '', nameEn: 'Beatrice Longname（副本）' }));
+  expect(api.profiles.save).toHaveBeenCalledWith(expect.objectContaining({ nameZh: '', nameEn: 'Beatrice Longname Copy' }));
   expect(api.profiles.save.mock.calls[0][0]).not.toHaveProperty('id');
   expect(api.profiles.save.mock.calls[0][0]).not.toHaveProperty('createdAt');
   expect(api.profiles.save.mock.calls[0][0]).not.toHaveProperty('updatedAt');
-  expect(await screen.findByRole('heading', { name: 'Beatrice Longname（副本）' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Beatrice Longname Copy' })).toBeInTheDocument();
+});
+
+test('uses language-specific duplicate suffixes for bilingual names', async () => {
+  const copied = { ...alpha, id: 'copy', nameZh: '王晓明 副本', nameEn: 'Alex Wang Copy' };
+  const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: true, data: [alpha, copied] });
+  const { api } = setup(list);
+  api.profiles.save.mockResolvedValue({ ok: true, data: copied });
+  await screen.findByRole('heading', { name: '王晓明' });
+
+  await userEvent.click(screen.getByRole('button', { name: '复制档案' }));
+
+  expect(api.profiles.save).toHaveBeenCalledWith(expect.objectContaining({ nameZh: '王晓明 副本', nameEn: 'Alex Wang Copy' }));
+  expect(await screen.findByRole('heading', { name: '王晓明 副本' })).toBeInTheDocument();
 });
 
 test('retries only duplicate refresh and selects only the authoritative returned ID among identical profiles', async () => {
-  const identical = { ...beta, id: 'existing', nameEn: 'Beatrice Longname（副本）' };
+  const identical = { ...beta, id: 'existing', nameEn: 'Beatrice Longname Copy' };
   const saved = { ...identical, id: 'authoritative-copy' };
   const list = vi.fn()
     .mockResolvedValueOnce({ ok: true, data: [beta, identical] })
@@ -211,7 +224,7 @@ test('retries only duplicate refresh and selects only the authoritative returned
 });
 
 test('does not select an identical profile when the authoritative saved ID is absent after refresh', async () => {
-  const identical = { ...beta, id: 'existing', nameEn: 'Beatrice Longname（副本）' };
+  const identical = { ...beta, id: 'existing', nameEn: 'Beatrice Longname Copy' };
   const saved = { ...identical, id: 'missing-copy' };
   const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [beta, identical] }).mockResolvedValueOnce({ ok: true, data: [beta, identical] });
   const { api } = setup(list);
@@ -225,7 +238,7 @@ test('does not select an identical profile when the authoritative saved ID is ab
 });
 
 test('serializes duplicate save and canonical refresh across double clicks', async () => {
-  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）' };
+  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname Copy' };
   const saveResult = deferred<{ ok: true; data: Profile }>();
   const refreshResult = deferred<{ ok: true; data: Profile[] }>();
   const list = vi.fn()
@@ -251,7 +264,7 @@ test('serializes duplicate save and canonical refresh across double clicks', asy
 });
 
 test('serializes refresh retry and ignores a stale first retry completion', async () => {
-  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）' };
+  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname Copy' };
   const retryResult = deferred<{ ok: true; data: Profile[] }>();
   const list = vi.fn()
     .mockResolvedValueOnce({ ok: true, data: [beta] })
@@ -275,7 +288,7 @@ test('serializes refresh retry and ignores a stale first retry completion', asyn
 });
 
 test('a new duplicate save clears a prior saved ID before its own failure retry', async () => {
-  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname（副本）' };
+  const copied = { ...beta, id: 'copy', nameEn: 'Beatrice Longname Copy' };
   const list = vi.fn()
     .mockResolvedValueOnce({ ok: true, data: [beta] })
     .mockResolvedValueOnce({ ok: false, error: '刷新断开' })
@@ -300,7 +313,7 @@ test('a new duplicate save clears a prior saved ID before its own failure retry'
 });
 
 test('keeps duplicate failure inline without an unhandled rejection and retries the same payload', async () => {
-  const copied = { ...alpha, id: 'copy', nameZh: '王晓明（副本）' };
+  const copied = { ...alpha, id: 'copy', nameZh: '王晓明 副本', nameEn: 'Alex Wang Copy' };
   const list = vi.fn().mockResolvedValueOnce({ ok: true, data: [alpha] }).mockResolvedValueOnce({ ok: true, data: [alpha, copied] });
   const { api } = setup(list);
   api.profiles.save.mockResolvedValueOnce({ ok: false, error: '磁盘繁忙' }).mockResolvedValueOnce({ ok: true, data: copied });
@@ -314,7 +327,7 @@ test('keeps duplicate failure inline without an unhandled rejection and retries 
   expect(unhandled).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole('button', { name: '重试' }));
 
-  expect(await screen.findByRole('heading', { name: '王晓明（副本）' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: '王晓明 副本' })).toBeInTheDocument();
   expect(api.profiles.save).toHaveBeenCalledTimes(2);
   expect(api.profiles.save.mock.calls[1][0]).toEqual(api.profiles.save.mock.calls[0][0]);
   expect(list).toHaveBeenCalledTimes(2);
@@ -329,6 +342,11 @@ test('uses an accessible delete dialog with cancel, trapped focus, failure, and 
   const trigger = screen.getByRole('button', { name: '删除档案' });
   await userEvent.click(trigger);
   let dialog = screen.getByRole('alertdialog', { name: '删除档案' });
+  const background = document.querySelector<HTMLElement>('.profile-page__background');
+  expect(background).toHaveAttribute('inert');
+  expect(background).toHaveAttribute('aria-hidden', 'true');
+  expect(background?.querySelector('[aria-label="复制档案"]')?.closest('[inert]')).toBe(background);
+  expect(screen.queryByRole('button', { name: '复制档案' })).not.toBeInTheDocument();
   expect(within(dialog).getByRole('button', { name: '取消' })).toHaveFocus();
   fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
   expect(within(dialog).getByRole('button', { name: '确认删除' })).toHaveFocus();

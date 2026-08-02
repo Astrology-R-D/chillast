@@ -5,6 +5,8 @@ const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const { runElectronSmokeController } = require('./ElectronSmokeController');
 const { imageMetrics } = require('./NativeImageMetrics');
+const CloseGuard = require('../src/main/CloseGuard');
+const IpcRouter = require('../src/main/IpcRouter');
 
 runElectronSmokeController('chillast-react-smoke-', app);
 
@@ -40,6 +42,7 @@ const seededProfile = {
 let smokeProfiles = [anchorProfile, seededProfile];
 const userDataDir = process.env.CHILLAST_SMOKE_USER_DATA;
 let win = null;
+let closeGuard = null;
 let finished = false;
 
 app.disableHardwareAcceleration();
@@ -55,6 +58,7 @@ function finish(code, reason) {
   if (finished) return;
   finished = true;
   if (reason) console.error(`\nReact smoke failed: ${reason}\n`);
+  closeGuard?.dispose();
   if (win && !win.isDestroyed()) win.destroy();
   app.exit(code);
 }
@@ -211,6 +215,32 @@ app.whenReady().then(async () => {
       backgroundThrottling: false,
     },
   });
+  const closeDiagnostics = [];
+  const closeStages = [];
+  let rejectNextCloseDecision = false;
+  let resolveCloseTimeout;
+  let resolveSecondCloseRequest;
+  const closeTimeout = new Promise((resolve) => { resolveCloseTimeout = resolve; });
+  const secondCloseRequest = new Promise((resolve) => { resolveSecondCloseRequest = resolve; });
+  closeGuard = new CloseGuard({
+    win,
+    timeoutMs: 250,
+    diagnostic: (message) => { closeDiagnostics.push(message); resolveCloseTimeout(message); },
+    onStage: (stage) => {
+      closeStages.push(stage);
+      if (stage === 'request-sent' && closeStages.filter((value) => value === stage).length === 2) resolveSecondCloseRequest();
+    },
+  });
+  const closeRouter = new IpcRouter({ ipcMain });
+  closeRouter.setWebContents(win.webContents);
+  closeRouter._handle('app:closeDecision', (_event, decision) => {
+    if (rejectNextCloseDecision) {
+      rejectNextCloseDecision = false;
+      throw new Error('trusted close IPC rejection');
+    }
+    return closeGuard.decide(decision);
+  });
+  closeGuard.install();
 
   win.webContents.on('console-message', (...args) => {
     const details = args.at(-1);
@@ -335,8 +365,32 @@ app.whenReady().then(async () => {
       const element = document.querySelector('.profile-form [name="notes"]');
       Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value').set.call(element, '未保存烟测备注');
       element.dispatchEvent(new Event('input', { bubbles: true }));
-      document.querySelectorAll('.shell-nav__button')[1].click();
     })()`);
+    win.close();
+    await poll(win, 'native dirty close dialog', () => ({ ready: Boolean(document.querySelector('.dirty-navigation__dialog')) }));
+    const nativeCloseTimedOut = Boolean(await closeTimeout);
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '放弃更改').click()`);
+    const nativeCloseRejectedRetained = await poll(win, 'rejected native close retained', () => ({
+      ready: document.querySelector('.dirty-navigation__dialog [role="alert"]')?.textContent.includes('关闭请求已失效')
+        && document.querySelector('.profile-form [name="notes"]')?.value === '未保存烟测备注',
+      value: true,
+    }));
+    win.close();
+    await secondCloseRequest;
+    rejectNextCloseDecision = true;
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '放弃更改').click()`);
+    const nativeCloseIpcRejectedRetained = await poll(win, 'rejected close IPC retained', () => ({
+      ready: document.querySelector('.dirty-navigation__dialog [role="alert"]')?.textContent.includes('trusted close IPC rejection')
+        && document.querySelector('.profile-form [name="notes"]')?.value === '未保存烟测备注',
+      value: true,
+    }));
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '取消').click()`);
+    const nativeCloseRetryCanceled = await poll(win, 'retried native close canceled', () => ({
+      ready: !document.querySelector('.dirty-navigation__dialog')
+        && document.querySelector('.profile-form [name="notes"]')?.value === '未保存烟测备注',
+      value: true,
+    }));
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[1].click()`);
     const dirtyCancelRetained = await poll(win, 'dirty dialog', () => ({ ready: Boolean(document.querySelector('.dirty-navigation__dialog')), value: true }));
     await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '取消').click()`);
     await poll(win, 'dirty cancel retained', () => ({ ready: document.querySelector('.profile-form [name="notes"]')?.value === '未保存烟测备注' && document.querySelector('h1')?.textContent === '档案管理' }));
@@ -366,6 +420,13 @@ app.whenReady().then(async () => {
     await poll(win, 'duplicate profile', () => ({ ready: document.querySelectorAll('.profile-row').length === 4 }));
     await win.webContents.executeJavaScript(`document.querySelector('.profile-detail__actions button:last-child').click()`);
     await poll(win, 'delete dialog', () => ({ ready: Boolean(document.querySelector('.profile-dialog')) }));
+    const profileModalIsolated = await win.webContents.executeJavaScript(`(() => {
+      const background = document.querySelector('.profile-page__background');
+      const copy = background?.querySelector('[aria-label="复制档案"]');
+      copy?.focus();
+      return Boolean(background?.inert && background?.getAttribute('aria-hidden') === 'true' && document.activeElement !== copy);
+    })()`);
+    if (!profileModalIsolated) throw new Error('delete dialog did not isolate the profile background');
     await win.webContents.executeJavaScript(`document.querySelector('.profile-dialog__actions button:last-child').click()`);
     await poll(win, 'delete duplicate', () => ({ ready: document.querySelectorAll('.profile-row').length === 3 && !document.querySelector('.profile-dialog') }));
 
@@ -567,7 +628,7 @@ app.whenReady().then(async () => {
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, initialSearchVerified, primaryMarkerVerified, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {

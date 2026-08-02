@@ -44,7 +44,8 @@
     "discard": "放弃更改",
     "cancel": "取消",
     "saving": "正在保存档案…",
-    "saveFailed": "档案未能保存，请修正错误后重试。"
+    "saveFailed": "档案未能保存，请修正错误后重试。",
+    "closeFailed": "关闭请求已失效。请再次关闭窗口，然后重试所选操作。"
   },
   "appearance": {
     "system": "跟随系统",
@@ -92,7 +93,8 @@
     "setPrimary": "设为主档案",
     "edit": "编辑档案",
     "copy": "复制档案",
-    "copySuffix": "（副本）",
+    "copySuffixZh": " 副本",
+    "copySuffixEn": " Copy",
     "unnamed": "未命名档案",
     "unnamedCopy": "未命名档案（副本）",
     "actions": "档案操作",
