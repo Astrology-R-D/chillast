@@ -27,7 +27,7 @@ function nativeImageMock({ scaleFactors, logicalWidth, logicalHeight, fixedSize 
   };
 }
 
-for (const requestedScaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
+for (const requestedScaleFactor of [0.5, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 3, 4]) {
   test(`selects the current ${requestedScaleFactor}x representation for every NativeImage API`, () => {
     const image = nativeImageMock({ scaleFactors: [requestedScaleFactor], logicalWidth: 80, logicalHeight: 40 });
 
@@ -42,6 +42,32 @@ for (const requestedScaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
     assert.equal(metrics.selectedScaleFactor, requestedScaleFactor);
     assert.equal(metrics.actualScaleX, requestedScaleFactor);
     assert.equal(metrics.actualScaleY, requestedScaleFactor);
+  });
+}
+
+test('selects the numerically closest representation for an arbitrary fractional scale', () => {
+  const image = nativeImageMock({ scaleFactors: [1.8, 2.4, 3], logicalWidth: 100, logicalHeight: 60 });
+
+  const metrics = imageMetrics(image, { logicalWidth: 100, logicalHeight: 60, requestedScaleFactor: 2.37 });
+
+  assert.deepEqual(image.calls, {
+    getSize: [2.4],
+    toPNG: [{ scaleFactor: 2.4 }],
+    toBitmap: [{ scaleFactor: 2.4 }],
+  });
+  assert.equal(metrics.selectedScaleFactor, 2.4);
+  assert.equal(metrics.actualScaleX, 2.4);
+  assert.equal(metrics.actualScaleY, 2.4);
+});
+
+for (const requestedScaleFactor of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0.49, 4.01]) {
+  test(`rejects invalid requested scale ${String(requestedScaleFactor)}`, () => {
+    const image = nativeImageMock({ scaleFactors: [1], logicalWidth: 100, logicalHeight: 60 });
+
+    assert.throws(
+      () => imageMetrics(image, { logicalWidth: 100, logicalHeight: 60, requestedScaleFactor }),
+      /device scale factor/i,
+    );
   });
 }
 
@@ -87,5 +113,27 @@ test('rejects a representation whose native dimensions imply inconsistent x and 
   assert.throws(
     () => imageMetrics(image, { logicalWidth: 100, logicalHeight: 60, requestedScaleFactor: 1.75 }),
     /inconsistent native scale/i,
+  );
+});
+
+test('accepts one-pixel rounding differences using tolerance proportional to actual scale', () => {
+  const image = nativeImageMock({
+    scaleFactors: [3], logicalWidth: 100, logicalHeight: 100, fixedSize: { width: 301, height: 300 },
+  });
+
+  const metrics = imageMetrics(image, { logicalWidth: 100, logicalHeight: 100, requestedScaleFactor: 3 });
+
+  assert.equal(metrics.actualScaleX, 3.01);
+  assert.equal(metrics.actualScaleY, 3);
+});
+
+test('rejects an extreme measured scale outside the supported range', () => {
+  const image = nativeImageMock({
+    scaleFactors: [3], logicalWidth: 100, logicalHeight: 100, fixedSize: { width: 500, height: 500 },
+  });
+
+  assert.throws(
+    () => imageMetrics(image, { logicalWidth: 100, logicalHeight: 100, requestedScaleFactor: 3 }),
+    /actual scale/i,
   );
 });
