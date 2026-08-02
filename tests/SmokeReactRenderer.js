@@ -418,6 +418,14 @@ app.whenReady().then(async () => {
     await poll(win, 'profile after discard', () => ({ ready: document.querySelector('.profile-detail h2')?.textContent === '烟测档案' }));
     await win.webContents.executeJavaScript(`document.querySelectorAll('.profile-detail__actions button')[1].click()`);
     await poll(win, 'duplicate profile', () => ({ ready: document.querySelectorAll('.profile-row').length === 4 }));
+    const modalInputTarget = await win.webContents.executeJavaScript(`(() => {
+      const copy = document.querySelector('[aria-label="复制档案"]');
+      const bounds = copy.getBoundingClientRect();
+      window.__backgroundCopyActivations = 0;
+      copy.addEventListener('click', () => { window.__backgroundCopyActivations += 1; });
+      return { x: Math.round(bounds.left + bounds.width / 2), y: Math.round(bounds.top + bounds.height / 2) };
+    })()`);
+    const profilesBeforeModalInput = smokeProfiles.length;
     await win.webContents.executeJavaScript(`document.querySelector('.profile-detail__actions button:last-child').click()`);
     await poll(win, 'delete dialog', () => ({ ready: Boolean(document.querySelector('.profile-dialog')) }));
     const profileModalIsolated = await win.webContents.executeJavaScript(`(() => {
@@ -427,6 +435,24 @@ app.whenReady().then(async () => {
       return Boolean(background?.inert && background?.getAttribute('aria-hidden') === 'true' && document.activeElement !== copy);
     })()`);
     if (!profileModalIsolated) throw new Error('delete dialog did not isolate the profile background');
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: modalInputTarget.x, y: modalInputTarget.y });
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: modalInputTarget.x, y: modalInputTarget.y, button: 'left', clickCount: 1 });
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: modalInputTarget.x, y: modalInputTarget.y, button: 'left', clickCount: 1 });
+    await win.webContents.executeJavaScript(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
+    const modalPointerBlocked = await win.webContents.executeJavaScript(`window.__backgroundCopyActivations === 0 && Boolean(document.querySelector('.profile-dialog'))`)
+      && smokeProfiles.length === profilesBeforeModalInput;
+    if (!modalPointerBlocked) throw new Error('delete dialog allowed pointer activation of the background copy command');
+
+    await win.webContents.executeJavaScript(`(() => {
+      document.activeElement?.blur();
+      document.querySelector('[aria-label="复制档案"]').focus();
+    })()`);
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ENTER' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'ENTER' });
+    await win.webContents.executeJavaScript(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
+    const modalKeyboardBlocked = await win.webContents.executeJavaScript(`window.__backgroundCopyActivations === 0 && Boolean(document.querySelector('.profile-dialog'))`)
+      && smokeProfiles.length === profilesBeforeModalInput;
+    if (!modalKeyboardBlocked) throw new Error('delete dialog allowed keyboard activation of the background copy command');
     await win.webContents.executeJavaScript(`document.querySelector('.profile-dialog__actions button:last-child').click()`);
     await poll(win, 'delete duplicate', () => ({ ready: document.querySelectorAll('.profile-row').length === 3 && !document.querySelector('.profile-dialog') }));
 
@@ -628,7 +654,7 @@ app.whenReady().then(async () => {
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {

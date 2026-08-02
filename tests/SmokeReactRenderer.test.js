@@ -53,6 +53,15 @@ test('React smoke verifies dirty navigation and all six profile screenshot varia
   assert.match(source, /document\.querySelector\('\.profile-detail'\)/);
 });
 
+test('React smoke attempts pointer and keyboard activation of an inert modal background command', () => {
+  assert.match(source, /modalPointerBlocked/);
+  assert.match(source, /modalKeyboardBlocked/);
+  assert.match(source, /sendInputEvent\(\{ type: 'mouseDown'/);
+  assert.match(source, /sendInputEvent\(\{ type: 'keyDown', keyCode: 'ENTER'/);
+  assert.match(source, /__backgroundCopyActivations/);
+  assert.match(source, /profilesBeforeModalInput/);
+});
+
 test('React smoke captures exact logical viewports as untouched native-DPI images', () => {
   assert.match(source, /require\('\.\/NativeImageMetrics'\)/);
   assert.match(source, /setExactContentSize/);
