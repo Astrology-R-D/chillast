@@ -338,6 +338,7 @@ describe('chart API boundary', () => {
     ['ipc', () => Promise.reject(new Error('transport unavailable')), 'ipc'],
     ['domain', () => Promise.resolve({ ok: false as const, error: 'domain rejected' }), 'domain'],
     ['malformed envelope', () => Promise.resolve({ bad: true } as never), 'parser'],
+    ['malformed domain envelope', () => Promise.resolve({ ok: false } as never), 'parser'],
   ])('classifies %s failures', async (_label, getChartTypes, kind) => {
     installApi({ getChartTypes });
     const error = await apiClient.getChartCatalog().catch((value: unknown) => value);

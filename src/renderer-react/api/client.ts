@@ -189,7 +189,11 @@ async function chartBoundary<T>(
     throw new ChartBoundaryError('parser', cause.message, { cause });
   }
   if (envelope.ok === false) {
-    const cause = new Error('error' in envelope && typeof envelope.error === 'string' ? envelope.error : 'Unknown domain error');
+    if (!('error' in envelope) || typeof envelope.error !== 'string') {
+      const cause = new Error('Malformed IPC envelope');
+      throw new ChartBoundaryError('parser', cause.message, { cause });
+    }
+    const cause = new Error(envelope.error);
     throw new ChartBoundaryError('domain', cause.message, { cause });
   }
   if (envelope.ok !== true || !('data' in envelope)) {

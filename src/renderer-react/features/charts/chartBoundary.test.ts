@@ -174,7 +174,7 @@ describe('normalizeChartResult', () => {
     expect(result.houses[0].id).toBe('house:1');
     expect(result.aspects[0].id).toBe('aspect:natal:sun:conjunction:transit:moon');
     expect(result.identities).toEqual([
-      'ring:natal', 'natal:sun', 'ring:transit', 'transit:moon', 'house:1',
+      'ring:natal', 'ring:transit', 'natal:sun', 'transit:moon', 'house:1',
       'aspect:natal:sun:conjunction:transit:moon',
     ]);
     expect(result.meta.strategyData).toEqual({ retained: true });

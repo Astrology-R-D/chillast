@@ -93,6 +93,11 @@ export function normalizeChartResult(value: unknown): NormalizedChartResult {
     rings,
     aspects,
     distributions: raw.distributions,
-    identities: [...identities],
+    identities: [
+      ...rings.map(({ identity }) => identity),
+      ...rings.flatMap(({ points }) => points.map(({ id }) => id)),
+      ...houses.map(({ id }) => id),
+      ...aspects.map(({ id }) => id),
+    ],
   };
 }
