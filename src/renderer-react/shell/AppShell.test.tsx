@@ -5,7 +5,7 @@ import { I18nProvider } from '../i18n/I18nProvider';
 import { AppProviders } from '../AppProviders';
 import { preferencesStore, startPreferenceSync } from '../preferences/preferences';
 import { createMatchMediaController } from '../test/matchMedia';
-import { AppShell, preloadChartWorkbench } from './AppShell';
+import { AppShell, ChartWorkbenchRoute, createChartWorkbenchLoader, preloadChartWorkbench } from './AppShell';
 import locale from '../../../locale/zh.json';
 import type { Profile } from '../api/contracts';
 import { apiClient } from '../api/client';
@@ -114,11 +114,40 @@ test('navigates localized placeholders and keeps route state across shell breakp
   await user.click(screen.getByRole('button', { name: '个人星盘' }));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
   expect(await screen.findByRole('group', { name: '星盘筛选' })).toBeInTheDocument();
+  expect(screen.getByRole('main').querySelector('.workspace')).toHaveClass('workspace--chart');
 
   act(() => media.setMatches(true));
   act(() => media.setMatches(false));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
   expect(screen.getByRole('button', { name: '个人星盘' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('recovers a rejected chart chunk through route-local retry', async () => {
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const user = userEvent.setup();
+  const Page = ({ route }: { route: string }) => <div role="group" aria-label={`loaded-${route}`} />;
+  const importer = vi.fn().mockRejectedValueOnce(new Error('chunk failed')).mockResolvedValue({ ChartWorkbenchPage: Page });
+  const loader = createChartWorkbenchLoader(importer);
+  render(<I18nProvider dictionary={dictionary}><ChartWorkbenchRoute route="personal" loader={loader} /></I18nProvider>);
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('chunk failed');
+  await user.click(screen.getByRole('button', { name: locale.chart.workbench.retry }));
+  expect(await screen.findByRole('group', { name: 'loaded-personal' })).toBeInTheDocument();
+  expect(importer).toHaveBeenCalledTimes(2);
+  errorSpy.mockRestore();
+});
+
+test('recovers a rejected chart chunk by navigating to another chart route', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const Page = ({ route }: { route: string }) => <div role="group" aria-label={`loaded-${route}`} />;
+  const importer = vi.fn().mockRejectedValueOnce(new Error('chunk failed')).mockResolvedValue({ ChartWorkbenchPage: Page });
+  const loader = createChartWorkbenchLoader(importer);
+  const view = render(<I18nProvider dictionary={dictionary}><ChartWorkbenchRoute route="personal" loader={loader} /></I18nProvider>);
+  await screen.findByRole('alert');
+
+  view.rerender(<I18nProvider dictionary={dictionary}><ChartWorkbenchRoute route="relationship" loader={loader} /></I18nProvider>);
+  expect(await screen.findByRole('group', { name: 'loaded-relationship' })).toBeInTheDocument();
+  expect(importer).toHaveBeenCalledTimes(2);
 });
 
 test('passes locale-provided accessibility labels through the application shell', async () => {

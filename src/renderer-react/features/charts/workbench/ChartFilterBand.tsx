@@ -43,6 +43,7 @@ export function ChartFilterBand(props: ChartFilterBandProps) {
   const disabled = Boolean(props.disabled);
   const localizeError = (code?: ChartDraftErrorCode) => code ? t(`chart.workbench.${code}`) : undefined;
   const errorId = (key: keyof DraftValidation['fieldErrors']) => `${errorPrefix}-${String(key)}-error`;
+  const advancedDialogErrorId = `${errorId('advancedAspects')}-dialog`;
   const errorAttributes = (key: keyof DraftValidation['fieldErrors']) => ({
     'aria-invalid': validation.fieldErrors[key] ? true : undefined,
     'aria-describedby': validation.fieldErrors[key] ? errorId(key) : undefined,
@@ -127,10 +128,11 @@ export function ChartFilterBand(props: ChartFilterBandProps) {
           return <div key={key} className="chart-aspects__row"><label><input type="checkbox" checked={enabled} disabled={disabled} onChange={() => onPatch({
             enabledAspects: enabled ? draft.enabledAspects.filter((item) => item !== key) : [...draft.enabledAspects, key],
           })} />{reference.aspects[key]?.nameZh ?? key}</label><input type="number" aria-label={`${reference.aspects[key]?.nameZh ?? key}${t('chart.workbench.orb')}`}
-            disabled={disabled} {...errorAttributes('advancedAspects')}
+            disabled={disabled} aria-invalid={validation.fieldErrors.advancedAspects ? true : undefined}
+            aria-describedby={validation.fieldErrors.advancedAspects ? advancedDialogErrorId : undefined}
             min={0.1} max={15} step={0.1} value={draft.orbOverrides[key] ?? reference.aspects[key]?.defaultOrb ?? 5}
             onChange={(event) => onPatch({ orbOverrides: { ...draft.orbOverrides, [key]: Number(event.target.value) } })} /></div>;
-        })}</div><ErrorText id={`${errorId('advancedAspects')}-dialog`} message={localizeError(validation.fieldErrors.advancedAspects)} />
+        })}</div><ErrorText id={advancedDialogErrorId} message={localizeError(validation.fieldErrors.advancedAspects)} />
         <div className="chart-dialog__actions"><button type="button" onClick={() => onPatch({ enabledAspects: [...DEFAULT_ASPECTS], orbOverrides: {} })}>{t('chart.workbench.resetAspects')}</button>
           <Dialog.Close asChild><button type="button">{t('chart.workbench.close')}</button></Dialog.Close></div>
       </Dialog.Content></Dialog.Portal>

@@ -153,6 +153,51 @@ async function setExactContentSize(win, width, height) {
   throw new Error(`exact viewport ${width}x${height} timed out; last result: ${JSON.stringify({ last, nativeState })}`);
 }
 
+async function measureChartGeometry(win, description) {
+  const geometry = await poll(win, description, () => {
+    const mainContent = document.querySelector('.shell__main-content');
+    const workspace = document.querySelector('.workspace--chart');
+    const header = document.querySelector('.workspace__header');
+    const workbench = document.querySelector('.chart-workbench');
+    const filters = document.querySelector('.chart-filter-band');
+    const result = document.querySelector('.chart-result');
+    if (!mainContent || !workspace || !header || !workbench || !filters || !result) return { ready: false };
+    const rect = (element) => {
+      const value = element.getBoundingClientRect();
+      return { top: value.top, bottom: value.bottom, width: value.width, height: value.height };
+    };
+    const mainContentRect = rect(mainContent);
+    const workspaceRect = rect(workspace);
+    const headerRect = rect(header);
+    const workbenchRect = rect(workbench);
+    const filterRect = rect(filters);
+    const resultRect = rect(result);
+    return { ready: workbenchRect.height > 0 && resultRect.height > 0, value: {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      mainContent: mainContentRect,
+      workspace: workspaceRect,
+      header: headerRect,
+      workbench: workbenchRect,
+      filters: filterRect,
+      resultHeight: resultRect.height,
+      remainingHeightError: Math.abs(workbenchRect.height - (workspaceRect.height - headerRect.height)),
+      resultHeightError: Math.abs(resultRect.height - (workbenchRect.height - filterRect.height)),
+      availableWidthError: document.querySelector('.shell--narrow')
+        ? Math.abs(mainContentRect.width - (window.innerWidth - 56)) : 0,
+      outerScroll: Math.max(document.documentElement.scrollHeight - window.innerHeight, document.body.scrollHeight - window.innerHeight),
+    } };
+  });
+  return { name: description, ...geometry };
+}
+
+function assertChartGeometry(geometry) {
+  if (geometry.outerScroll > 1 || geometry.remainingHeightError > 1.5 || geometry.resultHeightError > 1.5 || geometry.availableWidthError > 1.5
+    || geometry.resultHeight <= 42 || geometry.workbench.bottom > geometry.workspace.bottom + 1
+    || Math.abs(geometry.workspace.height - geometry.mainContent.height) > 1.5) {
+    throw new Error(`invalid chart geometry: ${JSON.stringify(geometry)}`);
+  }
+}
+
 function registerEnvelope(channel, handler) {
   ipcMain.handle(channel, async (_event, ...args) => {
     try {
@@ -491,6 +536,7 @@ app.whenReady().then(async () => {
       return { ready: Math.abs(width - baseline.width) > 1, value: { width, value } };
     });
 
+    const chartGeometry = [];
     await setExactContentSize(win, 1100, 720);
     const narrow = await poll(win, 'narrow shell', () => {
       const shell = document.querySelector('.shell--narrow');
@@ -511,6 +557,8 @@ app.whenReady().then(async () => {
     if (narrow.innerWidth > 1102 || !narrow.aiHidden || !narrow.openerVisible) {
       throw new Error(`invalid narrow geometry: ${JSON.stringify(narrow)}`);
     }
+    chartGeometry.push(await measureChartGeometry(win, 'chart-1100x720'));
+    assertChartGeometry(chartGeometry.at(-1));
 
     await win.webContents.executeJavaScript(`document.querySelector('.shell__main-toolbar button').click()`);
     const overlay = await poll(win, 'AI overlay open', () => {
@@ -550,6 +598,8 @@ app.whenReady().then(async () => {
     if (restored.heading !== '个人星盘' || restored.theme !== 'dark' || restored.density !== 'comfortable' || !restored.noOverlap) {
       throw new Error(`desktop state was not retained: ${JSON.stringify(restored)}`);
     }
+    chartGeometry.push(await measureChartGeometry(win, 'chart-1440x920'));
+    assertChartGeometry(chartGeometry.at(-1));
 
     const screenshotDir = path.join(__dirname, 'screenshots');
     fs.mkdirSync(screenshotDir, { recursive: true });
@@ -659,7 +709,7 @@ app.whenReady().then(async () => {
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, chartGeometry, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {

@@ -85,6 +85,17 @@ const maySettle = (state: ChartRouteState, sequence: number) =>
   && sequence === state.activeSequence
   && state.requestStatus === 'loading';
 
+function immutableClone<T>(value: T): T {
+  const clone = structuredClone(value);
+  const freeze = (entry: unknown): void => {
+    if (!entry || typeof entry !== 'object' || Object.isFrozen(entry)) return;
+    Object.freeze(entry);
+    for (const child of Object.values(entry as Record<string, unknown>)) freeze(child);
+  };
+  freeze(clone);
+  return clone;
+}
+
 function initialRouteState(draft: ChartDraft): ChartRouteState {
   return {
     draft, submitted: null, accepted: null, lastSuccessfulResult: null,
@@ -164,10 +175,11 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
         const state = get().routes[route];
         if (!state) return null;
         if (state.requestStatus === 'loading' && state.submitted && structurallyEqual(state.submitted, snapshot)) return null;
+        const submitted = immutableClone(snapshot);
         const sequence = state.latestIssuedSequence + 1;
         updateRoute(route, (current) => ({
           ...current,
-          submitted: snapshot,
+          submitted,
           submittedDraft: structuredClone(current.draft),
           latestIssuedSequence: sequence,
           activeSequence: sequence,
@@ -179,11 +191,12 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
       },
       acceptSuccess(route, sequence, result, snapshot) {
         const state = get().routes[route];
-        if (!state || !maySettle(state, sequence)) return false;
+        if (!state || !state.submitted || !maySettle(state, sequence)) return false;
+        const submitted = state.submitted;
         const acceptedDraft = state.submittedDraft ? structuredClone(state.submittedDraft) : structuredClone(state.draft);
         updateRoute(route, (current) => ({
           ...current,
-          accepted: snapshot,
+          accepted: submitted,
           acceptedDraft,
           lastSuccessfulResult: result,
           activeSequence: null,
@@ -193,21 +206,21 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
           isStale: !structurallyEqual(current.draft, acceptedDraft),
         }));
         const recent = get().workspace.recents;
-        const place = snapshot.request.options.latitude === undefined ? null : {
-          id: relocationRecentId({ latitude: snapshot.request.options.latitude, longitude: snapshot.request.options.longitude! }),
-          label: snapshot.request.options.locationLabel ?? '',
-          latitude: snapshot.request.options.latitude,
-          longitude: snapshot.request.options.longitude!,
+        const place = submitted.request.options.latitude === undefined ? null : {
+          id: relocationRecentId({ latitude: submitted.request.options.latitude, longitude: submitted.request.options.longitude! }),
+          label: submitted.request.options.locationLabel ?? '',
+          latitude: submitted.request.options.latitude,
+          longitude: submitted.request.options.longitude!,
         };
         persist({
           ...get().workspace,
           recents: {
-            primaryProfileIds: pushRecent(recent.primaryProfileIds, snapshot.primaryProfileId),
-            secondaryProfileIds: snapshot.secondaryProfileId
-              ? pushRecent(recent.secondaryProfileIds, snapshot.secondaryProfileId) : recent.secondaryProfileIds,
-            chartTypes: pushRecent(recent.chartTypes, snapshot.type),
-            houseSystems: pushRecent(recent.houseSystems, snapshot.request.settings.houseSystem),
-            zodiacs: pushRecent(recent.zodiacs, snapshot.request.settings.zodiac),
+            primaryProfileIds: pushRecent(recent.primaryProfileIds, submitted.primaryProfileId),
+            secondaryProfileIds: submitted.secondaryProfileId
+              ? pushRecent(recent.secondaryProfileIds, submitted.secondaryProfileId) : recent.secondaryProfileIds,
+            chartTypes: pushRecent(recent.chartTypes, submitted.type),
+            houseSystems: pushRecent(recent.houseSystems, submitted.request.settings.houseSystem),
+            zodiacs: pushRecent(recent.zodiacs, submitted.request.settings.zodiac),
             relocationPlaces: place
               ? pushRecent(recent.relocationPlaces, place, ({ id }) => id) : recent.relocationPlaces,
           },

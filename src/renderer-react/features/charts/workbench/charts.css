@@ -3,7 +3,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  overflow: hidden;
 }
 
 .chart-filter-band {
@@ -32,14 +32,14 @@
   background: var(--surface-raised);
   box-shadow: var(--shadow-lg);
 }
-.chart-popover { display: grid; padding: 6px; }
+.chart-popover { display: grid; max-block-size: min(320px, calc(100vh - 16px)); overflow: auto; padding: 6px; }
 .chart-dialog__overlay { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / 45%); }
 .chart-dialog { position: fixed; z-index: 31; top: 50%; left: 50%; width: min(560px, calc(100vw - 32px)); max-height: min(680px, calc(100vh - 32px)); overflow: auto; transform: translate(-50%, -50%); padding: 16px; border-radius: 6px; }
 .chart-aspects { display: grid; gap: 6px; }
 .chart-aspects__row { display: grid; grid-template-columns: minmax(0, 1fr) 90px; align-items: center; gap: 12px; }
 .chart-dialog__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .relocation-picker { position: relative; min-width: 220px; }
-.relocation-picker__list { position: absolute; top: 100%; left: 0; width: 100%; display: grid; padding: 4px; }
+.relocation-picker__list { position: absolute; top: 100%; left: 0; width: 100%; display: grid; max-block-size: min(240px, calc(100vh - 16px)); overflow: auto; padding: 4px; }
 .relocation-picker__list button { display: flex; justify-content: space-between; text-align: left; }
 
 .chart-result { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; }

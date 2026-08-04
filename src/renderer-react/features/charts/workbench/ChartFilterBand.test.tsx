@@ -128,6 +128,11 @@ describe('chart filter band', () => {
     });
     await user.click(screen.getByRole('button', { name: '高级相位' }));
     const dialog = screen.getByRole('dialog', { name: '高级相位' });
+    const orb = within(dialog).getAllByRole('spinbutton')[0];
+    const dialogError = document.getElementById(orb.getAttribute('aria-describedby')!);
+    expect(dialog.contains(dialogError)).toBe(true);
+    expect(dialogError).toBeVisible();
+    expect(dialogError?.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
     expect(within(dialog).getAllByRole('checkbox')).toHaveLength(10);
     await user.click(within(dialog).getAllByRole('checkbox')[0]);
     expect(props.onPatch).toHaveBeenCalledWith({ enabledAspects: DEFAULT_ASPECTS.slice(1) });
@@ -145,7 +150,10 @@ describe('chart filter band', () => {
     const trigger = screen.getByRole('button', { name: '高级相位' });
     const describedBy = trigger.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy!)).toHaveTextContent('相位或容许度无效');
+    const outerError = document.getElementById(describedBy!);
+    expect(outerError).toHaveTextContent('相位或容许度无效');
+    expect(outerError).toBeVisible();
+    expect(outerError?.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

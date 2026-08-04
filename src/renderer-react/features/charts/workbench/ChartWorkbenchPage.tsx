@@ -64,7 +64,15 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
       ? intent
       : null;
     if (applicableIntent) {
-      nextDraft = { ...nextDraft, type: applicableIntent.chartType, primaryProfileId: applicableIntent.primaryProfileId };
+      const selectorSecondaryIds = store.getState().workspace.recents.secondaryProfileIds;
+      const secondaryProfileId = route === 'relationship'
+        ? [...selectorSecondaryIds, ...recentSecondaryIds].find(
+          (id) => id !== applicableIntent.primaryProfileId && profiles.some((profile) => profile.id === id),
+        )
+          ?? profiles.find(({ id }) => id !== applicableIntent.primaryProfileId)?.id
+          ?? null
+        : nextDraft.secondaryProfileId;
+      nextDraft = { ...nextDraft, type: applicableIntent.chartType, primaryProfileId: applicableIntent.primaryProfileId, secondaryProfileId };
     }
     try {
       store.getState().initializeRoute(route, nextDraft, Boolean(current && applicableIntent));
@@ -74,8 +82,8 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
     if (!applicableIntent) return;
     const applied = store.getState().routes[route]?.draft;
     if (applied && structurallyEqual(
-      { type: applied.type, primaryProfileId: applied.primaryProfileId },
-      { type: applicableIntent.chartType, primaryProfileId: applicableIntent.primaryProfileId },
+      { type: applied.type, primaryProfileId: applied.primaryProfileId, secondaryProfileId: applied.secondaryProfileId },
+      { type: nextDraft.type, primaryProfileId: nextDraft.primaryProfileId, secondaryProfileId: nextDraft.secondaryProfileId },
     )) profileWorkspaceStore.getState().consumeChartIntent();
   }, [startupReady, catalogQuery.data, profiles, reference, route, store]);
 

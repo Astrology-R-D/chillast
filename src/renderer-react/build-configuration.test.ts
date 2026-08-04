@@ -8,7 +8,7 @@ const packageJson = JSON.parse(
   readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8'),
 ) as { scripts: Record<string, string>; dependencies: Record<string, string>; build: { files: string[] } };
 
-test('runs the canonical renderer suite with one worker', () => {
+test('pins the canonical renderer suite to one worker for Windows Electron host stability', () => {
   expect(packageJson.scripts['test:renderer']).toBe('vitest run --maxWorkers=1');
 });
 
@@ -27,7 +27,7 @@ test('declares the accessible primitives used by chart filters', () => {
 test('loads the chart workbench outside the initial renderer chunk', () => {
   const shell = readFileSync(resolve(repositoryRoot, 'src/renderer-react/shell/AppShell.tsx'), 'utf8');
   expect(shell).toMatch(/return import\(['"]\.\.\/features\/charts\/workbench\/ChartWorkbenchPage['"]\)/);
-  expect(shell).toMatch(/lazy\(\(\) => loadChartWorkbench\(\)/);
+  expect(shell).toMatch(/lazy\(\(\) => loader\.load\(\)/);
   expect(shell).not.toMatch(/^import .*ChartWorkbenchPage.*from/m);
 });
 

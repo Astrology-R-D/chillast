@@ -11,7 +11,7 @@ import { defaultWesternWorkspace, writeWesternWorkspace } from '../../../stores/
 import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { CHART_DESCRIPTORS } from '../catalog';
 import { CHART_TYPES, type ChartReferenceData, type NormalizedChartResult } from '../contracts';
-import { DEFAULT_ASPECTS } from './chartDraft';
+import { createDefaultDraft, DEFAULT_ASPECTS } from './chartDraft';
 import { ChartWorkbenchPage } from './ChartWorkbenchPage';
 
 const profile = (id: string): Profile => ({
@@ -44,12 +44,12 @@ function storage(): Storage {
     key: (index) => [...values.keys()][index] ?? null, removeItem: (key) => values.delete(key), setItem: (key, value) => values.set(key, value) };
 }
 
-function setup(route: 'personal' | 'relationship', availableProfiles = profiles, memory = storage()) {
+function setup(route: 'personal' | 'relationship', availableProfiles = profiles, memory = storage(), providedStore?: ReturnType<typeof createChartWorkspaceStore>) {
   vi.spyOn(apiClient, 'listProfiles').mockResolvedValue(availableProfiles);
   vi.spyOn(apiClient, 'getChartCatalog').mockResolvedValue(catalog);
   vi.spyOn(apiClient, 'getChartReference').mockResolvedValue(reference);
   const compute = vi.spyOn(apiClient, 'computeChart').mockResolvedValue(result);
-  const store = createChartWorkspaceStore(memory);
+  const store = providedStore ?? createChartWorkspaceStore(memory);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const view = render(<QueryClientProvider client={client}><I18nProvider dictionary={dictionary}>
     <ChartWorkspaceProvider store={store}><ChartWorkbenchPage route={route} /></ChartWorkspaceProvider>
@@ -172,6 +172,43 @@ test('keeps intent until matching route and profiles are available, then applies
   await waitFor(() => expect(relationship.store.getState().routes.relationship?.draft).toMatchObject({ type: 'synastry', primaryProfileId: 'p1' }));
   expect(profileWorkspaceStore.getState().chartIntent).toBeNull();
   expect(relationship.compute).not.toHaveBeenCalled();
+});
+
+test('relationship intent atomically selects a recent secondary distinct from its new primary', async () => {
+  const available = [profile('p1'), profile('p2'), profile('p3')];
+  profileWorkspaceStore.setState({ primaryProfileId: null, recentUses: {}, chartIntent: {
+    route: 'relationship', chartType: 'synastry', primaryProfileId: 'p2',
+  } });
+  const store = createChartWorkspaceStore(storage());
+  store.setState({ workspace: { ...store.getState().workspace, recents: {
+    ...store.getState().workspace.recents, secondaryProfileIds: ['p3', 'p1'],
+  } } });
+  store.getState().initializeRoute('relationship', {
+    ...createDefaultDraft('relationship', { now: new Date(), profiles: available, reference, persistedPrimaryId: 'p1', recentSecondaryIds: [], toInstant: (value) => value }),
+    primaryProfileId: 'p1', secondaryProfileId: 'p2',
+  });
+  const view = setup('relationship', available, storage(), store);
+
+  await waitFor(() => expect(store.getState().routes.relationship?.draft).toMatchObject({
+    primaryProfileId: 'p2', secondaryProfileId: 'p3',
+  }));
+  expect(profileWorkspaceStore.getState().chartIntent).toBeNull();
+  expect(view.compute).not.toHaveBeenCalled();
+});
+
+test('relationship intent clears secondary when no distinct profile exists and stays invalid', async () => {
+  profileWorkspaceStore.getState().openChart({ route: 'relationship', chartType: 'synastry', primaryProfileId: 'p2' });
+  const store = createChartWorkspaceStore(storage());
+  store.getState().initializeRoute('relationship', {
+    ...createDefaultDraft('relationship', { now: new Date(), profiles: [profile('p2')], reference, persistedPrimaryId: 'p2', recentSecondaryIds: [], toInstant: (value) => value }),
+    secondaryProfileId: 'p2',
+  });
+  setup('relationship', [profile('p2')], storage(), store);
+
+  await waitFor(() => expect(store.getState().routes.relationship?.draft.secondaryProfileId).toBeNull());
+  expect(screen.getByText('关系盘需要两个不同档案')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '计算' })).toBeDisabled();
+  expect(profileWorkspaceStore.getState().chartIntent).toBeNull();
 });
 
 test('retains intent when the atomic draft application throws', async () => {

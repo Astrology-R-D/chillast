@@ -94,6 +94,24 @@ describe('chart workspace request state', () => {
     expect(store.getState().submit(snapshotA)).toBe(2);
   });
 
+  test('owns an immutable submitted snapshot and ignores mismatched settlement payloads', () => {
+    const store = readyStore();
+    const caller = structuredClone(snapshotA);
+    const sequence = store.getState().submit(caller)!;
+    caller.primaryProfileId = 'mutated';
+    caller.request.primary.id = 'mutated';
+    caller.request.settings.aspects.enabled.push('opposition');
+    const mismatched = { ...snapshotA, primaryProfileId: 'other', request: { ...snapshotA.request, primary: { id: 'other' } } } as SubmittedChartSnapshot;
+
+    const submitted = store.getState().routes.personal!.submitted!;
+    expect(submitted).toEqual(snapshotA);
+    expect(Object.isFrozen(submitted)).toBe(true);
+    expect(Object.isFrozen(submitted.request.settings.aspects.enabled)).toBe(true);
+    expect(store.getState().acceptSuccess('personal', sequence, resultA, mismatched)).toBe(true);
+    expect(store.getState().routes.personal!.accepted).toBe(submitted);
+    expect(store.getState().workspace.recents.primaryProfileIds).toEqual(['p1']);
+  });
+
   test('records successful recents only, caps them, and exposes no global clear action', () => {
     const store = readyStore();
     const failed = store.getState().submit(snapshotA)!;

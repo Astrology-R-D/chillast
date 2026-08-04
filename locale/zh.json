@@ -234,6 +234,7 @@
       "ipcError": "无法连接星盘计算服务。",
       "domainError": "当前参数无法完成星盘计算。",
       "catalogError": "星盘目录加载失败",
+      "routeLoadError": "星盘工作区加载失败",
       "resizeSplit": "调整星盘与数据区域",
       "chartPane": "星盘区域",
       "dataPane": "数据区域",

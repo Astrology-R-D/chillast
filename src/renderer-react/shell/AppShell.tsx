@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { Component, lazy, Suspense, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import { useI18n } from '../i18n/I18nProvider';
 import {
   type Density,
@@ -12,35 +12,79 @@ import { PanelLayout } from './PanelLayout';
 import { ROUTES, type RouteKey } from './routes';
 import { DirtyNavigationProvider, useDirtyNavigation } from './DirtyNavigationProvider';
 
-type ChartWorkbenchModule = Awaited<ReturnType<typeof importChartWorkbench>>;
-
-let chartWorkbenchPromise: ReturnType<typeof importChartWorkbench> | undefined;
-let chartWorkbenchModule: ChartWorkbenchModule | undefined;
+type ChartRoute = 'personal' | 'relationship';
+interface ChartWorkbenchModule { ChartWorkbenchPage: ComponentType<{ route: ChartRoute }> }
+export interface ChartWorkbenchLoader {
+  load(): Promise<ChartWorkbenchModule>;
+  resolved(): ChartWorkbenchModule | undefined;
+}
 
 function importChartWorkbench() {
   return import('../features/charts/workbench/ChartWorkbenchPage');
 }
 
-function loadChartWorkbench() {
-  chartWorkbenchPromise ??= importChartWorkbench().then((module) => {
-    chartWorkbenchModule = module;
-    return module;
-  });
-  return chartWorkbenchPromise;
+export function createChartWorkbenchLoader(importer: () => Promise<ChartWorkbenchModule>): ChartWorkbenchLoader {
+  let module: ChartWorkbenchModule | undefined;
+  let pending: Promise<ChartWorkbenchModule> | undefined;
+  return {
+    load() {
+      if (module) return Promise.resolve(module);
+      if (pending) return pending;
+      const request = importer().then((loaded) => {
+        module = loaded;
+        pending = undefined;
+        return loaded;
+      }, (error: unknown) => {
+        pending = undefined;
+        throw error;
+      });
+      pending = request;
+      return request;
+    },
+    resolved: () => module,
+  };
 }
+
+const chartWorkbenchLoader = createChartWorkbenchLoader(importChartWorkbench);
 
 export async function preloadChartWorkbench(): Promise<void> {
-  await loadChartWorkbench();
+  await chartWorkbenchLoader.load();
 }
 
-const ChartWorkbenchPage = lazy(() => loadChartWorkbench().then((module) => ({ default: module.ChartWorkbenchPage })));
-
-function ChartWorkbenchRoute({ route }: { route: 'personal' | 'relationship' }) {
-  if (chartWorkbenchModule) {
-    const LoadedChartWorkbenchPage = chartWorkbenchModule.ChartWorkbenchPage;
-    return <LoadedChartWorkbenchPage route={route} />;
+class ChartRouteErrorBoundary extends Component<{
+  children: ReactNode;
+  errorLabel: string;
+  retryLabel: string;
+  onRetry(): void;
+}, { error: unknown }> {
+  state = { error: null as unknown };
+  static getDerivedStateFromError(error: unknown) { return { error }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const message = this.state.error instanceof Error ? this.state.error.message : String(this.state.error);
+    return <section className="workspace__route-error" role="alert">
+      <p>{this.props.errorLabel}: {message}</p>
+      <button type="button" onClick={this.props.onRetry}>{this.props.retryLabel}</button>
+    </section>;
   }
-  return <ChartWorkbenchPage route={route} />;
+}
+
+export function ChartWorkbenchRoute({ route, loader = chartWorkbenchLoader }: { route: ChartRoute; loader?: ChartWorkbenchLoader }) {
+  const { t } = useI18n();
+  const [attempt, setAttempt] = useState(0);
+  const LazyChartWorkbenchPage = useMemo(() => lazy(() => loader.load().then(
+    (module) => ({ default: module.ChartWorkbenchPage }),
+  )), [attempt, loader, route]);
+  const loaded = loader.resolved();
+  const page = loaded
+    ? (() => { const Loaded = loaded.ChartWorkbenchPage; return <Loaded route={route} />; })()
+    : <LazyChartWorkbenchPage route={route} />;
+  return <ChartRouteErrorBoundary key={`${route}-${attempt}`} errorLabel={t('chart.workbench.routeLoadError')}
+    retryLabel={t('chart.workbench.retry')} onRetry={() => setAttempt((value) => value + 1)}>
+    <Suspense fallback={<section className="chart-result"><div role="status" aria-live="polite">{t('chart.workbench.startupLoading')}</div></section>}>
+      {page}
+    </Suspense>
+  </ChartRouteErrorBoundary>;
 }
 
 export function AppShell() {
@@ -76,7 +120,7 @@ function AppShellInner() {
         aiRegion: t('shell.aiRegion'),
       }}
     >
-      <div className="workspace">
+      <div className={`workspace${activeRoute === 'personal' || activeRoute === 'relationship' ? ' workspace--chart' : ''}`}>
         <header className="workspace__header">
           <h1 id="workspace-title">{title}</h1>
           <div className="workspace__appearance">
@@ -105,9 +149,7 @@ function AppShellInner() {
         </header>
         {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} />
           : activeRoute === 'personal' || activeRoute === 'relationship'
-            ? <Suspense fallback={<section className="chart-result"><div role="status" aria-live="polite">{t('chart.workbench.startupLoading')}</div></section>}>
-                <ChartWorkbenchRoute route={activeRoute} />
-              </Suspense>
+            ? <ChartWorkbenchRoute route={activeRoute} />
             : <section className="workspace__placeholder" aria-labelledby="workspace-title">
                 <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
                 <p>{t('shell.placeholder', { title })}</p>

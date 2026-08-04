@@ -35,6 +35,17 @@ test('keeps the narrow rail and AI overlay geometry stable', () => {
   expect(css).toMatch(/\.shell__ai-overlay\s*\{[^}]*width:\s*min\(420px, calc\(100vw - 56px\)\)/s);
 });
 
+test('owns the remaining-height chain from the main panel through chart workspace', () => {
+  expect(css).toMatch(/\.shell__main-panel\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*minmax\(0, 1fr\)[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s);
+  expect(css).toMatch(/\.shell__main\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*minmax\(0, 1fr\)[^}]*overflow:\s*hidden/s);
+  expect(css).toMatch(/\.shell__main-content\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*minmax\(0, 1fr\)[^}]*min-height:\s*0/s);
+  expect(css).toMatch(/\.workspace\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)[^}]*min-height:\s*0/s);
+  expect(css).toMatch(/\.workspace--chart\s*\{[^}]*overflow:\s*hidden/s);
+  expect(css).not.toMatch(/\.shell__main-content\s*\{[^}]*height:\s*100%/s);
+  expect(css).not.toMatch(/\.shell__main\s*\{[^}]*height:\s*100%/s);
+  expect(css).not.toMatch(/\.shell__main--narrow\s*\{[^}]*grid-column/s);
+});
+
 test('styles shell navigation, stable controls, placeholder, and AI status without gradients', () => {
   expect(css).toMatch(/\.shell-nav__button\[data-active='true'\]/);
   expect(css).toMatch(/\.workspace__appearance\s+select\s*\{[^}]*height:\s*var\(--control-height\)/s);
