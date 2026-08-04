@@ -206,6 +206,9 @@ test('contains the complete chart workbench localization contract', () => {
     'parserError', 'ipcError', 'domainError', 'catalogError', 'resizeSplit', 'chartPane', 'dataPane',
     'chartPending', 'dataPending', 'subjects', 'settings', 'rings', 'points', 'aspects', 'target',
     'year', 'location', 'returnInstant', 'metadata', 'firdaria', 'profection',
+    'startupLoading', 'errorRouteType', 'errorPrimaryProfile', 'errorSecondaryProfile',
+    'errorRelationshipProfiles', 'errorHouseSystem', 'errorZodiac', 'errorAspects',
+    'errorTargetDate', 'errorReturnYear', 'errorRelocation',
   ];
   for (const key of keys) expect(resolveKey(`chart.workbench.${key}`), key).toEqual(expect.any(String));
 });

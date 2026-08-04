@@ -66,18 +66,9 @@
       "node_modules/swisseph-v2/**"
     ],
     "extraResources": [
-      {
-        "from": "assets",
-        "to": "assets"
-      },
-      {
-        "from": "resources/models",
-        "to": "models"
-      },
-      {
-        "from": "resources/vector-index",
-        "to": "vector-index"
-      }
+      { "from": "assets", "to": "assets" },
+      { "from": "resources/models", "to": "models" },
+      { "from": "resources/vector-index", "to": "vector-index" }
     ],
     "directories": {
       "output": "release"

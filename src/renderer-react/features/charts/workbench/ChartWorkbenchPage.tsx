@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { apiClient } from '../../../api/client';
 import { useProfiles } from '../../profiles/profileQueries';
+import { useI18n } from '../../../i18n/I18nProvider';
 import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { useChartWorkspaceStoreApi } from '../../../stores/chartWorkspace';
 import { CHART_DESCRIPTORS } from '../catalog';
@@ -23,6 +24,7 @@ function errorMessage(error: unknown): string {
 }
 
 export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
+  const { t } = useI18n();
   const store = useChartWorkspaceStoreApi();
   const routeState = useStore(store, (state) => state.routes[route]);
   const persistedPrimaryId = useStore(profileWorkspaceStore, (state) => state.primaryProfileId);
@@ -77,9 +79,9 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
 
   if (!routeState) {
     return <section className="chart-workbench">
-      <div className="chart-filter-band" role="group" aria-label="星盘筛选" />
+      <div className="chart-filter-band" role="group" aria-label={t('chart.workbench.filters')} />
       <section className="chart-result"><header className="chart-result__header"><div role="status" aria-live="polite">
-        {startupError ? `星盘目录加载失败：${errorMessage(startupError)}` : '正在加载星盘筛选…'}
+        {startupError ? `${t('chart.workbench.catalogError')}：${errorMessage(startupError)}` : t('chart.workbench.startupLoading')}
       </div></header></section>
     </section>;
   }
@@ -91,7 +93,7 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
       onReset={() => store.getState().resetDraft(route, createDefaultDraft(route, environment))}
       onCancel={calculation.cancel} />
     <ChartResultShell route={route} state={routeState} profilesAvailable={profiles.length > 0}
-      validDraft={validation.valid} startupError={startupError ? `星盘目录加载失败：${errorMessage(startupError)}` : null}
+      validDraft={validation.valid} startupError={startupError ? `${t('chart.workbench.catalogError')}：${errorMessage(startupError)}` : null}
       onRetry={calculation.retry} onCancel={calculation.cancel} />
   </section>;
 }

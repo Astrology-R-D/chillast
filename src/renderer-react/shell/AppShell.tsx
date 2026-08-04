@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useI18n } from '../i18n/I18nProvider';
 import {
   type Density,
@@ -7,11 +7,14 @@ import {
 } from '../preferences/preferences';
 import { AiStatusPanel } from './AiStatusPanel';
 import { ProfilePage } from '../features/profiles/ProfilePage';
-import { ChartWorkbenchPage } from '../features/charts/workbench/ChartWorkbenchPage';
 import { Navigation } from './Navigation';
 import { PanelLayout } from './PanelLayout';
 import { ROUTES, type RouteKey } from './routes';
 import { DirtyNavigationProvider, useDirtyNavigation } from './DirtyNavigationProvider';
+
+const ChartWorkbenchPage = lazy(() => import('../features/charts/workbench/ChartWorkbenchPage').then(
+  (module) => ({ default: module.ChartWorkbenchPage }),
+));
 
 export function AppShell() {
   return <DirtyNavigationProvider><AppShellInner /></DirtyNavigationProvider>;
@@ -75,7 +78,9 @@ function AppShellInner() {
         </header>
         {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} />
           : activeRoute === 'personal' || activeRoute === 'relationship'
-            ? <ChartWorkbenchPage route={activeRoute} />
+            ? <Suspense fallback={<section className="chart-result"><div role="status" aria-live="polite">{t('chart.workbench.startupLoading')}</div></section>}>
+                <ChartWorkbenchPage route={activeRoute} />
+              </Suspense>
             : <section className="workspace__placeholder" aria-labelledby="workspace-title">
                 <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
                 <p>{t('shell.placeholder', { title })}</p>
