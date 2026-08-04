@@ -31,6 +31,21 @@ function readyStore() {
 }
 
 describe('chart workspace request state', () => {
+  test('owns one toggled focus independently from hover and active tab', () => {
+    const store = readyStore();
+    store.getState().setActiveTab('houses');
+    store.getState().setFocus('a:sun');
+    store.getState().setHover('a:moon');
+    expect(store.getState()).toMatchObject({ focusedIdentity: 'a:sun', hoverIdentity: 'a:moon', activeTab: 'houses' });
+    store.getState().setFocus('a:moon');
+    expect(store.getState()).toMatchObject({ focusedIdentity: 'a:moon', hoverIdentity: 'a:moon', activeTab: 'houses' });
+    store.getState().setFocus('a:moon');
+    expect(store.getState().focusedIdentity).toBeNull();
+    store.getState().setFocus('a:sun');
+    store.getState().clearFocus();
+    expect(store.getState()).toMatchObject({ focusedIdentity: null, hoverIdentity: 'a:moon', activeTab: 'houses' });
+  });
+
   test('marks accepted success stale against edits and clears stale on revert', () => {
     const store = readyStore();
     const sequence = store.getState().submit(snapshotA)!;

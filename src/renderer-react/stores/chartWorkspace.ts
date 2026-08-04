@@ -63,6 +63,7 @@ export interface ChartWorkspaceState {
   acceptFailure(route: ChartRoute, sequence: number, kind: RequestFailureKind, message: string): boolean;
   cancel(route: ChartRoute): void;
   setFocus(identity: ChartIdentity | null): void;
+  clearFocus(): void;
   setHover(identity: ChartIdentity | null): void;
   setLayers(patch: Partial<LayerState>): void;
   setTransform(transform: ChartTransform): void;
@@ -242,7 +243,8 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
           ...state, activeSequence: null, requestStatus: 'cancelled', requestFailureKind: null, requestMessage: null,
         } : state);
       },
-      setFocus: (focusedIdentity) => set({ focusedIdentity }),
+      setFocus: (identity) => set({ focusedIdentity: identity !== null && get().focusedIdentity === identity ? null : identity }),
+      clearFocus: () => set({ focusedIdentity: null }),
       setHover: (hoverIdentity) => set({ hoverIdentity }),
       setLayers: (patch) => set({ layers: { ...get().layers, ...patch } }),
       setTransform: (transform) => set({ transform }),
