@@ -37,7 +37,7 @@ class SwissephAdapter extends EphemerisAdapter {
 
     const hsysCode = this._houseSystemCode();
 
-    const h = SwissEphCore.houses(jdUt, latitude, longitude, hsysCode);
+    const h = SwissEphCore.houses(jdUt, latitude, longitude, hsysCode, this.zodiac);
     const cusps = h.house;
     const housesArr = [];
     for (let i = 1; i <= 12; i += 1) {
@@ -88,7 +88,7 @@ class SwissephAdapter extends EphemerisAdapter {
     const Constants = require('../Constants');
     let body;
     try {
-      body = SwissEphCore.calcBody(jdUt, BODY_IDS[key]);
+      body = SwissEphCore.calcBody(jdUt, BODY_IDS[key], this.zodiac);
     } catch (e) {
       // A single body outside its ephemeris range (e.g. Chiron is restricted to
       // ~675–4650 AD) must NOT abort the whole chart — just omit that body.

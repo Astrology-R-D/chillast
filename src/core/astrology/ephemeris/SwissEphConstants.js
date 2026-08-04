@@ -36,12 +36,18 @@ const HOUSE_SYSTEM_CODES = {
   'whole-sign': 'W',
 };
 
-const FLAGS = swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED;
+const TROPICAL_FLAGS = swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED;
+const SIDEREAL_FLAGS = TROPICAL_FLAGS | swisseph.SEFLG_SIDEREAL;
+const SIDEREAL_HOUSE_FLAGS = swisseph.SEFLG_SIDEREAL;
+const SIDEREAL_MODE = swisseph.SE_SIDM_LAHIRI;
 
 module.exports = {
   BODY_IDS,
   DERIVED_POINTS,
   HOUSE_SYSTEM_CODES,
-  FLAGS,
+  TROPICAL_FLAGS,
+  SIDEREAL_FLAGS,
+  SIDEREAL_HOUSE_FLAGS,
+  SIDEREAL_MODE,
   swisseph,
 };
