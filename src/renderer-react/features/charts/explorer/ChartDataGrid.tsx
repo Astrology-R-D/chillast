@@ -1,0 +1,292 @@
+import {
+  flexRender,
+  functionalUpdate,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type ColumnOrderState,
+  type ColumnPinningState,
+  type ColumnSizingState,
+  type SortingState,
+  type VisibilityState,
+} from '@tanstack/react-table';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from 'react';
+import type { ChartIdentity } from '../contracts';
+import { useChartWorkspace } from '../../../stores/chartWorkspace';
+import type { ExplorerTab, TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
+import type { ExplorerRow, MachineValue } from './explorerRows';
+
+export interface ChartDataGridHandle {
+  revealRow(rowId: string): void;
+  focusRow(rowId: string): void;
+  getFilteredRows(): ExplorerRow[];
+  getVisibleColumnIds(): string[];
+}
+
+export interface ChartDataGridProps {
+  rows: ExplorerRow[];
+  columns: ColumnDef<ExplorerRow, MachineValue>[];
+  layout: TabLayoutV1;
+  selectedRowIds: ReadonlySet<string>;
+  focusedIdentity: ChartIdentity | null;
+  onLayoutChange(layout: TabLayoutV1): void;
+  onSelectionChange(ids: Set<string>): void;
+  onFocusIdentity(identity: ChartIdentity): void;
+  tab?: ExplorerTab;
+}
+
+function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every((id) => right.has(id));
+}
+
+function pinnedStyle(column: { getIsPinned(): false | 'left' | 'right'; getStart(position: 'left'): number; getAfter(position: 'right'): number }): CSSProperties {
+  const pinned = column.getIsPinned();
+  if (!pinned) return {};
+  return {
+    position: 'sticky',
+    left: pinned === 'left' ? column.getStart('left') : undefined,
+    right: pinned === 'right' ? column.getAfter('right') : undefined,
+    zIndex: 2,
+  };
+}
+
+export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>(function ChartDataGrid({
+  rows,
+  columns,
+  layout,
+  selectedRowIds,
+  focusedIdentity,
+  onLayoutChange,
+  onSelectionChange,
+  onFocusIdentity,
+  tab = 'planets',
+}, forwardedRef) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const restoredActive = useChartWorkspace((state) => state.activeCells[tab]);
+  const setStoredActive = useChartWorkspace((state) => state.setActiveCell);
+  const [sorting, setSorting] = useState<SortingState>(layout.sorting);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(layout.filters);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(layout.columnVisibility);
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(layout.columnPinning);
+  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(layout.columnOrder);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(layout.columnSizing);
+  const [active, setActive] = useState(() => restoredActive ?? {
+    rowId: rows[0]?.id ?? '',
+    columnId: columns[0]?.id ?? 'selected',
+    anchorRowId: null,
+  });
+
+  const emitLayout = (patch: Partial<TabLayoutV1>) => onLayoutChange({
+    sorting, filters: columnFilters, columnOrder, columnVisibility, columnPinning: {
+      left: columnPinning.left ?? [], right: columnPinning.right ?? [],
+    }, columnSizing, ...patch,
+  });
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting, columnFilters, columnVisibility, columnPinning, columnOrder, columnSizing },
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange(updater) {
+      const next = functionalUpdate(updater, sorting); setSorting(next); emitLayout({ sorting: next });
+    },
+    onColumnFiltersChange(updater) {
+      const next = functionalUpdate(updater, columnFilters); setColumnFilters(next); emitLayout({ filters: next });
+    },
+    onColumnVisibilityChange(updater) {
+      const next = functionalUpdate(updater, columnVisibility); setColumnVisibility(next); emitLayout({ columnVisibility: next });
+    },
+    onColumnPinningChange(updater) {
+      const next = functionalUpdate(updater, columnPinning); setColumnPinning(next);
+      emitLayout({ columnPinning: { left: next.left ?? [], right: next.right ?? [] } });
+    },
+    onColumnOrderChange(updater) {
+      const next = functionalUpdate(updater, columnOrder); setColumnOrder(next); emitLayout({ columnOrder: next });
+    },
+    onColumnSizingChange(updater) {
+      const next = functionalUpdate(updater, columnSizing); setColumnSizing(next); emitLayout({ columnSizing: next });
+    },
+    columnResizeMode: 'onChange',
+  });
+
+  const modelRows = table.getRowModel().rows;
+  const visibleColumns = table.getVisibleLeafColumns();
+  const activeIndex = modelRows.findIndex((row) => row.id === active.rowId);
+  const rowVirtualizer = useVirtualizer({
+    count: modelRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 32,
+    overscan: 8,
+    initialRect: { width: 960, height: 320 },
+    observeElementRect(instance, callback) {
+      const element = instance.scrollElement;
+      if (!element) return undefined;
+      const report = () => {
+        const rect = element.getBoundingClientRect();
+        callback({
+          width: rect.width || element.clientWidth || 960,
+          height: rect.height || element.clientHeight || 320,
+        });
+      };
+      const observer = new ResizeObserver(report);
+      observer.observe(element);
+      report();
+      return () => observer.disconnect();
+    },
+    rangeExtractor: (range) => {
+      const indexes = defaultRangeExtractor(range);
+      if (activeIndex >= 0 && !indexes.includes(activeIndex)) indexes.push(activeIndex);
+      return indexes.sort((left, right) => left - right);
+    },
+    scrollToFn(offset, options, instance) {
+      const element = instance.scrollElement;
+      if (!element) return;
+      if (typeof element.scrollTo === 'function') element.scrollTo({ top: offset, behavior: options.behavior });
+      else element.scrollTop = offset;
+    },
+  });
+
+  const visibleIds = useMemo(() => new Set(modelRows.map((row) => row.id)), [modelRows]);
+  useLayoutEffect(() => {
+    const next = new Set([...selectedRowIds].filter((id) => visibleIds.has(id)));
+    if (!sameSet(next, selectedRowIds)) onSelectionChange(next);
+  }, [onSelectionChange, selectedRowIds, visibleIds]);
+
+  useEffect(() => {
+    setSorting(layout.sorting);
+    setColumnFilters(layout.filters);
+    setColumnVisibility(layout.columnVisibility);
+    setColumnPinning(layout.columnPinning);
+    setColumnOrder(layout.columnOrder);
+    setColumnSizing(layout.columnSizing);
+  }, [layout]);
+
+  useLayoutEffect(() => {
+    if (!scrollRef.current?.contains(document.activeElement)) return;
+    scrollRef.current.querySelector<HTMLElement>(
+      `[data-row-id="${CSS.escape(active.rowId)}"] [data-column-id="${CSS.escape(active.columnId)}"]`,
+    )?.focus();
+  }, [active.columnId, active.rowId]);
+
+  const activate = (rowIndex: number, columnIndex: number, anchorRowId: string | null = active.anchorRowId) => {
+    if (!modelRows.length || !visibleColumns.length) return;
+    const boundedRow = Math.max(0, Math.min(modelRows.length - 1, rowIndex));
+    const boundedColumn = Math.max(0, Math.min(visibleColumns.length - 1, columnIndex));
+    const next = { rowId: modelRows[boundedRow].id, columnId: visibleColumns[boundedColumn].id, anchorRowId };
+    setActive(next);
+    setStoredActive(tab, next);
+    rowVirtualizer.scrollToIndex(boundedRow, { align: 'auto' });
+  };
+
+  const reveal = (rowId: string, focus: boolean) => {
+    const rowIndex = modelRows.findIndex((row) => row.id === rowId);
+    if (rowIndex < 0) return;
+    const columnIndex = Math.max(0, visibleColumns.findIndex((column) => column.id === active.columnId));
+    activate(rowIndex, columnIndex);
+    if (focus) requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
+      `[data-row-id="${CSS.escape(rowId)}"] [data-column-id="${CSS.escape(visibleColumns[columnIndex]?.id ?? '')}"]`,
+    )?.focus());
+  };
+
+  useImperativeHandle(forwardedRef, () => ({
+    revealRow: (rowId) => reveal(rowId, false),
+    focusRow: (rowId) => reveal(rowId, true),
+    getFilteredRows: () => table.getRowModel().rows.map((row) => row.original),
+    getVisibleColumnIds: () => table.getVisibleLeafColumns().map((column) => column.id),
+  }));
+
+  useEffect(() => {
+    if (focusedIdentity) reveal(focusedIdentity, false);
+  // Focus changes are the trigger; row/layout changes are handled by active range extraction.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedIdentity]);
+
+  const updateSelection = (next: Set<string>) => onSelectionChange(next);
+  const toggleRow = (rowId: string) => {
+    const next = new Set(selectedRowIds);
+    if (next.has(rowId)) next.delete(rowId); else next.add(rowId);
+    updateSelection(next);
+  };
+  const selectRange = (targetIndex: number) => {
+    const anchorId = active.anchorRowId ?? active.rowId;
+    const anchorIndex = Math.max(0, modelRows.findIndex((row) => row.id === anchorId));
+    const [start, end] = [anchorIndex, targetIndex].sort((left, right) => left - right);
+    const next = new Set(selectedRowIds);
+    for (let index = start; index <= end; index += 1) next.add(modelRows[index].id);
+    updateSelection(next);
+    return anchorId;
+  };
+
+  const onCellKeyDown = (event: KeyboardEvent<HTMLDivElement>, rowIndex: number, columnIndex: number) => {
+    let nextRow = rowIndex;
+    let nextColumn = columnIndex;
+    if (event.key === 'ArrowUp') nextRow -= 1;
+    else if (event.key === 'ArrowDown') nextRow += 1;
+    else if (event.key === 'ArrowLeft') nextColumn -= 1;
+    else if (event.key === 'ArrowRight') nextColumn += 1;
+    else if (event.key === 'Home') { nextRow = event.ctrlKey ? 0 : rowIndex; nextColumn = 0; }
+    else if (event.key === 'End') { nextRow = event.ctrlKey ? modelRows.length - 1 : rowIndex; nextColumn = visibleColumns.length - 1; }
+    else if (event.key === ' ') { event.preventDefault(); toggleRow(modelRows[rowIndex].id); return; }
+    else if (event.key === 'Enter') {
+      const identity = modelRows[rowIndex].original.chartIdentity;
+      if (identity) onFocusIdentity(identity);
+      return;
+    } else return;
+    event.preventDefault();
+    nextRow = Math.max(0, Math.min(modelRows.length - 1, nextRow));
+    const anchor = event.shiftKey && nextRow !== rowIndex ? selectRange(nextRow) : null;
+    activate(nextRow, nextColumn, anchor);
+  };
+
+  return <div ref={scrollRef} className="chart-data-grid" role="grid" tabIndex={-1}
+    aria-rowcount={modelRows.length + 1} aria-colcount={visibleColumns.length}>
+    <div className="chart-data-grid__header" role="row" style={{ width: table.getTotalSize() }}>
+      {table.getHeaderGroups()[0]?.headers.map((header, columnIndex) => <div key={header.id} role="columnheader"
+        aria-colindex={columnIndex + 1} aria-label={String(header.column.columnDef.header ?? header.column.id)}
+        data-pinned={header.column.getIsPinned() || undefined}
+        style={{ width: header.getSize(), ...pinnedStyle(header.column) }}>
+        {flexRender(header.column.columnDef.header, header.getContext())}
+      </div>)}
+    </div>
+    <div className="chart-data-grid__body" style={{ height: rowVirtualizer.getTotalSize(), width: table.getTotalSize(), position: 'relative' }}>
+      {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        const row = modelRows[virtualRow.index];
+        const selected = selectedRowIds.has(row.id);
+        const focused = row.original.chartIdentity === focusedIdentity;
+        return <div key={row.id} role="row" data-row-id={row.id} data-selected={selected || undefined}
+          data-focused={focused || undefined} aria-rowindex={virtualRow.index + 2}
+          className="chart-data-grid__row" style={{ position: 'absolute', transform: `translateY(${virtualRow.start}px)`, height: virtualRow.size, width: table.getTotalSize() }}>
+          {row.getVisibleCells().map((cell, columnIndex) => {
+            const isActive = active.rowId === row.id && active.columnId === cell.column.id;
+            return <div key={cell.id} role="gridcell" aria-colindex={columnIndex + 1} tabIndex={isActive ? 0 : -1}
+              data-column-id={cell.column.id} data-active={isActive || undefined} data-pinned={cell.column.getIsPinned() || undefined}
+              style={{ width: cell.column.getSize(), ...pinnedStyle(cell.column) }}
+              onFocus={() => activate(virtualRow.index, columnIndex)}
+              onKeyDown={(event) => onCellKeyDown(event, virtualRow.index, columnIndex)}>
+              {cell.column.id === 'selected'
+                ? <input type="checkbox" tabIndex={-1} checked={selected} aria-label={`Select ${row.id}`} onChange={() => toggleRow(row.id)} />
+                : String(cell.getValue<MachineValue>() ?? '')}
+            </div>;
+          })}
+        </div>;
+      })}
+    </div>
+  </div>;
+});

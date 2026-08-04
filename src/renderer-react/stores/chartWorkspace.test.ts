@@ -197,4 +197,17 @@ describe('chart workspace request state', () => {
   test('defaults foundation minor aspects off', () => {
     expect(readyStore().getState().layers.minorAspects).toBe(false);
   });
+
+  test('keeps active cells per tab and prunes bulk row IDs against visible rows', () => {
+    const store = readyStore();
+    store.getState().setActiveCell('planets', { rowId: 'natal:sun', columnId: 'point', anchorRowId: 'natal:sun' });
+    store.getState().setActiveCell('houses', { rowId: 'house:1', columnId: 'house', anchorRowId: null });
+    store.getState().setBulkSelection(['natal:sun', 'natal:moon', 'metadata:strategyFacts']);
+    store.getState().pruneBulkSelection(new Set(['natal:moon', 'metadata:strategyFacts']));
+    expect(store.getState().activeCells).toEqual({
+      planets: { rowId: 'natal:sun', columnId: 'point', anchorRowId: 'natal:sun' },
+      houses: { rowId: 'house:1', columnId: 'house', anchorRowId: null },
+    });
+    expect(store.getState().bulkSelection).toEqual(['natal:moon', 'metadata:strategyFacts']);
+  });
 });

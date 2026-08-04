@@ -28,6 +28,11 @@ export interface LayerState {
   labels: boolean;
   rings: Record<string, boolean>;
 }
+export interface ActiveCellState {
+  rowId: string;
+  columnId: string;
+  anchorRowId: string | null;
+}
 
 export interface ChartRouteState {
   draft: ChartDraft;
@@ -53,7 +58,8 @@ export interface ChartWorkspaceState {
   transform: ChartTransform;
   activeTab: ExplorerTab;
   comparisonMode: ComparisonMode;
-  bulkSelection: ChartIdentity[];
+  activeCells: Partial<Record<ExplorerTab, ActiveCellState>>;
+  bulkSelection: string[];
   aiContextSource: string | null;
   initializeRoute(route: ChartRoute, draft: ChartDraft, replace?: boolean): void;
   editDraft(route: ChartRoute, patch: Partial<ChartDraft>): void;
@@ -70,7 +76,9 @@ export interface ChartWorkspaceState {
   setTransform(transform: ChartTransform): void;
   setActiveTab(tab: ExplorerTab): void;
   setComparisonMode(mode: ComparisonMode): void;
-  setBulkSelection(identities: ChartIdentity[]): void;
+  setActiveCell(tab: ExplorerTab, cell: ActiveCellState): void;
+  setBulkSelection(identities: string[]): void;
+  pruneBulkSelection(visibleIds: ReadonlySet<string>): void;
   setAiContextSource(source: string | null): void;
   setSplit(route: ChartRoute, orientation: 'horizontal' | 'vertical', value: [number, number]): void;
   clearRecent(key: keyof WesternChartWorkspaceV1['recents']): void;
@@ -141,6 +149,7 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
       transform: { scale: 1, x: 0, y: 0 },
       activeTab: 'planets',
       comparisonMode: 'merged',
+      activeCells: {},
       bulkSelection: [],
       aiContextSource: null,
       initializeRoute(route, draft, replace = false) {
@@ -255,7 +264,13 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
       setTransform: (transform) => set({ transform }),
       setActiveTab: (activeTab) => set({ activeTab }),
       setComparisonMode: (comparisonMode) => set({ comparisonMode }),
+      setActiveCell: (tab, cell) => set({ activeCells: { ...get().activeCells, [tab]: cell } }),
       setBulkSelection: (bulkSelection) => set({ bulkSelection }),
+      pruneBulkSelection: (visibleIds) => {
+        const current = get().bulkSelection;
+        const next = current.filter((id) => visibleIds.has(id));
+        if (next.length !== current.length) set({ bulkSelection: next });
+      },
       setAiContextSource: (aiContextSource) => set({ aiContextSource }),
       setSplit(route, orientation, value) {
         const workspace = get().workspace;
