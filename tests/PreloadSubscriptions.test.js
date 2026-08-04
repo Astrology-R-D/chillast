@@ -49,6 +49,20 @@ test('preload forwards profile, city, location, and close bridge arguments', asy
   ]);
 });
 
+test('preload forwards only narrow chart methods', async () => {
+  const { api, invocations } = loadPreloadApi();
+  const request = { type: 'natal', primary: { id: 'p1' } };
+  await api.getReferenceData();
+  await api.getChartTypes();
+  await api.computeChart(request);
+
+  assert.deepEqual(invocations, [
+    ['reference:get'], ['chartTypes:get'], ['chart:compute', request],
+  ]);
+  assert.equal(api.invoke, undefined);
+  assert.equal(api.ipcRenderer, undefined);
+});
+
 test('close-request cleanup removes only its scoped listener', () => {
   const { api, ipcRenderer } = loadPreloadApi();
   const received = [];

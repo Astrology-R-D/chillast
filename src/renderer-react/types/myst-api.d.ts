@@ -9,6 +9,7 @@ import type {
   ProfileSaveInput,
   ResolveLocationInput,
 } from '../api/contracts';
+import type { ChartRequest } from '../features/charts/contracts';
 
 declare global {
   interface MystAiApi {
@@ -21,6 +22,9 @@ declare global {
   interface MystApi {
     getConfig(): Promise<IpcResult<AppConfig>>;
     getLocale(): Promise<IpcResult<LocaleDictionary>>;
+    getReferenceData(): Promise<IpcResult<unknown>>;
+    getChartTypes(): Promise<IpcResult<unknown>>;
+    computeChart(request: ChartRequest): Promise<IpcResult<unknown>>;
     profiles: {
       list(): Promise<IpcResult<Profile[]>>;
       get(id: string): Promise<IpcResult<Profile | null>>;

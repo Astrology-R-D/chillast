@@ -13,6 +13,20 @@ import type {
   ResolveLocationInput,
   WesternCityRaw,
 } from './contracts';
+import { assertCatalogMatchesDescriptors } from '../features/charts/catalog';
+import type {
+  ChartCatalogDefinition,
+  ChartReferenceData,
+  ChartRequest,
+  NormalizedChartResult,
+} from '../features/charts/contracts';
+import { normalizeChartResult } from '../features/charts/normalizeChartResult';
+import {
+  chartReferenceDataSchema,
+  chartCatalogDefinitionSchema,
+  parseChartReferenceData,
+} from '../features/charts/schemas';
+import { z } from 'zod';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -146,6 +160,50 @@ async function invoke<T>(request: (api: MystApi) => Promise<IpcResult<T>>): Prom
   return unwrap<T>(await request(window.mystApi));
 }
 
+export type ChartBoundaryFailureKind = 'ipc' | 'domain' | 'parser';
+
+export class ChartBoundaryError extends Error {
+  constructor(readonly kind: ChartBoundaryFailureKind, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ChartBoundaryError';
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function chartBoundary<T>(
+  request: (api: MystApi) => Promise<IpcResult<unknown>>,
+  parse: (value: unknown) => T,
+): Promise<T> {
+  let envelope: unknown;
+  try {
+    envelope = await request(window.mystApi);
+  } catch (error) {
+    throw new ChartBoundaryError('ipc', errorMessage(error), { cause: error });
+  }
+
+  if (!envelope || typeof envelope !== 'object' || !('ok' in envelope)) {
+    const cause = new Error('Malformed IPC envelope');
+    throw new ChartBoundaryError('parser', cause.message, { cause });
+  }
+  if (envelope.ok === false) {
+    const cause = new Error('error' in envelope && typeof envelope.error === 'string' ? envelope.error : 'Unknown domain error');
+    throw new ChartBoundaryError('domain', cause.message, { cause });
+  }
+  if (envelope.ok !== true || !('data' in envelope)) {
+    const cause = new Error('Malformed IPC envelope');
+    throw new ChartBoundaryError('parser', cause.message, { cause });
+  }
+
+  try {
+    return parse(envelope.data);
+  } catch (error) {
+    throw new ChartBoundaryError('parser', errorMessage(error), { cause: error });
+  }
+}
+
 function parseCityArray(value: unknown, source: 'western' | 'chinese'): CitySearchResult[] {
   if (!Array.isArray(value)) throw new Error('城市数据无效');
   return value.flatMap((entry): CitySearchResult[] => {
@@ -224,6 +282,27 @@ async function searchCities(query: string): Promise<CitySearchResult[]> {
 export const apiClient = {
   getConfig: (): Promise<AppConfig> => invoke((api) => api.getConfig()),
   getLocale: (): Promise<LocaleDictionary> => invoke((api) => api.getLocale()),
+  getChartCatalog: (): Promise<ChartCatalogDefinition[]> => chartBoundary(
+    (api) => api.getChartTypes(),
+    (value) => {
+      const catalog = z.array(chartCatalogDefinitionSchema).parse(value) as ChartCatalogDefinition[];
+      assertCatalogMatchesDescriptors(catalog);
+      return catalog;
+    },
+  ),
+  getChartReference: (): Promise<ChartReferenceData> => chartBoundary(
+    (api) => api.getReferenceData(),
+    (value) => {
+      chartReferenceDataSchema.parse(value);
+      const reference = parseChartReferenceData(value);
+      assertCatalogMatchesDescriptors(reference.chartTypes);
+      return reference;
+    },
+  ),
+  computeChart: (request: ChartRequest): Promise<NormalizedChartResult> => chartBoundary(
+    (api) => api.computeChart(request),
+    normalizeChartResult,
+  ),
   getAiStatus: async (): Promise<AiStatus> =>
     parseAiStatus(await invoke<unknown>((api) => api.ai.status())),
   listProfiles: async (): Promise<Profile[]> => {

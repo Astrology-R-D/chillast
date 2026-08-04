@@ -97,6 +97,41 @@ test('optional bridge handlers are absent without injected dependencies', () => 
   assert.equal(handlers.has('app:closeDecision'), false);
 });
 
+test('chart handlers invoke astrology only for the trusted main frame', async () => {
+  const handlers = new Map();
+  const calls = [];
+  const astrology = {
+    referenceData: () => { calls.push(['reference']); return { signs: [] }; },
+    chartTypes: () => { calls.push(['catalog']); return [{ type: 'natal' }]; },
+    computeChart: (request) => { calls.push(['compute', request]); return { meta: { type: request.type } }; },
+  };
+  const router = new IpcRouter({
+    ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+    astrologyService: astrology,
+  }).register();
+  const mainFrame = {};
+  const trusted = { mainFrame };
+  router.setWebContents(trusted);
+  const event = { sender: trusted, senderFrame: mainFrame };
+  const request = { type: 'natal' };
+
+  assert.deepEqual(await handlers.get('reference:get')(event), { ok: true, data: { signs: [] } });
+  assert.deepEqual(await handlers.get('chartTypes:get')(event), { ok: true, data: [{ type: 'natal' }] });
+  assert.deepEqual(await handlers.get('chart:compute')(event, request), { ok: true, data: { meta: { type: 'natal' } } });
+  assert.deepEqual(calls, [['reference'], ['catalog'], ['compute', request]]);
+
+  calls.length = 0;
+  for (const rejected of [
+    { sender: {}, senderFrame: {} },
+    { sender: trusted, senderFrame: { parent: mainFrame } },
+  ]) {
+    for (const channel of ['reference:get', 'chartTypes:get', 'chart:compute']) {
+      assert.equal((await handlers.get(channel)(rejected, request)).ok, false);
+    }
+  }
+  assert.deepEqual(calls, []);
+});
+
 test('AI configuration persists only provider-accepted candidates', async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-ipc-config-'));
   const dataDir = path.join(userData, 'data');

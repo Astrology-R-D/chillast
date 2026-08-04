@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { apiClient, parseAiStatus, parseLocationResolution, parseProfile, unwrap } from './client';
+import {
+  apiClient,
+  ChartBoundaryError,
+  parseAiStatus,
+  parseLocationResolution,
+  parseProfile,
+  unwrap,
+} from './client';
+import { CHART_DESCRIPTORS } from '../features/charts/catalog';
 import type {
   ChineseCityRaw, IpcResult, LocationResolution, Profile, ProfileSaveInput, ResolveLocationInput, WesternCityRaw,
 } from './contracts';
@@ -22,6 +30,9 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
   const api: MystApi = {
     getConfig: () => ok({}),
     getLocale: () => ok({}),
+    getReferenceData: () => ok({}),
+    getChartTypes: () => ok([]),
+    computeChart: () => ok({}),
     profiles: {
       list: () => ok([]), get: () => ok(null), save: (value) => ok({ ...profile, ...value }), remove: () => ok(false),
     },
@@ -277,4 +288,82 @@ test('getAiStatus rejects malformed successful IPC data', async () => {
   });
 
   await expect(apiClient.getAiStatus()).rejects.toThrow('AI 状态数据无效');
+});
+
+const chartCatalog = Object.entries(CHART_DESCRIPTORS).map(([type, descriptor]) => ({
+  type,
+  nameZh: type,
+  nameEn: type,
+  category: descriptor.route,
+  requiresSecondary: descriptor.requiresSecondary,
+  options: [...descriptor.serviceOptions],
+}));
+
+function rawChartResult() {
+  const point = {
+    key: 'sun', kind: 'body', glyph: 'S', nameEn: 'Sun', nameZh: 'Sun', longitude: 10,
+    signKey: 'aries', signGlyph: 'A', signNameZh: 'Aries', signIndex: 0, degreeInSign: 10,
+    dms: { degrees: 10, minutes: 0, seconds: 0 }, retrograde: false, house: 1,
+  };
+  return {
+    meta: {
+      type: 'natal', typeNameZh: 'Natal', title: 'Natal', subtitle: 'Natal',
+      settings: { houseSystem: 'placidus', zodiac: 'tropical' },
+      generatedAt: '2026-01-01T00:00:00.000Z', instantUtc: '2000-01-01T00:00:00.000Z',
+    },
+    subjects: [],
+    houses: [],
+    angles: {},
+    rings: [{ id: 'natal', role: 'primary', label: 'Natal', points: [point] }],
+    aspects: [],
+    distributions: { elements: {}, modalities: {} },
+  };
+}
+
+describe('chart API boundary', () => {
+  test('parses chart catalog and normalized compute results', async () => {
+    installApi({
+      getChartTypes: () => ok(chartCatalog),
+      computeChart: () => ok(rawChartResult()),
+    });
+
+    await expect(apiClient.getChartCatalog()).resolves.toHaveLength(20);
+    await expect(apiClient.computeChart({} as never)).resolves.toMatchObject({
+      resultId: 'natal:2026-01-01T00:00:00.000Z:natal',
+      identities: ['ring:natal', 'natal:sun'],
+    });
+  });
+
+  test.each([
+    ['ipc', () => Promise.reject(new Error('transport unavailable')), 'ipc'],
+    ['domain', () => Promise.resolve({ ok: false as const, error: 'domain rejected' }), 'domain'],
+    ['malformed envelope', () => Promise.resolve({ bad: true } as never), 'parser'],
+  ])('classifies %s failures', async (_label, getChartTypes, kind) => {
+    installApi({ getChartTypes });
+    const error = await apiClient.getChartCatalog().catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(ChartBoundaryError);
+    expect(error).toMatchObject({ kind });
+    expect((error as Error & { cause?: unknown }).cause).toBeTruthy();
+  });
+
+  test('rejects unknown catalog tokens as parser failures', async () => {
+    installApi({ getChartTypes: () => ok([{ ...chartCatalog[0], type: 'unknown' }]) });
+    await expect(apiClient.getChartCatalog()).rejects.toMatchObject({ kind: 'parser' });
+  });
+
+  test.each([
+    ['non-finite point', () => {
+      const result = rawChartResult();
+      result.rings[0].points[0].longitude = Number.NaN;
+      return result;
+    }],
+    ['duplicate ring', () => {
+      const result = rawChartResult();
+      result.rings.push({ ...result.rings[0] });
+      return result;
+    }],
+  ])('rejects %s result data as a parser failure', async (_label, makeResult) => {
+    installApi({ computeChart: () => ok(makeResult()) });
+    await expect(apiClient.computeChart({} as never)).rejects.toMatchObject({ kind: 'parser' });
+  });
 });

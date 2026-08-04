@@ -52,6 +52,9 @@ function installApi({
   window.mystApi = {
     getConfig: config,
     getLocale: locale,
+    getReferenceData: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+    getChartTypes: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+    computeChart: vi.fn().mockResolvedValue({ ok: true, data: {} }),
     profiles: {
       list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
       get: vi.fn().mockResolvedValue({ ok: true, data: null }),
