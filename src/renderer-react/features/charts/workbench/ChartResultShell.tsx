@@ -6,6 +6,14 @@ import { useChartWorkspace, type ChartRouteState } from '../../../stores/chartWo
 import type { ChartRoute } from '../contracts';
 import { ChartResultSummary } from './ChartResultSummary';
 
+const DIVIDER_SIZE = 6;
+const PANE_MINIMUM = 360;
+const REQUIRED_SPLIT_EXTENT = PANE_MINIMUM * 2 + DIVIDER_SIZE;
+
+export function resultPaneMinimumPercent(extent: number): number {
+  return (PANE_MINIMUM / Math.max(PANE_MINIMUM * 2, extent - DIVIDER_SIZE)) * 100;
+}
+
 export function useResultOrientation(ref: RefObject<HTMLElement | null>): 'horizontal' | 'vertical' {
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('vertical');
   useEffect(() => {
@@ -48,8 +56,11 @@ export function ChartResultShell({ route, state, profilesAvailable, validDraft, 
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const extent = orientation === 'horizontal' ? size.width : size.height;
-  const minimum = extent > 0 ? (360 / extent) * 100 : 0;
+  const measuredExtent = orientation === 'horizontal' ? size.width : size.height;
+  const logicalExtent = orientation === 'vertical'
+    ? Math.max(REQUIRED_SPLIT_EXTENT, measuredExtent)
+    : measuredExtent;
+  const minimum = logicalExtent > 0 ? resultPaneMinimumPercent(logicalExtent) : 0;
   const ratio = clampRatio(stored[orientation], minimum);
   const result = state.lastSuccessfulResult;
   const accepted = state.accepted;
@@ -65,21 +76,23 @@ export function ChartResultShell({ route, state, profilesAvailable, validDraft, 
   } else if (state.requestStatus === 'cancelled') { status = t('chart.workbench.cancelled'); icon = <Ban size={16} />; }
   else if (!result) status = t('chart.workbench.empty');
 
-  return <section ref={ref} className={`chart-result chart-result--${orientation}`} data-orientation={orientation}>
+  return <section ref={ref} className={`chart-result chart-result--${orientation}`} data-orientation={orientation}
+    data-required-extent={orientation === 'vertical' ? REQUIRED_SPLIT_EXTENT : undefined}>
     <header className="chart-result__header">
       <div aria-live="polite" role="status">{icon}{status}{state.isStale && <span className="chart-result__stale">{t('chart.workbench.stale')}</span>}</div>
       <div className="chart-result__actions">{state.requestStatus === 'loading' && <button type="button" onClick={onCancel}><X size={15} />{t('chart.workbench.cancel')}</button>}
-        {state.requestStatus === 'error' && validDraft && <button type="button" onClick={onRetry}><RefreshCw size={15} />{t('chart.workbench.retry')}</button>}</div>
+        {(Boolean(startupError) || (state.requestStatus === 'error' && validDraft)) && <button type="button" onClick={onRetry}><RefreshCw size={15} />{t('chart.workbench.retry')}</button>}</div>
     </header>
     {result && accepted && <PanelGroup key={orientation} direction={orientation} className="chart-result__split"
+      style={orientation === 'vertical' ? { minHeight: `${REQUIRED_SPLIT_EXTENT}px` } : undefined}
       onLayout={(layout) => { if (layout.length === 2) setSplit(route, orientation, [layout[0], layout[1]]); }}>
-      <Panel id={`${route}-${orientation}-chart`} order={1} defaultSize={ratio[0]} minSize={Math.min(50, minimum)}
+      <Panel id={`${route}-${orientation}-chart`} order={1} defaultSize={ratio[0]} minSize={minimum}
         className="chart-result__chart-pane" data-min-percent={minimum.toFixed(3)}>
         <div className="chart-result__pane-heading"><span>{result.meta.typeNameZh}</span><strong>{result.rings.length} {t('chart.workbench.rings')} · {result.aspects.length} {t('chart.workbench.aspects')}</strong></div>
         <p>{t('chart.workbench.chartPending')}</p>
       </Panel>
       <PanelResizeHandle className="chart-result__resize" aria-label={t('chart.workbench.resizeSplit')} />
-      <Panel id={`${route}-${orientation}-data`} order={2} defaultSize={ratio[1]} minSize={Math.min(50, minimum)} className="chart-result__data-pane">
+      <Panel id={`${route}-${orientation}-data`} order={2} defaultSize={ratio[1]} minSize={minimum} className="chart-result__data-pane">
         <p className="chart-result__pending">{t('chart.workbench.dataPending')}</p>
         <ChartResultSummary result={result} submitted={accepted} />
       </Panel>

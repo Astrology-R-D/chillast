@@ -7,7 +7,7 @@ import { ChartWorkspaceProvider, createChartWorkspaceStore, type ChartRouteState
 import { setObservedSize } from '../../../test/setup';
 import type { NormalizedChartResult } from '../contracts';
 import type { ChartDraft, SubmittedChartSnapshot } from './chartDraft';
-import { ChartResultShell } from './ChartResultShell';
+import { ChartResultShell, resultPaneMinimumPercent } from './ChartResultShell';
 
 const draft = {
   route: 'personal', type: 'natal', primaryProfileId: 'p1', secondaryProfileId: null,
@@ -50,22 +50,36 @@ function renderShell(state: ChartRouteState, props: Partial<React.ComponentProps
 }
 
 describe('chart result shell', () => {
+  test('reserves the six pixel divider when deriving exact pane minima', () => {
+    const minimum = resultPaneMinimumPercent(760);
+    expect(minimum).toBeCloseTo((360 / 754) * 100, 8);
+    expect(((760 - 6) * minimum) / 100).toBeCloseTo(360, 8);
+  });
+
   test('uses measured 760px boundary and pixel-derived horizontal minima', () => {
     const view = renderShell(routeState({ accepted: submitted, lastSuccessfulResult: result, requestStatus: 'success' }));
     act(() => setObservedSize(view.resultElement, { width: 760, height: 700 }));
     expect(view.resultElement).toHaveAttribute('data-orientation', 'horizontal');
     expect(view.container.querySelector('[data-panel-group-direction]')).toHaveAttribute('data-panel-group-direction', 'horizontal');
-    expect(view.container.querySelector('.chart-result__chart-pane')).toHaveAttribute('data-min-percent', '47.368');
+    expect(view.container.querySelector('.chart-result__chart-pane')).toHaveAttribute('data-min-percent', '47.745');
     expect(screen.getByRole('separator')).toHaveAttribute('aria-label', '调整星盘与数据区域');
     act(() => setObservedSize(view.resultElement, { width: 759, height: 700 }));
     expect(view.resultElement).toHaveAttribute('data-orientation', 'vertical');
   });
 
+  test('preserves two 360px vertical panes plus divider and delegates overflow to the result', () => {
+    const view = renderShell(routeState({ accepted: submitted, lastSuccessfulResult: result, requestStatus: 'success' }));
+    act(() => setObservedSize(view.resultElement, { width: 759, height: 600 }));
+    expect(view.resultElement).toHaveAttribute('data-required-extent', '726');
+    expect(view.container.querySelector('.chart-result__split')).toHaveStyle({ minHeight: '726px' });
+    expect(view.container.querySelector('.chart-result__chart-pane')).toHaveAttribute('data-min-percent', '50.000');
+  });
+
   test('uses 55/45 vertical defaults with 360px chart minimum and separate persisted ratios', () => {
     const view = renderShell(routeState({ accepted: submitted, lastSuccessfulResult: result, requestStatus: 'success' }));
     act(() => setObservedSize(view.resultElement, { width: 759, height: 800 }));
-    expect(view.container.querySelector('.chart-result__chart-pane')).toHaveAttribute('data-panel-size', '55.0');
-    expect(view.container.querySelector('.chart-result__chart-pane')).toHaveAttribute('data-min-percent', '45.000');
+    expect(view.container.querySelector('.chart-result__chart-pane')).toHaveAttribute('data-panel-size', '54.7');
+    expect(view.container.querySelector('.chart-result__chart-pane')).toHaveAttribute('data-min-percent', '45.340');
     view.store.getState().setSplit('personal', 'vertical', [60, 40]);
     act(() => setObservedSize(view.resultElement, { width: 800, height: 800 }));
     view.store.getState().setSplit('personal', 'horizontal', [52, 48]);

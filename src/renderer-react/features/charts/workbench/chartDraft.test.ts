@@ -133,6 +133,24 @@ describe('chart draft mapping', () => {
     expect(relationship).toMatchObject({ type: 'synastry', primaryProfileId: 'p1', secondaryProfileId: 'p2' });
   });
 
+  test('prefers the actual placidus value and otherwise uses the first valid house system', () => {
+    const systems = [
+      { value: 'whole-sign', nameEn: 'Whole Sign', nameZh: '整宫制' },
+      { value: 'Placidus', nameEn: 'Placidus', nameZh: '普拉西德' },
+    ];
+    expect(createDefaultDraft('personal', environment({ reference: { ...reference, houseSystems: systems } })).houseSystem).toBe('Placidus');
+    expect(createDefaultDraft('personal', environment({ reference: { ...reference, houseSystems: systems.slice(0, 1) } })).houseSystem).toBe('whole-sign');
+  });
+
+  test('returns stable validation codes instead of localized messages', () => {
+    const validation = validateChartDraft({
+      ...draftFor('relocation'), primaryProfileId: null, houseSystem: 'bad', relocationPlace: null,
+    }, environment());
+    expect(validation.fieldErrors).toMatchObject({
+      primaryProfileId: 'errorPrimaryProfile', houseSystem: 'errorHouseSystem', relocationPlace: 'errorRelocation',
+    });
+  });
+
   test('compares sorted object keys but preserves array order', () => {
     expect(structurallyEqual({ b: 2, a: [1, 2] }, { a: [1, 2], b: 2 })).toBe(true);
     expect(structurallyEqual({ a: [1, 2] }, { a: [2, 1] })).toBe(false);

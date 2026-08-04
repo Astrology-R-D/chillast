@@ -36,8 +36,14 @@ function draftFor(type: ChartType): ChartDraft {
   }), type };
 }
 
-function renderBand(draft: ChartDraft, overrides: Partial<React.ComponentProps<typeof ChartFilterBand>> = {}) {
+function renderBand(
+  draft: ChartDraft,
+  overrides: Partial<React.ComponentProps<typeof ChartFilterBand>> = {},
+  seededRecents?: ReturnType<typeof createChartWorkspaceStore>['getState'] extends () => infer State
+    ? State extends { workspace: { recents: infer Recents } } ? Recents : never : never,
+) {
   const store = createChartWorkspaceStore(makeStorage());
+  if (seededRecents) store.setState({ workspace: { ...store.getState().workspace, recents: seededRecents } });
   const props = {
     route: draft.route, draft, profiles, reference,
     validation: { valid: true, fieldErrors: {} }, status: 'idle' as const, equivalentInFlight: false,
@@ -46,7 +52,7 @@ function renderBand(draft: ChartDraft, overrides: Partial<React.ComponentProps<t
   render(<I18nProvider dictionary={dictionary}>
     <ChartWorkspaceProvider store={store}><ChartFilterBand {...props} /></ChartWorkspaceProvider>
   </I18nProvider>);
-  return props;
+  return { ...props, store };
 }
 
 describe('chart filter band', () => {
@@ -65,10 +71,44 @@ describe('chart filter band', () => {
   test('requires two distinct relationship profiles and keeps field errors beside controls', () => {
     renderBand(draftFor('synastry'), {
       profiles: [profiles[0]],
-      validation: { valid: false, fieldErrors: { secondaryProfileId: '关系盘需要两个不同档案' } },
+      validation: { valid: false, fieldErrors: { secondaryProfileId: 'errorRelationshipProfiles' } },
     });
     expect(screen.getByRole('button', { name: '计算' })).toBeDisabled();
     expect(screen.getByText('关系盘需要两个不同档案')).toBeInTheDocument();
+  });
+
+  test('localizes validation codes and links every invalid control to its exact error', () => {
+    renderBand({ ...draftFor('transit'), primaryProfileId: null, targetLocal: '' }, {
+      validation: { valid: false, fieldErrors: {
+        primaryProfileId: 'errorPrimaryProfile', targetLocal: 'errorTargetDate', houseSystem: 'errorHouseSystem',
+      } },
+    });
+    for (const [label, message] of [
+      ['主档案', '请选择有效档案'], ['目标日期时间', '目标日期时间无效'], ['宫位制', '宫位制无效'],
+    ]) {
+      const control = screen.getByLabelText(label);
+      expect(control).toHaveAttribute('aria-invalid', 'true');
+      const errorId = control.getAttribute('aria-describedby');
+      expect(errorId).toBeTruthy();
+      expect(document.getElementById(errorId!)).toHaveTextContent(message);
+    }
+  });
+
+  test('offers chart, house, and zodiac recents and clears only the chosen history', async () => {
+    const user = userEvent.setup();
+    const seeded = {
+      primaryProfileIds: ['p1'], secondaryProfileIds: ['p2'], chartTypes: ['transit' as const],
+      houseSystems: ['placidus'], zodiacs: ['sidereal' as const], relocationPlaces: [],
+    };
+    const { store } = renderBand(draftFor('natal'), {}, seeded);
+    for (const name of ['星盘类型最近记录', '宫位制最近记录', '黄道最近记录']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('button', { name: '星盘类型最近记录' }));
+    await user.click(screen.getByRole('button', { name: '清除星盘类型最近记录' }));
+    expect(store.getState().workspace.recents.chartTypes).toEqual([]);
+    expect(store.getState().workspace.recents.houseSystems).toEqual(['placidus']);
+    expect(store.getState().workspace.recents.zodiacs).toEqual(['sidereal']);
   });
 
   test('reset never calculates and edits only publish patches', async () => {
@@ -84,7 +124,7 @@ describe('chart filter band', () => {
   test('advanced shows ten aspects, toggles enabled values, resets, and surfaces orb errors', async () => {
     const user = userEvent.setup();
     const props = renderBand(draftFor('natal'), {
-      validation: { valid: false, fieldErrors: { advancedAspects: '相位或容许度无效' } },
+      validation: { valid: false, fieldErrors: { advancedAspects: 'errorAspects' } },
     });
     await user.click(screen.getByRole('button', { name: '高级相位' }));
     const dialog = screen.getByRole('dialog', { name: '高级相位' });

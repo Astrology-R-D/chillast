@@ -30,6 +30,13 @@ const result = {
   subjects: [], houses: [], angles: {}, rings: [], aspects: [], distributions: { elements: {}, modalities: {} },
 } as unknown as NormalizedChartResult;
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
 function storage(): Storage {
   const values = new Map<string, string>();
   return { get length() { return values.size; }, clear: () => values.clear(), getItem: (key) => values.get(key) ?? null,
@@ -82,6 +89,67 @@ test('keeps filters visible when no profiles exist', async () => {
   expect(await screen.findByRole('group', { name: '星盘筛选' })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('请先创建至少一个档案。'));
   expect(screen.getByRole('button', { name: '计算' })).toBeDisabled();
+});
+
+test('renders stable disabled filter controls during startup instead of an empty band', () => {
+  const pending = deferred<ChartReferenceData>();
+  vi.spyOn(apiClient, 'listProfiles').mockReturnValue(new Promise(() => {}));
+  vi.spyOn(apiClient, 'getChartCatalog').mockReturnValue(new Promise(() => {}));
+  vi.spyOn(apiClient, 'getChartReference').mockReturnValue(pending.promise);
+  vi.spyOn(apiClient, 'computeChart').mockResolvedValue(result);
+  const store = createChartWorkspaceStore(storage());
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(<QueryClientProvider client={client}><I18nProvider dictionary={dictionary}>
+    <ChartWorkspaceProvider store={store}><ChartWorkbenchPage route="personal" /></ChartWorkspaceProvider>
+  </I18nProvider></QueryClientProvider>);
+  expect(screen.getByRole('combobox', { name: '星盘类型' })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: '主档案' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '计算' })).toBeDisabled();
+  expect(screen.getByRole('status')).toHaveTextContent('正在加载星盘筛选…');
+});
+
+test('keeps catalog failure result-local with stable controls and retries all startup queries', async () => {
+  const user = userEvent.setup();
+  vi.spyOn(apiClient, 'listProfiles').mockResolvedValue(profiles);
+  vi.spyOn(apiClient, 'getChartCatalog').mockResolvedValue(catalog);
+  const getReference = vi.spyOn(apiClient, 'getChartReference').mockRejectedValueOnce(new Error('broken')).mockResolvedValue(reference);
+  vi.spyOn(apiClient, 'computeChart').mockResolvedValue(result);
+  const store = createChartWorkspaceStore(storage());
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(<QueryClientProvider client={client}><I18nProvider dictionary={dictionary}>
+    <ChartWorkspaceProvider store={store}><ChartWorkbenchPage route="personal" /></ChartWorkspaceProvider>
+  </I18nProvider></QueryClientProvider>);
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('星盘目录加载失败：broken'));
+  expect(screen.getByRole('combobox', { name: '星盘类型' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: '重试' }));
+  await waitFor(() => expect(screen.getByRole('combobox', { name: '星盘类型' })).toBeEnabled());
+  expect(getReference).toHaveBeenCalledTimes(2);
+});
+
+test('reconciles persisted recents in the production load path', async () => {
+  const { store } = setup('personal');
+  store.setState({ workspace: { ...store.getState().workspace, recents: {
+    primaryProfileIds: ['deleted', 'p1'], secondaryProfileIds: ['p2', 'deleted'],
+    chartTypes: ['natal'], houseSystems: ['deleted', 'placidus'], zodiacs: ['tropical'],
+    relocationPlaces: [{ id: 'old', label: 'Old', latitude: 1, longitude: 2 }],
+  } } });
+  await waitFor(() => expect(store.getState().workspace.recents).toMatchObject({
+    primaryProfileIds: ['p1'], secondaryProfileIds: ['p2'], houseSystems: ['placidus'], relocationPlaces: [],
+  }));
+});
+
+test('invalidates edited relocation text so old coordinates cannot be submitted', async () => {
+  const user = userEvent.setup();
+  const { compute } = setup('personal');
+  const type = await screen.findByRole('combobox', { name: '星盘类型' });
+  await waitFor(() => expect(type).toBeEnabled());
+  await user.selectOptions(type, 'relocation');
+  const relocation = await screen.findByRole('combobox', { name: '迁移地点' });
+  expect(relocation).toHaveValue('北京');
+  await user.type(relocation, 'x');
+  expect(screen.getByRole('button', { name: '计算' })).toBeDisabled();
+  expect(compute).not.toHaveBeenCalled();
+  expect(screen.getByText('请选择已解析的迁移地点')).toBeInTheDocument();
 });
 
 test('keeps intent until matching route and profiles are available, then applies before consuming without compute', async () => {

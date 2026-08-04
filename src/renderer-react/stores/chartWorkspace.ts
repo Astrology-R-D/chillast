@@ -1,16 +1,16 @@
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { createContext, createElement, useContext, type ReactNode } from 'react';
-import type { ChartIdentity, ChartRoute, NormalizedChartResult } from '../features/charts/contracts';
+import type { ChartIdentity, ChartRoute, ChartType, NormalizedChartResult, Zodiac } from '../features/charts/contracts';
 import {
   structurallyEqual,
   type ChartDraft,
   type SubmittedChartSnapshot,
 } from '../features/charts/workbench/chartDraft';
 import {
-  defaultWesternWorkspace,
   pushRecent,
   readWesternWorkspace,
+  reconcileWorkspace,
   relocationRecentId,
   writeWesternWorkspace,
   type ComparisonMode,
@@ -71,7 +71,14 @@ export interface ChartWorkspaceState {
   setBulkSelection(identities: ChartIdentity[]): void;
   setAiContextSource(source: string | null): void;
   setSplit(route: ChartRoute, orientation: 'horizontal' | 'vertical', value: [number, number]): void;
-  clearRecents(): void;
+  clearRecent(key: keyof WesternChartWorkspaceV1['recents']): void;
+  reconcileRecents(authority: {
+    profileIds: readonly string[];
+    chartTypes: readonly ChartType[];
+    houseSystems: readonly string[];
+    zodiacs: readonly Zodiac[];
+    relocationIds: readonly string[];
+  }): void;
 }
 
 const maySettle = (state: ChartRouteState, sequence: number) =>
@@ -118,7 +125,7 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
       workspace: persisted,
       focusedIdentity: null,
       hoverIdentity: null,
-      layers: { majorAspects: true, minorAspects: true, houses: true, labels: true, rings: {} },
+      layers: { majorAspects: true, minorAspects: false, houses: true, labels: true, rings: {} },
       transform: { scale: 1, x: 0, y: 0 },
       activeTab: 'planets',
       comparisonMode: 'merged',
@@ -238,8 +245,28 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
           split: { ...workspace.split, [route]: { ...workspace.split[route], [orientation]: value } },
         });
       },
-      clearRecents() {
-        persist({ ...get().workspace, recents: defaultWesternWorkspace().recents });
+      clearRecent(key) {
+        const workspace = get().workspace;
+        persist({ ...workspace, recents: { ...workspace.recents, [key]: [] } });
+      },
+      reconcileRecents(authority) {
+        const profilesAndPlaces = reconcileWorkspace(
+          get().workspace,
+          authority.profileIds,
+          authority.relocationIds,
+        );
+        const chartTypes = new Set(authority.chartTypes);
+        const houseSystems = new Set(authority.houseSystems);
+        const zodiacs = new Set(authority.zodiacs);
+        persist({
+          ...profilesAndPlaces,
+          recents: {
+            ...profilesAndPlaces.recents,
+            chartTypes: profilesAndPlaces.recents.chartTypes.filter((value) => chartTypes.has(value)),
+            houseSystems: profilesAndPlaces.recents.houseSystems.filter((value) => houseSystems.has(value)),
+            zodiacs: profilesAndPlaces.recents.zodiacs.filter((value) => zodiacs.has(value)),
+          },
+        });
       },
     };
   });

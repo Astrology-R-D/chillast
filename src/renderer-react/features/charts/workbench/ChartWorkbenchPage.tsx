@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { RefreshCw } from 'lucide-react';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { apiClient } from '../../../api/client';
@@ -6,6 +7,7 @@ import { useProfiles } from '../../profiles/profileQueries';
 import { useI18n } from '../../../i18n/I18nProvider';
 import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { useChartWorkspaceStoreApi } from '../../../stores/chartWorkspace';
+import { relocationRecentId } from '../../../stores/chartWorkspacePersistence';
 import { CHART_DESCRIPTORS } from '../catalog';
 import type { ChartReferenceData, ChartRoute } from '../contracts';
 import { ChartFilterBand } from './ChartFilterBand';
@@ -34,18 +36,26 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
   const referenceQuery = useQuery({ queryKey: ['western-chart-reference'], queryFn: apiClient.getChartReference });
   const profiles = profilesQuery.data ?? [];
   const reference = referenceQuery.data ?? EMPTY_REFERENCE;
+  const startupReady = profilesQuery.isSuccess && catalogQuery.isSuccess && referenceQuery.isSuccess;
   const recentSecondaryIds = Object.entries(profileRecents).sort((left, right) => right[1] - left[1]).map(([id]) => id);
   const environment: DraftEnvironment = {
     now: new Date(), profiles, reference, persistedPrimaryId, recentSecondaryIds,
     toInstant(local) {
       const instant = new Date(local);
-      if (!Number.isFinite(instant.getTime())) throw new Error('目标日期时间无效');
+      if (!Number.isFinite(instant.getTime())) throw new Error('errorTargetDate');
       return instant.toISOString();
     },
   };
 
   useEffect(() => {
-    if (!profilesQuery.isSuccess || !catalogQuery.isSuccess || !referenceQuery.isSuccess) return;
+    if (!startupReady || !catalogQuery.data) return;
+    store.getState().reconcileRecents({
+      profileIds: profiles.map(({ id }) => id),
+      chartTypes: catalogQuery.data.map(({ type }) => type),
+      houseSystems: reference.houseSystems.map(({ value }) => value),
+      zodiacs: ['tropical', 'sidereal'],
+      relocationIds: profiles.map(({ birthData }) => relocationRecentId(birthData.location)),
+    });
     const current = store.getState().routes[route];
     const intent = profileWorkspaceStore.getState().chartIntent;
     let nextDraft = current?.draft ?? createDefaultDraft(route, environment);
@@ -69,31 +79,39 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
       { type: applied.type, primaryProfileId: applied.primaryProfileId },
       { type: applicableIntent.chartType, primaryProfileId: applicableIntent.primaryProfileId },
     )) profileWorkspaceStore.getState().consumeChartIntent();
-  }, [profilesQuery.isSuccess, catalogQuery.isSuccess, referenceQuery.isSuccess, profiles, reference, route, store]);
+  }, [startupReady, catalogQuery.data, profiles, reference, route, store]);
 
   const calculation = useChartCalculation(route, environment);
   const validation = routeState
     ? validateChartDraft(routeState.draft, environment)
     : { valid: false, fieldErrors: {} };
   const startupError = profilesQuery.error ?? catalogQuery.error ?? referenceQuery.error;
+  const placeholderDraft = createDefaultDraft(route, environment);
+  const retryStartup = () => {
+    void Promise.all([profilesQuery.refetch(), catalogQuery.refetch(), referenceQuery.refetch()]);
+  };
 
   if (!routeState) {
     return <section className="chart-workbench">
-      <div className="chart-filter-band" role="group" aria-label={t('chart.workbench.filters')} />
+      <ChartFilterBand route={route} draft={placeholderDraft} profiles={profiles} reference={reference}
+        validation={{ valid: false, fieldErrors: {} }} status="idle" equivalentInFlight={false} disabled
+        onPatch={() => {}} onCalculate={() => {}} onReset={() => {}} onCancel={() => {}} />
       <section className="chart-result"><header className="chart-result__header"><div role="status" aria-live="polite">
         {startupError ? `${t('chart.workbench.catalogError')}：${errorMessage(startupError)}` : t('chart.workbench.startupLoading')}
-      </div></header></section>
+      </div><div className="chart-result__actions">{startupError && <button type="button" onClick={retryStartup}>
+        <RefreshCw size={15} />{t('chart.workbench.retry')}</button>}</div></header></section>
     </section>;
   }
 
   return <section className="chart-workbench">
     <ChartFilterBand route={route} draft={routeState.draft} profiles={profiles} reference={reference}
       validation={validation} status={routeState.requestStatus} equivalentInFlight={calculation.isEquivalentInFlight}
+      disabled={!startupReady}
       onPatch={(patch) => store.getState().editDraft(route, patch)} onCalculate={calculation.calculate}
       onReset={() => store.getState().resetDraft(route, createDefaultDraft(route, environment))}
       onCancel={calculation.cancel} />
     <ChartResultShell route={route} state={routeState} profilesAvailable={profiles.length > 0}
       validDraft={validation.valid} startupError={startupError ? `${t('chart.workbench.catalogError')}：${errorMessage(startupError)}` : null}
-      onRetry={calculation.retry} onCancel={calculation.cancel} />
+      onRetry={startupError ? retryStartup : calculation.retry} onCancel={calculation.cancel} />
   </section>;
 }

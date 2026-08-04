@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { NormalizedChartResult } from '../features/charts/contracts';
 import type { ChartDraft, SubmittedChartSnapshot } from '../features/charts/workbench/chartDraft';
-import { defaultWesternWorkspace } from './chartWorkspacePersistence';
 import { createChartWorkspaceStore } from './chartWorkspace';
 
 function storage(): Storage {
@@ -95,7 +94,7 @@ describe('chart workspace request state', () => {
     expect(store.getState().submit(snapshotA)).toBe(2);
   });
 
-  test('records successful recents only, caps them, and clear does not edit draft', () => {
+  test('records successful recents only, caps them, and exposes no global clear action', () => {
     const store = readyStore();
     const failed = store.getState().submit(snapshotA)!;
     store.getState().acceptFailure('personal', failed, 'ipc', 'failed');
@@ -107,8 +106,59 @@ describe('chart workspace request state', () => {
     }
     expect(store.getState().workspace.recents.primaryProfileIds).toHaveLength(8);
     const before = store.getState().routes.personal!.draft;
-    store.getState().clearRecents();
-    expect(store.getState().workspace.recents).toEqual(defaultWesternWorkspace().recents);
+    store.getState().clearRecent('primaryProfileIds');
+    expect(store.getState().workspace.recents.primaryProfileIds).toEqual([]);
     expect(store.getState().routes.personal!.draft).toBe(before);
+    expect(store.getState()).not.toHaveProperty('clearRecents');
+  });
+
+  test.each([
+    'primaryProfileIds', 'secondaryProfileIds', 'chartTypes', 'houseSystems', 'zodiacs', 'relocationPlaces',
+  ] as const)('clears only the %s selector history', (key) => {
+    const store = readyStore();
+    store.setState({ workspace: {
+      ...store.getState().workspace,
+      recents: {
+        primaryProfileIds: ['p1'], secondaryProfileIds: ['p2'], chartTypes: ['natal'],
+        houseSystems: ['placidus'], zodiacs: ['tropical'],
+        relocationPlaces: [{ id: '1.000000:2.000000', label: 'Place', latitude: 1, longitude: 2 }],
+      },
+    } });
+    const before = structuredClone(store.getState().workspace.recents);
+    store.getState().clearRecent(key);
+    expect(store.getState().workspace.recents[key]).toEqual([]);
+    expect({ ...store.getState().workspace.recents, [key]: before[key] }).toEqual(before);
+  });
+
+  test('reconciles and persists every selector history against loaded authority', () => {
+    const memory = storage();
+    const store = createChartWorkspaceStore(memory);
+    store.setState({ workspace: {
+      ...store.getState().workspace,
+      recents: {
+        primaryProfileIds: ['deleted', 'p1'], secondaryProfileIds: ['p2', 'deleted'],
+        chartTypes: ['natal', 'transit'], houseSystems: ['deleted', 'placidus'],
+        zodiacs: ['sidereal', 'tropical'],
+        relocationPlaces: [
+          { id: 'old', label: 'Old', latitude: 1, longitude: 2 },
+          { id: 'kept', label: 'Kept', latitude: 3, longitude: 4 },
+        ],
+      },
+    } });
+    store.getState().reconcileRecents({
+      profileIds: ['p1', 'p2'], chartTypes: ['natal'], houseSystems: ['placidus'],
+      zodiacs: ['tropical'], relocationIds: ['kept'],
+    });
+    expect(store.getState().workspace.recents).toEqual({
+      primaryProfileIds: ['p1'], secondaryProfileIds: ['p2'], chartTypes: ['natal'],
+      houseSystems: ['placidus'], zodiacs: ['tropical'],
+      relocationPlaces: [{ id: 'kept', label: 'Kept', latitude: 3, longitude: 4 }],
+    });
+    expect(memory.getItem('chillast.westernChartWorkspace')).toContain('"kept"');
+    expect(memory.getItem('chillast.westernChartWorkspace')).not.toContain('"old"');
+  });
+
+  test('defaults foundation minor aspects off', () => {
+    expect(readyStore().getState().layers.minorAspects).toBe(false);
   });
 });

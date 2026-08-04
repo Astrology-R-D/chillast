@@ -37,9 +37,21 @@ export interface SubmittedChartSnapshot {
   request: ChartRequest;
 }
 
+export type ChartDraftErrorCode =
+  | 'errorRouteType'
+  | 'errorPrimaryProfile'
+  | 'errorSecondaryProfile'
+  | 'errorRelationshipProfiles'
+  | 'errorHouseSystem'
+  | 'errorZodiac'
+  | 'errorAspects'
+  | 'errorTargetDate'
+  | 'errorReturnYear'
+  | 'errorRelocation';
+
 export interface DraftValidation {
   valid: boolean;
-  fieldErrors: Partial<Record<keyof ChartDraft | 'advancedAspects', string>>;
+  fieldErrors: Partial<Record<keyof ChartDraft | 'advancedAspects', ChartDraftErrorCode>>;
 }
 
 export interface DraftEnvironment {
@@ -91,6 +103,9 @@ export function createDefaultDraft(route: ChartRoute, environment: DraftEnvironm
   const primary = environment.profiles.find(({ id }) => id === primaryProfileId);
   const referenceAspects = new Set(Object.keys(environment.reference.aspects));
   const enabledAspects = DEFAULT_ASPECTS.filter((aspect) => referenceAspects.has(aspect));
+  const placidus = environment.reference.houseSystems.find(
+    ({ value }) => value.trim().toLowerCase() === 'placidus',
+  );
 
   return {
     route,
@@ -100,7 +115,7 @@ export function createDefaultDraft(route: ChartRoute, environment: DraftEnvironm
     targetLocal: localMinute(environment.now),
     returnYear: environment.now.getFullYear(),
     relocationPlace: birthPlace(primary),
-    houseSystem: environment.reference.houseSystems[0]?.value ?? 'placidus',
+    houseSystem: placidus?.value ?? environment.reference.houseSystems[0]?.value ?? 'placidus',
     zodiac: 'tropical',
     enabledAspects,
     orbOverrides: {},
@@ -123,34 +138,36 @@ export function validateChartDraft(draft: ChartDraft, environment: DraftEnvironm
   const primary = environment.profiles.find(({ id }) => id === draft.primaryProfileId);
   const secondary = environment.profiles.find(({ id }) => id === draft.secondaryProfileId);
 
-  if (descriptor.route !== draft.route) fieldErrors.type = '星盘类型与当前工作区不匹配';
-  if (!primary) fieldErrors.primaryProfileId = '请选择有效档案';
+  if (descriptor.route !== draft.route) fieldErrors.type = 'errorRouteType';
+  if (!primary) fieldErrors.primaryProfileId = 'errorPrimaryProfile';
   if (descriptor.requiresSecondary && (!secondary || secondary.id === primary?.id)) {
-    fieldErrors.secondaryProfileId = environment.profiles.length < 2 ? '关系盘需要两个不同档案' : '请选择不同的第二档案';
+    fieldErrors.secondaryProfileId = environment.profiles.length < 2
+      ? 'errorRelationshipProfiles'
+      : 'errorSecondaryProfile';
   }
   if (!environment.reference.houseSystems.some(({ value }) => value === draft.houseSystem)) {
-    fieldErrors.houseSystem = '宫位制无效';
+    fieldErrors.houseSystem = 'errorHouseSystem';
   }
-  if (draft.zodiac !== 'tropical' && draft.zodiac !== 'sidereal') fieldErrors.zodiac = '黄道类型无效';
+  if (draft.zodiac !== 'tropical' && draft.zodiac !== 'sidereal') fieldErrors.zodiac = 'errorZodiac';
 
   const knownAspects = new Set(Object.keys(environment.reference.aspects));
   if (draft.enabledAspects.some((key) => !knownAspects.has(key))
     || Object.entries(draft.orbOverrides).some(([key, orb]) =>
       !knownAspects.has(key) || !Number.isFinite(orb) || orb < 0.1 || orb > 15)) {
-    fieldErrors.advancedAspects = '相位或容许度无效';
+    fieldErrors.advancedAspects = 'errorAspects';
   }
   if (hasOption(draft.type, 'targetDate') && !validLocalMinute(draft.targetLocal)) {
-    fieldErrors.targetLocal = '目标日期时间无效';
+    fieldErrors.targetLocal = 'errorTargetDate';
   }
   if (hasOption(draft.type, 'year')
     && (!Number.isInteger(draft.returnYear) || draft.returnYear < 1 || draft.returnYear > 3000)) {
-    fieldErrors.returnYear = '返照年份必须在 1 到 3000 之间';
+    fieldErrors.returnYear = 'errorReturnYear';
   }
   if (hasOption(draft.type, 'location')) {
     const place = draft.relocationPlace;
     if (!place || !place.label.trim() || !Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)
       || place.latitude < -90 || place.latitude > 90 || place.longitude < -180 || place.longitude > 180) {
-      fieldErrors.relocationPlace = '请选择已解析的迁移地点';
+      fieldErrors.relocationPlace = 'errorRelocation';
     }
   }
   return { valid: Object.keys(fieldErrors).length === 0, fieldErrors };
@@ -169,7 +186,7 @@ export function buildSubmittedSnapshot(
   environment: DraftEnvironment,
 ): SubmittedChartSnapshot {
   const validation = validateChartDraft(draft, environment);
-  if (!validation.valid) throw new Error(Object.values(validation.fieldErrors)[0] ?? '星盘筛选无效');
+  if (!validation.valid) throw new Error(Object.values(validation.fieldErrors)[0] ?? 'invalidChartDraft');
   const descriptor = CHART_DESCRIPTORS[draft.type];
   const primary = environment.profiles.find(({ id }) => id === draft.primaryProfileId)!;
   const secondary = environment.profiles.find(({ id }) => id === draft.secondaryProfileId);
