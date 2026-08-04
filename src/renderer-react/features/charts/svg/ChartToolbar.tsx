@@ -1,8 +1,9 @@
-import { Maximize, Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Download, Maximize, Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import type { ChartTransform } from '../../../stores/chartWorkspace';
 import type { NormalizedChartResult } from '../contracts';
 import { ChartLayerMenu } from './ChartLayerMenu';
 import { fitBounds, RESET_TRANSFORM, visibleBounds, zoomAt } from './chartTransform';
+import { downloadSvg } from './svgExport';
 
 interface Props {
   result: NormalizedChartResult;
@@ -25,5 +26,9 @@ export function ChartToolbar({ result, svg, transform, onChange }: Props) {
     <button type="button" className="chart-toolbar__button" aria-label="适合可见内容" title="适合可见内容" onClick={fit}><Maximize size={17} /></button>
     <button type="button" className="chart-toolbar__button" aria-label="重置视图" title="重置视图" onClick={() => onChange({ ...RESET_TRANSFORM })}><RotateCcw size={17} /></button>
     <ChartLayerMenu result={result} />
+    <button type="button" className="chart-toolbar__button" aria-label="导出 SVG" title="导出 SVG" disabled={!svg}
+      onClick={() => svg && downloadSvg(svg, `${result.meta.type}-${result.meta.generatedAt.replace(/[:.]/g, '-')}.svg`, {
+        title: result.meta.title, description: result.meta.subtitle,
+      })}><Download size={17} /></button>
   </div>;
 }

@@ -127,4 +127,9 @@ describe('interactive chart', () => {
     expect(store.getState().transform.scale).toBe(2);
     expect(store.getState().transform.scale).toBeLessThanOrEqual(8);
   });
+
+  test('exposes an accessible SVG export command', () => {
+    renderChart();
+    expect(screen.getByRole('button', { name: '导出 SVG' })).toHaveAttribute('title', '导出 SVG');
+  });
 });
