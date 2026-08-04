@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { CHART_DESCRIPTORS } from './catalog';
-import { normalizeChartResult } from './normalizeChartResult';
+import { aspectIdentity, normalizeChartResult, pointIdentity } from './normalizeChartResult';
 import {
   chartRequestSchema,
   parseChartReferenceData,
   parseChartRequest,
 } from './schemas';
+import { ELEMENT_KEYS, MODALITY_KEYS } from './contracts';
 import type { ChartReferenceData } from './contracts';
 
 function profile(id: string) {
@@ -45,8 +46,17 @@ function reference(): ChartReferenceData {
     signs: [{ key: 'aries', nameEn: 'Aries', nameZh: 'Aries', shortZh: 'A', glyph: 'A', element: 'fire', modality: 'cardinal', ruler: 'mars' }],
     points: { sun: { nameEn: 'Sun', nameZh: 'Sun', glyph: 'S', kind: 'body' } },
     aspects: { conjunction: { nameEn: 'Conjunction', nameZh: 'Conjunction', angle: 0, defaultOrb: 8, level: 'major', glyph: 'C' } },
-    elements: { fire: { nameEn: 'Fire', nameZh: 'Fire', token: 'fire' } },
-    modalities: { cardinal: { nameEn: 'Cardinal', nameZh: 'Cardinal' } },
+    elements: {
+      fire: { nameEn: 'Fire', nameZh: 'Fire', token: 'element-fire' },
+      earth: { nameEn: 'Earth', nameZh: 'Earth', token: 'element-earth' },
+      air: { nameEn: 'Air', nameZh: 'Air', token: 'element-air' },
+      water: { nameEn: 'Water', nameZh: 'Water', token: 'element-water' },
+    },
+    modalities: {
+      cardinal: { nameEn: 'Cardinal', nameZh: 'Cardinal' },
+      fixed: { nameEn: 'Fixed', nameZh: 'Fixed' },
+      mutable: { nameEn: 'Mutable', nameZh: 'Mutable' },
+    },
     houseSystems: [{ value: 'placidus', nameEn: 'Placidus', nameZh: 'Placidus' }],
     chartTypes: catalog(),
   });
@@ -117,7 +127,10 @@ function rawResult(patch: Record<string, unknown> = {}) {
     },
     rings: [ring('natal', [point('sun'), point('moon', 11)])],
     aspects: [aspect()],
-    distributions: { elements: { fire: 2 }, modalities: { cardinal: 2 } },
+    distributions: {
+      elements: { fire: 2, earth: 0, air: 0, water: 0 },
+      modalities: { cardinal: 2, fixed: 0, mutable: 0 },
+    },
     ...patch,
   };
 }
@@ -132,6 +145,12 @@ function request(patch: Record<string, unknown> = {}) {
   };
 }
 
+function inheritRequired<T extends Record<string, unknown>>(value: T, key: keyof T): T {
+  const own = { ...value };
+  delete own[key];
+  return Object.assign(Object.create({ [key]: value[key] }), own) as T;
+}
+
 describe('chart request and reference schemas', () => {
   test('accepts a declared request against parsed reference data', () => {
     expect(parseChartRequest(request(), reference()).type).toBe('natal');
@@ -140,6 +159,7 @@ describe('chart request and reference schemas', () => {
   test.each([
     request({ type: 'unknown' }),
     request({ type: 'synastry', secondary: profile('primary') }),
+    request({ secondary: undefined }),
     request({ options: { undeclared: true } }),
     request({ settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: ['conjunction'], orbOverrides: { conjunction: 0.09 } } } }),
     request({ settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: ['conjunction'], orbOverrides: { conjunction: 15.01 } } } }),
@@ -163,6 +183,31 @@ describe('chart request and reference schemas', () => {
   test('rejects unknown keys at nested reference boundaries', () => {
     const value = { ...reference(), houseSystems: [{ value: 'placidus', nameEn: 'P', nameZh: 'P', extra: true }] };
     expect(() => parseChartReferenceData(value)).toThrow('Chart reference validation failed');
+  });
+
+  test.each([
+    ['request profile', () => request({ primary: inheritRequired(profile('primary'), 'id') })],
+    ['reference sign', () => ({ ...reference(), signs: [inheritRequired(reference().signs[0] as unknown as Record<string, unknown>, 'key')] })],
+    ['result ring', () => rawResult({ rings: [inheritRequired(ring('natal'), 'id')] })],
+  ])('rejects inherited required properties in a nested %s', (_label, makeValue) => {
+    const value = makeValue();
+    if (_label === 'request profile') expect(chartRequestSchema.safeParse(value).success).toBe(false);
+    else if (_label === 'reference sign') expect(() => parseChartReferenceData(value)).toThrow('Chart reference validation failed');
+    else expect(() => normalizeChartResult(value)).toThrow('Chart response validation failed');
+  });
+
+  test('accepts recursively null-prototype structured data', () => {
+    const toNullPrototype = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(toNullPrototype);
+      if (!value || typeof value !== 'object') return value;
+      return Object.assign(Object.create(null), Object.fromEntries(
+        Object.entries(value).map(([key, nested]) => [key, toNullPrototype(nested)]),
+      ));
+    };
+
+    expect(parseChartRequest(toNullPrototype(request()), reference()).type).toBe('natal');
+    expect(parseChartReferenceData(toNullPrototype(reference())).chartTypes).toHaveLength(20);
+    expect(normalizeChartResult(toNullPrototype(rawResult())).rings[0].id).toBe('natal');
   });
 });
 
@@ -196,6 +241,36 @@ describe('normalizeChartResult', () => {
   test.each([Number.NaN, Infinity, Number.NEGATIVE_INFINITY])('rejects non-finite numeric values: %s', (longitude) => {
     expect(() => normalizeChartResult(rawResult({ rings: [ring('natal', [point('sun', longitude)])] })))
       .toThrow('Chart response validation failed');
+  });
+
+  test.each([
+    { elements: { fire: 1, earth: 0, air: 0 }, modalities: { cardinal: 1, fixed: 0, mutable: 0 } },
+    { elements: { arbitrary: 1 }, modalities: { arbitrary: 1 } },
+    { elements: { fire: Infinity, earth: 0, air: 0, water: 0 }, modalities: { cardinal: 1, fixed: 0, mutable: 0 } },
+  ])('rejects incomplete, arbitrary, or non-finite distributions %#', (distributions) => {
+    expect(() => normalizeChartResult(rawResult({ distributions }))).toThrow('Chart response validation failed');
+  });
+
+  test('retains every canonical distribution key', () => {
+    const result = normalizeChartResult(rawResult());
+    expect(Object.keys(result.distributions.elements)).toEqual(ELEMENT_KEYS);
+    expect(Object.keys(result.distributions.modalities)).toEqual(MODALITY_KEYS);
+  });
+
+  test.each([
+    { rings: [ring('natal:injected')] },
+    { rings: [ring('natal', [point('sun:injected')])] },
+    { aspects: [aspect('sun', 'conjunction:injected', 'moon')] },
+    { aspects: [aspect('sun:injected', 'conjunction', 'moon')] },
+  ])('rejects colon injection in identity source tokens %#', (patch) => {
+    expect(() => normalizeChartResult(rawResult(patch))).toThrow('Chart response validation failed');
+  });
+
+  test('rejects invalid tokens at exported identity constructors', () => {
+    expect(() => pointIdentity('natal:injected', 'sun')).toThrow('Invalid chart identity token');
+    expect(() => pointIdentity('natal', '')).toThrow('Invalid chart identity token');
+    expect(() => aspectIdentity('natal', 'sun', 'conjunction:injected', 'natal', 'moon'))
+      .toThrow('Invalid chart identity token');
   });
 
   test('rejects absent and wrong-ring aspect endpoints', () => {

@@ -23,7 +23,12 @@ export const CHART_TYPES = [
   'davisonTertiary',
 ] as const;
 
+export const ELEMENT_KEYS = ['fire', 'earth', 'air', 'water'] as const;
+export const MODALITY_KEYS = ['cardinal', 'fixed', 'mutable'] as const;
+
 export type ChartType = typeof CHART_TYPES[number];
+export type ElementKey = typeof ELEMENT_KEYS[number];
+export type ModalityKey = typeof MODALITY_KEYS[number];
 export type ChartRoute = 'personal' | 'relationship';
 export type Zodiac = 'tropical' | 'sidereal';
 export type AspectLevel = 'major' | 'minor';
@@ -167,8 +172,8 @@ export interface ChartMeta {
 }
 
 export interface ChartDistributions {
-  elements: Record<'fire' | 'earth' | 'air' | 'water', number>;
-  modalities: Record<'cardinal' | 'fixed' | 'mutable', number>;
+  elements: Record<ElementKey, number>;
+  modalities: Record<ModalityKey, number>;
 }
 
 export interface NormalizedChartResult {
@@ -189,10 +194,9 @@ export interface ChartSignReference {
   nameZh: string;
   shortZh: string;
   glyph: string;
-  element: string;
-  modality: string;
+  element: ElementKey;
+  modality: ModalityKey;
   ruler: string;
-  [key: string]: unknown;
 }
 
 export interface ChartPointReference {
@@ -200,7 +204,6 @@ export interface ChartPointReference {
   nameZh: string;
   glyph: string;
   kind: 'body' | 'point' | 'angle';
-  [key: string]: unknown;
 }
 
 export interface ChartAspectReference {
@@ -210,20 +213,17 @@ export interface ChartAspectReference {
   defaultOrb: number;
   level: AspectLevel;
   glyph: string;
-  [key: string]: unknown;
 }
 
 export interface ChartElementReference {
   nameEn: string;
   nameZh: string;
   token: string;
-  [key: string]: unknown;
 }
 
 export interface ChartModalityReference {
   nameEn: string;
   nameZh: string;
-  [key: string]: unknown;
 }
 
 export interface ChartHouseSystemReference {
@@ -236,8 +236,8 @@ export interface ChartReferenceData {
   signs: ChartSignReference[];
   points: Record<string, ChartPointReference>;
   aspects: Record<string, ChartAspectReference>;
-  elements: Record<string, ChartElementReference>;
-  modalities: Record<string, ChartModalityReference>;
+  elements: Record<ElementKey, ChartElementReference>;
+  modalities: Record<ModalityKey, ChartModalityReference>;
   houseSystems: ChartHouseSystemReference[];
   chartTypes: ChartCatalogDefinition[];
 }

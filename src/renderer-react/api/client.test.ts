@@ -316,7 +316,10 @@ function rawChartResult() {
     angles: {},
     rings: [{ id: 'natal', role: 'primary', label: 'Natal', points: [point] }],
     aspects: [],
-    distributions: { elements: {}, modalities: {} },
+    distributions: {
+      elements: { fire: 1, earth: 0, air: 0, water: 0 },
+      modalities: { cardinal: 1, fixed: 0, mutable: 0 },
+    },
   };
 }
 

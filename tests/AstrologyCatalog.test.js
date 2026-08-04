@@ -60,12 +60,19 @@ function assertFiniteChart(result) {
   assert.equal(new Set(result.houses.map(({ index }) => index)).size, 12);
   assert.equal(new Set(result.rings.map(({ id }) => id)).size, result.rings.length);
   for (const ring of result.rings) {
+    assert.match(ring.id, /^[^:]+$/);
     assert.equal(new Set(ring.points.map(({ key }) => key)).size, ring.points.length);
-    for (const point of ring.points) assert.ok(Number.isFinite(point.longitude));
+    for (const point of ring.points) {
+      assert.match(point.key, /^[^:]+$/);
+      assert.ok(Number.isFinite(point.longitude));
+    }
   }
   for (const house of result.houses) assert.ok(Number.isFinite(house.cuspLongitude));
   for (const angle of Object.values(result.angles)) assert.ok(Number.isFinite(angle.longitude));
   for (const aspect of result.aspects) {
+    assert.match(aspect.aspectKey, /^[^:]+$/);
+    assert.match(aspect.point1, /^[^:]+$/);
+    assert.match(aspect.point2, /^[^:]+$/);
     for (const key of ['exactAngle', 'orb', 'orbUsed', 'strength', 'separation']) assert.ok(Number.isFinite(aspect[key]));
   }
 }

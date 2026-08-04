@@ -9,7 +9,13 @@ import type {
 } from './contracts';
 import { parseRawChartResult } from './schemas';
 
+function assertStableIdentityToken(value: string): void {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error(`Invalid chart identity token: ${value}`);
+}
+
 export function pointIdentity(ringId: string, pointKey: string): `${string}:${string}` {
+  assertStableIdentityToken(ringId);
+  assertStableIdentityToken(pointKey);
   return `${ringId}:${pointKey}`;
 }
 
@@ -24,6 +30,7 @@ export function aspectIdentity(
   ringB: string,
   point2: string,
 ): AspectIdentity {
+  for (const token of [ringA, point1, aspectKey, ringB, point2]) assertStableIdentityToken(token);
   return `aspect:${ringA}:${point1}:${aspectKey}:${ringB}:${point2}`;
 }
 

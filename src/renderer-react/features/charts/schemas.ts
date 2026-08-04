@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CHART_DESCRIPTORS } from './catalog';
-import { CHART_TYPES } from './contracts';
+import { CHART_TYPES, ELEMENT_KEYS, MODALITY_KEYS } from './contracts';
 import type {
   ChartReferenceData,
   ChartRequest,
@@ -9,64 +9,93 @@ import type {
 const finite = z.number().finite();
 const longitude = finite.min(0).lt(360);
 const isoInstant = z.string().datetime({ offset: true });
-const dmsSchema = z.object({
+const invalidPlainObject = Symbol('invalidPlainObject');
+
+function plainOwnSchema<Schema extends z.ZodTypeAny>(keys: readonly string[], schema: Schema) {
+  return z.preprocess((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return invalidPlainObject;
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return invalidPlainObject;
+    if (keys.some((key) => key in value && !Object.prototype.hasOwnProperty.call(value, key))) {
+      return invalidPlainObject;
+    }
+    return value;
+  }, schema);
+}
+
+function strictObject<Shape extends z.ZodRawShape>(shape: Shape) {
+  return plainOwnSchema(Object.keys(shape), z.object(shape).strict());
+}
+
+function extensibleObject<Shape extends z.ZodRawShape>(shape: Shape) {
+  return plainOwnSchema(Object.keys(shape), z.object(shape).catchall(z.unknown()));
+}
+
+function plainRecord<Value extends z.ZodTypeAny>(value: Value) {
+  return plainOwnSchema([], z.record(z.string(), value));
+}
+
+const stableToken = z.string().regex(/^[A-Za-z0-9_-]+$/);
+const elementKeySchema = z.enum(ELEMENT_KEYS);
+const modalityKeySchema = z.enum(MODALITY_KEYS);
+const dmsSchema = strictObject({
   degrees: z.number().int().min(0),
   minutes: z.number().int().min(0).max(60),
   seconds: z.number().int().min(0).max(60),
-}).strict();
+});
 
 export const chartTypeSchema = z.enum(CHART_TYPES);
 
-export const chartCatalogDefinitionSchema = z.object({
+export const chartCatalogDefinitionSchema = strictObject({
   type: chartTypeSchema,
   nameZh: z.string(),
   nameEn: z.string(),
   category: z.enum(['personal', 'relationship']),
   requiresSecondary: z.boolean(),
   options: z.array(z.enum(['targetDate', 'year', 'location'])),
-}).strict();
+});
 
-export const chartOptionsSchema = z.object({
+export const chartOptionsSchema = strictObject({
   targetDate: isoInstant.optional(),
   year: z.number().int().min(1).max(3000).optional(),
   latitude: finite.min(-90).max(90).optional(),
   longitude: finite.min(-180).max(180).optional(),
   locationLabel: z.string().trim().min(1).optional(),
-}).strict();
+});
 
-export const chartSettingsSchema = z.object({
+export const chartSettingsSchema = strictObject({
   houseSystem: z.string().min(1),
   zodiac: z.enum(['tropical', 'sidereal']),
-  aspects: z.object({
+  aspects: strictObject({
     enabled: z.array(z.string()).max(10),
-    orbOverrides: z.record(z.string(), finite.min(0.1).max(15)),
-  }).strict(),
-}).strict();
+    orbOverrides: plainRecord(finite.min(0.1).max(15)),
+  }),
+});
 
-const locationSchema = z.object({
+const locationSchema = strictObject({
   label: z.string().min(1),
   latitude: finite.min(-90).max(90),
   longitude: finite.min(-180).max(180),
-}).strict();
+});
 
-const profileSchema = z.object({
+const profileSchema = strictObject({
   id: z.string().min(1),
   nameZh: z.string(),
   nameEn: z.string(),
   gender: z.enum(['male', 'female', 'other']),
-  birthData: z.object({
+  birthData: strictObject({
     year: z.number().int().min(1).max(3000),
     month: z.number().int().min(1).max(12),
     day: z.number().int().min(1).max(31),
     hour: z.number().int().min(0).max(23),
     minute: z.number().int().min(0).max(59),
     location: locationSchema,
-  }).strict(),
+  }),
   notes: z.string(),
   tags: z.array(z.string()),
   createdAt: isoInstant,
   updatedAt: isoInstant,
-}).strict();
+});
 
 const optionKeysByServiceOption = {
   targetDate: ['targetDate'],
@@ -74,13 +103,13 @@ const optionKeysByServiceOption = {
   location: ['latitude', 'longitude', 'locationLabel'],
 } as const;
 
-export const chartRequestSchema = z.object({
+export const chartRequestSchema = strictObject({
   type: chartTypeSchema,
   primary: profileSchema,
   secondary: profileSchema.optional(),
   settings: chartSettingsSchema,
   options: chartOptionsSchema,
-}).strict().superRefine((request, context) => {
+}).superRefine((request, context) => {
   const descriptor = CHART_DESCRIPTORS[request.type];
   if (descriptor.requiresSecondary) {
     if (!request.secondary) {
@@ -88,7 +117,7 @@ export const chartRequestSchema = z.object({
     } else if (request.secondary.id === request.primary.id) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: 'Relationship profiles must be distinct', path: ['secondary', 'id'] });
     }
-  } else if (request.secondary) {
+  } else if (Object.prototype.hasOwnProperty.call(request, 'secondary')) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'Personal chart does not accept a secondary profile', path: ['secondary'] });
   }
 
@@ -109,72 +138,75 @@ export const chartRequestSchema = z.object({
   }
 });
 
-const signReferenceSchema = z.object({
+const signReferenceSchema = strictObject({
   key: z.string(), nameEn: z.string(), nameZh: z.string(), shortZh: z.string(), glyph: z.string(),
-  element: z.string(), modality: z.string(), ruler: z.string(),
-}).strict();
-const pointReferenceSchema = z.object({
+  element: elementKeySchema, modality: modalityKeySchema, ruler: z.string(),
+});
+const pointReferenceSchema = strictObject({
   nameEn: z.string(), nameZh: z.string(), glyph: z.string(), kind: z.enum(['body', 'point', 'angle']),
-}).strict();
-const aspectReferenceSchema = z.object({
+});
+const aspectReferenceSchema = strictObject({
   nameEn: z.string(), nameZh: z.string(), angle: finite, defaultOrb: finite.min(0.1).max(15),
   level: z.enum(['major', 'minor']), glyph: z.string(),
-}).strict();
-const elementReferenceSchema = z.object({ nameEn: z.string(), nameZh: z.string(), token: z.string() }).strict();
-const modalityReferenceSchema = z.object({ nameEn: z.string(), nameZh: z.string() }).strict();
-const houseSystemSchema = z.object({ value: z.string().min(1), nameEn: z.string(), nameZh: z.string() }).strict();
+});
+const elementReferenceSchema = strictObject({ nameEn: z.string(), nameZh: z.string(), token: z.string() });
+const modalityReferenceSchema = strictObject({ nameEn: z.string(), nameZh: z.string() });
+const houseSystemSchema = strictObject({ value: z.string().min(1), nameEn: z.string(), nameZh: z.string() });
 
-export const chartReferenceDataSchema = z.object({
+export const chartReferenceDataSchema = strictObject({
   signs: z.array(signReferenceSchema),
-  points: z.record(z.string(), pointReferenceSchema),
-  aspects: z.record(z.string(), aspectReferenceSchema),
-  elements: z.record(z.string(), elementReferenceSchema),
-  modalities: z.record(z.string(), modalityReferenceSchema),
+  points: plainRecord(pointReferenceSchema),
+  aspects: plainRecord(aspectReferenceSchema),
+  elements: strictObject({ fire: elementReferenceSchema, earth: elementReferenceSchema, air: elementReferenceSchema, water: elementReferenceSchema }),
+  modalities: strictObject({ cardinal: modalityReferenceSchema, fixed: modalityReferenceSchema, mutable: modalityReferenceSchema }),
   houseSystems: z.array(houseSystemSchema),
   chartTypes: z.array(chartCatalogDefinitionSchema),
-}).strict();
+});
 
-const rawPointSchema = z.object({
-  key: z.string().min(1), kind: z.enum(['body', 'point']), glyph: z.string(), nameEn: z.string(), nameZh: z.string(),
+const rawPointSchema = strictObject({
+  key: stableToken, kind: z.enum(['body', 'point']), glyph: z.string(), nameEn: z.string(), nameZh: z.string(),
   longitude, signKey: z.string(), signGlyph: z.string(), signNameZh: z.string(), signIndex: z.number().int().min(0).max(11),
   degreeInSign: finite.min(0).lt(30), dms: dmsSchema, retrograde: z.boolean(), house: z.number().int().min(1).max(12).nullable(),
-}).strict();
-const rawRingSchema = z.object({ id: z.string().min(1), role: z.string(), label: z.string(), points: z.array(rawPointSchema) }).strict();
-const rawHouseSchema = z.object({
+});
+const rawRingSchema = strictObject({ id: stableToken, role: z.string(), label: z.string(), points: z.array(rawPointSchema) });
+const rawHouseSchema = strictObject({
   index: z.number().int().min(1).max(12), cuspLongitude: longitude, signKey: z.string(), signGlyph: z.string(),
   signNameZh: z.string(), degreeInSign: finite.min(0).lt(30),
-}).strict();
-const chartAngleSchema = z.object({
+});
+const chartAngleSchema = strictObject({
   key: z.string(), glyph: z.string(), nameZh: z.string(), longitude, signKey: z.string(), signGlyph: z.string(),
   signIndex: z.number().int().min(0).max(11), degreeInSign: finite.min(0).lt(30), dms: dmsSchema,
-}).strict();
-const chartSubjectSchema = z.object({
+});
+const chartSubjectSchema = strictObject({
   role: z.string(), nameZh: z.string(), nameEn: z.string(), gender: z.string(), birthLabel: z.string(), location: locationSchema,
-}).strict();
-const rawAspectSchema = z.object({
-  point1: z.string().min(1), point2: z.string().min(1), aspectKey: z.string().min(1), glyph: z.string(), nameZh: z.string(),
+});
+const rawAspectSchema = strictObject({
+  point1: stableToken, point2: stableToken, aspectKey: stableToken, glyph: z.string(), nameZh: z.string(),
   nameEn: z.string(), level: z.enum(['major', 'minor']), exactAngle: finite, orb: finite, orbUsed: finite,
   strength: finite, separation: finite,
-}).strict();
-const chartMetaSchema = z.object({
+});
+const chartMetaSchema = extensibleObject({
   type: chartTypeSchema,
   typeNameZh: z.string(),
   title: z.string(),
   subtitle: z.string(),
-  settings: z.object({ houseSystem: z.string().min(1), zodiac: z.enum(['tropical', 'sidereal']) }).strict(),
+  settings: strictObject({ houseSystem: z.string().min(1), zodiac: z.enum(['tropical', 'sidereal']) }),
   generatedAt: isoInstant,
   instantUtc: isoInstant.nullable(),
-}).catchall(z.unknown());
+});
 
-export const rawChartResultSchema = z.object({
+export const rawChartResultSchema = strictObject({
   meta: chartMetaSchema,
   subjects: z.array(chartSubjectSchema),
   houses: z.array(rawHouseSchema),
-  angles: z.record(z.string(), chartAngleSchema),
+  angles: plainRecord(chartAngleSchema),
   rings: z.array(rawRingSchema),
   aspects: z.array(rawAspectSchema),
-  distributions: z.object({ elements: z.record(z.string(), finite), modalities: z.record(z.string(), finite) }).strict(),
-}).strict();
+  distributions: strictObject({
+    elements: strictObject({ fire: finite, earth: finite, air: finite, water: finite }),
+    modalities: strictObject({ cardinal: finite, fixed: finite, mutable: finite }),
+  }),
+});
 
 export type RawChartResult = z.infer<typeof rawChartResultSchema>;
 
@@ -201,5 +233,5 @@ export function parseChartRequest(value: unknown, reference: ChartReferenceData)
 }
 
 export function parseRawChartResult(value: unknown): RawChartResult {
-  return parseWithMessage(rawChartResultSchema, value, 'Chart response validation failed');
+  return parseWithMessage(rawChartResultSchema, value, 'Chart response validation failed') as RawChartResult;
 }

@@ -71,15 +71,14 @@ const REFERENCE_HOUSE_SYSTEM_IS_EXACT = true satisfies SameType<
   ReferenceHouseSystem,
   { value: string; nameEn: string; nameZh: string }
 >;
-const REFERENCE_ASPECT_WITH_EXTRA = {
-  level: 'major',
-  defaultOrb: 8,
-  nameEn: 'Conjunction',
-  nameZh: 'Conjunction',
-  angle: 0,
-  glyph: 'C',
-  color: 'red',
-} satisfies ReferenceAspect;
+const REFERENCE_ASPECT_IS_EXACT = true satisfies SameType<ReferenceAspect, {
+  level: AspectLevel;
+  defaultOrb: number;
+  nameEn: string;
+  nameZh: string;
+  angle: number;
+  glyph: string;
+}>;
 void [
   NULL_POINT_HOUSE,
   NULL_CHART_INSTANT,
@@ -98,7 +97,7 @@ void [
   REFERENCE_SIGN_KEY_IS_EXACT,
   REFERENCE_POINT_KIND_IS_EXACT,
   REFERENCE_HOUSE_SYSTEM_IS_EXACT,
-  REFERENCE_ASPECT_WITH_EXTRA,
+  REFERENCE_ASPECT_IS_EXACT,
 ];
 
 const EXPECTED_DESCRIPTORS = [
