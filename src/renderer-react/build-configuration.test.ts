@@ -4,10 +4,21 @@ import { expect, test } from 'vitest';
 import { build as viteBuild } from 'vite';
 
 const repositoryRoot = process.cwd();
+const packageJson = JSON.parse(
+  readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8'),
+) as { dependencies: Record<string, string>; build: { files: string[] } };
 
 interface BuildOutput {
   output: Array<{ type: string; code?: string }>;
 }
+
+test('declares the accessible primitives used by chart filters', () => {
+  expect(packageJson.dependencies).toMatchObject({
+    '@radix-ui/react-dialog': expect.any(String),
+    '@radix-ui/react-popover': expect.any(String),
+    '@radix-ui/react-tooltip': expect.any(String),
+  });
+});
 
 test('restricts renderer connections to self and localhost Vite HMR', () => {
   const html = readFileSync(resolve(repositoryRoot, 'src/renderer-react/index.html'), 'utf8');
@@ -85,9 +96,6 @@ test('bundles the shared CommonJS Unicode fold implementation for the browser', 
 });
 
 test('packages only legacy-referenced upright fonts within the payload budgets', () => {
-  const packageJson = JSON.parse(readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8')) as {
-    build: { files: string[] };
-  };
   const fontEntries = packageJson.build.files.filter((entry) => entry.startsWith('fonts/'));
   const expectedEntries = [
     'fonts/LICENSE.txt',
