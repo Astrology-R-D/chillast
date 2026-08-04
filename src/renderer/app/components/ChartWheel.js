@@ -173,14 +173,18 @@ export class ChartWheel {
       if (!isAngle) {
         const inner = this._polar(6, cusp.cuspLongitude, ctx.rotation);
         const outer = this._polar(this.R.houseOuter, cusp.cuspLongitude, ctx.rotation);
+        out += `<g data-chart-kind="house" data-chart-identity="house:${escapeAttribute(cusp.index)}">`;
         out += line(inner.x, inner.y, outer.x, outer.y,
           'stroke:rgba(60,60,60,0.22);stroke-width:0.5');
+      } else {
+        out += `<g data-chart-kind="house" data-chart-identity="house:${escapeAttribute(cusp.index)}">`;
       }
       const next = houses[(i + 1) % houses.length];
       const mid = midLongitude(cusp.cuspLongitude, next.cuspLongitude);
       const np = this._polar(this.R.houseNumber, mid, ctx.rotation);
       out += text(np.x, np.y, String(cusp.index),
         'fill:rgba(100,100,100,0.38);font-size:10px;font-weight:400');
+      out += '</g>';
     }
     return out;
   }
@@ -214,27 +218,24 @@ export class ChartWheel {
     const rings = chart.rings || [];
     const isBiWheel = rings.length > 1;
 
-    const buildMap = (pts, dotR) => {
+    const buildMap = (ring, dotR) => {
       const m = new Map();
-      for (const p of (pts || [])) m.set(p.key, { lon: p.longitude, dotR });
+      for (const p of (ring?.points || [])) m.set(p.key, { lon: p.longitude, dotR });
       return m;
     };
 
-    let map0, map1;
+    const ringMaps = new Map();
     if (isBiWheel) {
-      map0 = buildMap(rings[0].points, this.PR.inner - this.LL);
-      map1 = buildMap(rings[1].points, this.PR.outer - this.LL);
+      ringMaps.set(rings[0].id, buildMap(rings[0], this.PR.inner - this.LL));
+      ringMaps.set(rings[1].id, buildMap(rings[1], this.PR.outer - this.LL));
     } else {
-      map0 = buildMap(rings[0] ? rings[0].points : [], this.PR.single - this.LL);
-      map1 = new Map();
+      if (rings[0]) ringMaps.set(rings[0].id, buildMap(rings[0], this.PR.single - this.LL));
     }
 
     let out = '';
     for (const asp of aspects) {
-      const i1 = map0.get(asp.point1) || map1.get(asp.point1);
-      const i2 = isBiWheel
-        ? (map1.get(asp.point2) || map0.get(asp.point2))
-        : (map0.get(asp.point2) || map1.get(asp.point2));
+      const i1 = ringMaps.get(asp.ringA)?.get(asp.point1);
+      const i2 = ringMaps.get(asp.ringB)?.get(asp.point2);
       if (!i1 || !i2) continue;
       const a = this._polar(i1.dotR, i1.lon, ctx.rotation);
       const b = this._polar(i2.dotR, i2.lon, ctx.rotation);
@@ -243,8 +244,10 @@ export class ChartWheel {
       const opacity = (0.35 + 0.45 * (asp.strength || 0)).toFixed(2);
       const width = isMajor ? 1.2 : 0.6;
       const dash = isMajor ? '' : 'stroke-dasharray:3 3;';
+      out += `<g data-chart-kind="aspect" data-chart-identity="${escapeAttribute(asp.id)}">`;
       out += line(a.x, a.y, b.x, b.y,
         `stroke:${color};stroke-width:${width};stroke-opacity:${opacity};${dash}`);
+      out += '</g>';
     }
     return out;
   }
@@ -253,15 +256,15 @@ export class ChartWheel {
     const rings = chart.rings || [];
     let out = '';
     if (rings.length <= 1) {
-      out += this._planets(rings[0] ? rings[0].points : [], this.PR.single, ctx, 'primary');
+      if (rings[0]) out += `<g data-chart-kind="ring" data-chart-identity="ring:${escapeAttribute(rings[0].id)}" data-ring-id="${escapeAttribute(rings[0].id)}">${this._planets(rings[0].points, this.PR.single, ctx, rings[0].id)}</g>`;
     } else {
-      out += this._planets(rings[0].points, this.PR.inner, ctx, 'inner');
-      out += this._planets(rings[1].points, this.PR.outer, ctx, 'outer');
+      out += `<g data-chart-kind="ring" data-chart-identity="ring:${escapeAttribute(rings[0].id)}" data-ring-id="${escapeAttribute(rings[0].id)}">${this._planets(rings[0].points, this.PR.inner, ctx, rings[0].id)}</g>`;
+      out += `<g data-chart-kind="ring" data-chart-identity="ring:${escapeAttribute(rings[1].id)}" data-ring-id="${escapeAttribute(rings[1].id)}">${this._planets(rings[1].points, this.PR.outer, ctx, rings[1].id)}</g>`;
     }
     return out;
   }
 
-  _planets(points, radius, ctx, ringRole) {
+  _planets(points, radius, ctx, ringId) {
     if (!points || !points.length) return '';
     const plotted = points.filter((p) => p.kind === 'body' || p.kind === 'point');
     const display = spreadAngles(plotted.map((p) => p.longitude), 11);
@@ -276,7 +279,7 @@ export class ChartWheel {
       const dotPos = this._polar(dotR, p.longitude, ctx.rotation);
       const leaderStart = this._polar(radius - 14, dispLong, ctx.rotation);
 
-      out += `<g data-planet-key="${p.key}" data-planet-ring="${ringRole}" style="cursor:pointer">`;
+      out += `<g data-planet-key="${escapeAttribute(p.key)}" data-planet-ring="${escapeAttribute(ringId)}" data-chart-kind="point" data-chart-identity="${escapeAttribute(`${ringId}:${p.key}`)}" style="cursor:pointer">`;
 
       out += line(leaderStart.x, leaderStart.y, dotPos.x, dotPos.y,
         `stroke:${pColor};stroke-opacity:0.30;stroke-width:0.6`);
@@ -321,13 +324,14 @@ function circle(cx, cy, r, style) { return `<circle cx="${cx}" cy="${cy}" r="${r
 function line(x1, y1, x2, y2, style) { return `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" style="${style}"/>`; }
 function text(x, y, content, style) { return `<text x="${f(x)}" y="${f(y)}" text-anchor="middle" dominant-baseline="central" style="${style}">${escapeXml(content)}</text>`; }
 function escapeXml(s) { return String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])); }
+function escapeAttribute(s) { return String(s).replace(/[&"<>]/g, (c) => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[c])); }
 
-function midLongitude(a, b) {
+export function midLongitude(a, b) {
   let d = ((b - a) % 360 + 540) % 360 - 180;
   return ((a + d / 2) % 360 + 360) % 360;
 }
 
-function spreadAngles(longitudes, minSep) {
+export function spreadAngles(longitudes, minSep) {
   const order = longitudes
     .map((lon, idx) => ({ lon: ((lon % 360) + 360) % 360, idx }))
     .sort((a, b) => a.lon - b.lon);
