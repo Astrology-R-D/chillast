@@ -1,11 +1,12 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AppChartConfig } from '../../../api/contracts';
 import { useChartWorkspace } from '../../../stores/chartWorkspace';
 import type { ChartIdentity, ChartReferenceData, NormalizedChartResult } from '../contracts';
 import { selectionTargetForIdentity, type ChartSelectionTarget } from './chartSelection';
 import { createLegacySvg } from './legacyGeometry';
 import { applyLayers } from './chartLayers';
-import { ChartLayerMenu } from './ChartLayerMenu';
+import { ChartToolbar } from './ChartToolbar';
+import { useChartTransform } from './useChartTransform';
 
 export interface InteractiveChartProps {
   result: NormalizedChartResult;
@@ -33,6 +34,7 @@ function objectLabel(result: NormalizedChartResult, identity: ChartIdentity): st
 
 export function InteractiveChart({ result, reference, config, onRevealSelection, onSvgReady }: InteractiveChartProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const [svgElement, setSvgElement] = useState<SVGSVGElement | null>(null);
   const markup = useMemo(() => createLegacySvg(result, reference, config).markup, [result, reference, config]);
   const focusedIdentity = useChartWorkspace((state) => state.focusedIdentity);
   const hoverIdentity = useChartWorkspace((state) => state.hoverIdentity);
@@ -40,10 +42,22 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
   const clearFocus = useChartWorkspace((state) => state.clearFocus);
   const setHover = useChartWorkspace((state) => state.setHover);
   const layers = useChartWorkspace((state) => state.layers);
+  const transform = useChartWorkspace((state) => state.transform);
+  const setTransform = useChartWorkspace((state) => state.setTransform);
+  useChartTransform({ svg: svgElement, transform, onChange: setTransform });
 
   useLayoutEffect(() => {
     const host = hostRef.current;
-    if (host) host.innerHTML = markup;
+    if (!host) return;
+    host.innerHTML = markup;
+    const svg = host.querySelector('svg');
+    if (!(svg instanceof SVGSVGElement)) { setSvgElement(null); return; }
+    const transformGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    transformGroup.dataset.chartTransform = '';
+    for (const child of [...svg.children]) if (child.tagName.toLowerCase() !== 'defs') transformGroup.append(child);
+    svg.append(transformGroup);
+    svg.setAttribute('tabindex', '0');
+    setSvgElement(svg);
   }, [markup]);
 
   useLayoutEffect(() => {
@@ -113,8 +127,14 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     if (svg instanceof SVGSVGElement) applyLayers(svg, result, reference, layers);
   }, [focusedIdentity, hoverIdentity, layers, markup, reference, result]);
 
+  useLayoutEffect(() => {
+    hostRef.current?.querySelector('[data-chart-transform]')?.setAttribute(
+      'transform', `translate(${transform.x} ${transform.y}) scale(${transform.scale})`,
+    );
+  }, [markup, transform]);
+
   return <div className="interactive-chart">
-    <div className="chart-toolbar"><ChartLayerMenu result={result} /></div>
+    <ChartToolbar result={result} svg={svgElement} transform={transform} onChange={setTransform} />
     <div ref={hostRef} className="interactive-chart__svg" />
     {hoverIdentity && <div role="tooltip" className="interactive-chart__tooltip">{objectLabel(result, hoverIdentity)}</div>}
     <div role="status" aria-live="polite" className="interactive-chart__status">

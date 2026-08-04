@@ -11,6 +11,7 @@ import { defaultWesternWorkspace, writeWesternWorkspace } from '../../../stores/
 import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { CHART_DESCRIPTORS } from '../catalog';
 import { CHART_TYPES, type ChartReferenceData, type NormalizedChartResult } from '../contracts';
+import { chartReference } from '../svg/chartTestFixtures';
 import { createDefaultDraft, DEFAULT_ASPECTS } from './chartDraft';
 import { ChartWorkbenchPage } from './ChartWorkbenchPage';
 
@@ -22,9 +23,9 @@ const profile = (id: string): Profile => ({
 const profiles = [profile('p1'), profile('p2')];
 const catalog = CHART_TYPES.map((type) => ({ type, nameZh: type, nameEn: type, category: CHART_DESCRIPTORS[type].route, requiresSecondary: CHART_DESCRIPTORS[type].requiresSecondary, options: [...CHART_DESCRIPTORS[type].serviceOptions] }));
 const reference = {
+  ...chartReference,
   aspects: Object.fromEntries(DEFAULT_ASPECTS.map((key) => [key, { nameEn: key, nameZh: key, angle: 0, defaultOrb: 5, level: 'major', glyph: '*' }])),
   houseSystems: [{ value: 'placidus', nameEn: 'Placidus', nameZh: '普拉西德' }], chartTypes: catalog,
-  signs: [], points: {}, elements: {}, modalities: {},
 } as unknown as ChartReferenceData;
 const result = {
   resultId: 'result', identities: [], meta: { type: 'natal', typeNameZh: '本命盘', title: '计算成功', subtitle: '摘要', settings: { houseSystem: 'placidus', zodiac: 'tropical' }, generatedAt: '2026-01-01T00:00:00.000Z', instantUtc: null },
