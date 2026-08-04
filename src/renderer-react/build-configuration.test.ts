@@ -6,7 +6,11 @@ import { build as viteBuild } from 'vite';
 const repositoryRoot = process.cwd();
 const packageJson = JSON.parse(
   readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8'),
-) as { dependencies: Record<string, string>; build: { files: string[] } };
+) as { scripts: Record<string, string>; dependencies: Record<string, string>; build: { files: string[] } };
+
+test('runs the canonical renderer suite with one worker', () => {
+  expect(packageJson.scripts['test:renderer']).toBe('vitest run --maxWorkers=1');
+});
 
 interface BuildOutput {
   output: Array<{ type: string; code?: string }>;

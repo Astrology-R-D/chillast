@@ -15,7 +15,7 @@
     "build:ui-fonts": "node tools/build-ui-fonts.mjs",
     "build:renderer": "npm run build:ui-fonts && vite build",
     "start:react": "npm run build:renderer && cross-env CHILLAST_RENDERER=react electron .",
-    "test:renderer": "vitest run",
+    "test:renderer": "vitest run --maxWorkers=1",
     "test:renderer:watch": "vitest",
     "test:loader": "node --test tests/RendererLoader.test.js",
     "test:security": "node --test tests/CloseGuard.test.js tests/RendererLoader.test.js tests/IpcRouterSecurity.test.js tests/LocationResolver.test.js tests/MainCloseDecision.test.js tests/MainPolicy.test.js",
