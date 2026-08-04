@@ -24,6 +24,13 @@ test('declares the accessible primitives used by chart filters', () => {
   });
 });
 
+test('declares the professional chart grid engines', () => {
+  expect(packageJson.dependencies).toMatchObject({
+    '@tanstack/react-table': expect.any(String),
+    '@tanstack/react-virtual': expect.any(String),
+  });
+});
+
 test('loads the chart workbench outside the initial renderer chunk', () => {
   const shell = readFileSync(resolve(repositoryRoot, 'src/renderer-react/shell/AppShell.tsx'), 'utf8');
   expect(shell).toMatch(/return import\(['"]\.\.\/features\/charts\/workbench\/ChartWorkbenchPage['"]\)/);
