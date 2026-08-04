@@ -87,6 +87,11 @@ test('React smoke captures exact logical viewports as untouched native-DPI image
 });
 
 test('React smoke verifies chart remaining-height geometry at narrow and desktop viewports', () => {
+  assert.match(source, /generatedChart/);
+  assert.match(source, /\.interactive-chart__svg > svg/);
+  assert.match(source, /data-chart-identity/);
+  assert.match(source, /viewBox === '0 0 740 740'/);
+  assert.match(source, /NaN\|Infinity\|undefined/);
   assert.match(source, /chartGeometry/);
   assert.match(source, /chart-1100x720/);
   assert.match(source, /chart-1440x920/);

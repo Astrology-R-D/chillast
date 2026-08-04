@@ -519,6 +519,25 @@ app.whenReady().then(async () => {
         && document.documentElement.dataset.theme === 'dark'
         && document.documentElement.dataset.density === 'comfortable',
     }));
+    await poll(win, 'chart calculate command', () => {
+      const command = Array.from(document.querySelectorAll('.chart-filter-band button'))
+        .find((button) => button.textContent === '计算');
+      return { ready: Boolean(command && !command.disabled) };
+    });
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算').click()`);
+    const generatedChart = await poll(win, 'real generated interactive chart', () => {
+      const svg = document.querySelector('.interactive-chart__svg > svg');
+      if (!svg) return { ready: false };
+      const markup = svg.outerHTML;
+      const bounds = svg.getBoundingClientRect();
+      const viewBox = svg.getAttribute('viewBox');
+      const semanticGroups = svg.querySelectorAll('[data-chart-identity]').length;
+      const transformGroup = svg.querySelector('[data-chart-transform]')?.getAttribute('transform');
+      return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && bounds.width > 0 && bounds.height > 0
+        && Boolean(transformGroup) && !/NaN|Infinity|undefined/.test(markup), value: {
+        viewBox, semanticGroups, width: bounds.width, height: bounds.height, transformGroup,
+      } };
+    });
 
     const beforeResize = await win.webContents.executeJavaScript(`(() => {
       const handle = document.querySelectorAll('[role="separator"]')[0];
@@ -709,7 +728,7 @@ app.whenReady().then(async () => {
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, chartGeometry, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, generatedChart, chartGeometry, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {
