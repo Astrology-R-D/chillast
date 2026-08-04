@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { GeoLocation } from '../api/contracts';
 import { CHART_TYPES, type ChartType, type Zodiac } from '../features/charts/contracts';
+import { allowedColumnIds } from '../features/charts/explorer/explorerColumns';
 
 export type ExplorerTab = 'planets' | 'houses' | 'aspects' | 'distributions' | 'comparison';
 export type ComparisonMode = 'merged' | 'sideBySide' | 'difference';
@@ -84,7 +85,7 @@ const splitSchema = z.object({
   relationship: z.object({ horizontal: splitTuple, vertical: splitTuple }),
 });
 
-function defaultTabLayout(): TabLayoutV1 {
+export function defaultTabLayout(): TabLayoutV1 {
   return {
     sorting: [],
     filters: [],
@@ -92,6 +93,43 @@ function defaultTabLayout(): TabLayoutV1 {
     columnVisibility: {},
     columnPinning: { left: [], right: [] },
     columnSizing: {},
+  };
+}
+
+function sanitizeTabLayout(value: unknown, allowed: ReadonlySet<string>): TabLayoutV1 {
+  const parsed = tabLayoutSchema.safeParse(value);
+  if (!parsed.success) return defaultTabLayout();
+  const layout = parsed.data;
+  if (new Set(layout.columnOrder).size !== layout.columnOrder.length) return defaultTabLayout();
+  if (layout.columnPinning.left.some((id) => layout.columnPinning.right.includes(id))) return defaultTabLayout();
+  const keep = (id: string) => allowed.has(id);
+  return {
+    sorting: layout.sorting.filter(({ id }) => keep(id)),
+    filters: layout.filters.filter(({ id }) => keep(id)).map((entry) => ({ id: entry.id, value: entry.value })),
+    columnOrder: layout.columnOrder.filter(keep),
+    columnVisibility: Object.fromEntries(Object.entries(layout.columnVisibility).filter(([id]) => keep(id))),
+    columnPinning: {
+      left: layout.columnPinning.left.filter(keep),
+      right: layout.columnPinning.right.filter(keep),
+    },
+    columnSizing: Object.fromEntries(Object.entries(layout.columnSizing).filter(([id]) => keep(id))),
+  };
+}
+
+function parseTableLayout(value: unknown): ChartTableLayoutV1 {
+  const parsed = tableLayoutSchema.pick({ version: true, activeTab: true, comparisonMode: true }).safeParse(value);
+  if (!parsed.success || !value || typeof value !== 'object' || Array.isArray(value)) return defaultTableLayout();
+  const source = value as Record<string, unknown>;
+  const tabs = source.tabs && typeof source.tabs === 'object' && !Array.isArray(source.tabs)
+    ? source.tabs as Record<string, unknown>
+    : {};
+  const allowed = allowedColumnIds();
+  return {
+    ...parsed.data,
+    tabs: Object.fromEntries(EXPLORER_TABS.map((tab) => [
+      tab,
+      sanitizeTabLayout(tabs[tab], allowed[tab]),
+    ])) as Record<ExplorerTab, TabLayoutV1>,
   };
 }
 
@@ -145,8 +183,7 @@ export function parseWesternWorkspace(value: unknown): WesternChartWorkspaceV1 {
     recents: parsedRecents.success ? parsedRecents.data : defaults.recents,
     split: parsedSplit.success ? parsedSplit.data : defaults.split,
     tableLayouts: Object.fromEntries(CHART_TYPES.map((type) => {
-      const parsed = tableLayoutSchema.safeParse(layouts[type]);
-      return [type, parsed.success ? parsed.data : defaultTableLayout()];
+      return [type, parseTableLayout(layouts[type])];
     })) as Record<ChartType, ChartTableLayoutV1>,
   };
 }

@@ -60,6 +60,39 @@ describe('western chart workspace persistence', () => {
     expect(parsed.tableLayouts.transit).toEqual(defaultTableLayout());
   });
 
+  test('restores distinct layouts for all 20 exact chart types', () => {
+    const source = defaultWesternWorkspace();
+    CHART_TYPES.forEach((type, index) => {
+      source.tableLayouts[type].tabs.planets.columnSizing.longitude = 100 + index;
+    });
+    const parsed = parseWesternWorkspace(source);
+    expect(CHART_TYPES.map((type) => parsed.tableLayouts[type].tabs.planets.columnSizing.longitude))
+      .toEqual(CHART_TYPES.map((_type, index) => 100 + index));
+  });
+
+  test('drops unknown entries and resets only a structurally invalid exact tab', () => {
+    const source = defaultWesternWorkspace();
+    source.recents.primaryProfileIds = ['p1'];
+    source.split.personal.horizontal = [62, 38];
+    source.tableLayouts.natal.tabs.planets.columnSizing.longitude = 123;
+    source.tableLayouts.natal.tabs.houses.columnSizing.house = 77;
+    source.tableLayouts.transit.tabs.planets.columnSizing.longitude = 234;
+    source.tableLayouts.natal.tabs.planets.sorting = [{ id: 'unknown', desc: false }, { id: 'longitude', desc: true }];
+    source.tableLayouts.natal.tabs.planets.columnVisibility.unknown = false;
+    source.tableLayouts.natal.tabs.houses.columnOrder = ['house', 'house'];
+
+    const parsed = parseWesternWorkspace(source);
+    expect(parsed.tableLayouts.natal.tabs.planets).toMatchObject({
+      sorting: [{ id: 'longitude', desc: true }],
+      columnSizing: { longitude: 123 },
+      columnVisibility: {},
+    });
+    expect(parsed.tableLayouts.natal.tabs.houses).toEqual(defaultTableLayout().tabs.houses);
+    expect(parsed.tableLayouts.transit.tabs.planets.columnSizing.longitude).toBe(234);
+    expect(parsed.recents.primaryProfileIds).toEqual(['p1']);
+    expect(parsed.split.personal.horizontal).toEqual([62, 38]);
+  });
+
   test('unsupported top-level versions reset only the western chart payload', () => {
     const profileContainer = {
       primaryProfileId: 'p1',
