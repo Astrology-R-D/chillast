@@ -24,6 +24,7 @@ function renderChart(onRevealSelection = vi.fn()) {
 describe('interactive chart', () => {
   test('decorates selectable geometry with normalized accessible facts', () => {
     const { container } = renderChart();
+    expect(container.querySelector('.interactive-chart__svg svg')).toHaveAttribute('role', 'group');
     const selectable = container.querySelectorAll('[data-chart-kind="point"], [data-chart-kind="house"], [data-chart-kind="aspect"]');
     expect(selectable.length).toBeGreaterThan(0);
     for (const node of selectable) {

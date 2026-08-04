@@ -72,6 +72,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     const host = hostRef.current;
     const svg = host?.querySelector('svg');
     if (!host || !(svg instanceof SVGSVGElement)) return undefined;
+    svg.setAttribute('role', 'group');
     svg.setAttribute('aria-label', result.meta.title);
 
     const selectable = [...svg.querySelectorAll<SVGGElement>('[data-chart-identity]')];

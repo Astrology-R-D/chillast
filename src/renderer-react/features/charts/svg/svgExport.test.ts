@@ -28,6 +28,7 @@ describe('standalone SVG export', () => {
     expect(output).toContain('translate(12 24) scale(2)');
     expect(output).toContain('rgb(12, 34, 56)');
     expect(output).toContain('Maple Mono NF CN');
+    expect(output).toContain('[data-ring-style="1"]');
     expect(output).not.toMatch(/transit:saturn|tooltip|data-focused|data-hovered|tabindex|role="button"|aria-label="Sun"/);
     expect(output).not.toMatch(/NaN|Infinity|undefined/);
     expect(svg.outerHTML).toBe(before);
