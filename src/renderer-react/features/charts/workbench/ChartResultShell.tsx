@@ -3,7 +3,9 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useI18n } from '../../../i18n/I18nProvider';
 import { useChartWorkspace, type ChartRouteState } from '../../../stores/chartWorkspace';
-import type { ChartRoute } from '../contracts';
+import type { ChartReferenceData, ChartRoute } from '../contracts';
+import type { ChartSelectionTarget } from '../svg/chartSelection';
+import { InteractiveChart } from '../svg/InteractiveChart';
 import { ChartResultSummary } from './ChartResultSummary';
 
 const DIVIDER_SIZE = 6;
@@ -29,11 +31,13 @@ export function useResultOrientation(ref: RefObject<HTMLElement | null>): 'horiz
 export interface ChartResultShellProps {
   route: ChartRoute;
   state: ChartRouteState;
+  reference: ChartReferenceData;
   profilesAvailable: boolean;
   validDraft: boolean;
   startupError?: string | null;
   onRetry(): void;
   onCancel(): void;
+  onRevealSelection?(target: ChartSelectionTarget): void;
 }
 
 function clampRatio(value: [number, number], minimum: number): [number, number] {
@@ -42,7 +46,7 @@ function clampRatio(value: [number, number], minimum: number): [number, number] 
   return [first, 100 - first];
 }
 
-export function ChartResultShell({ route, state, profilesAvailable, validDraft, startupError, onRetry, onCancel }: ChartResultShellProps) {
+export function ChartResultShell({ route, state, reference, profilesAvailable, validDraft, startupError, onRetry, onCancel, onRevealSelection }: ChartResultShellProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLElement>(null);
   const orientation = useResultOrientation(ref);
@@ -89,7 +93,7 @@ export function ChartResultShell({ route, state, profilesAvailable, validDraft, 
       <Panel id={`${route}-${orientation}-chart`} order={1} defaultSize={ratio[0]} minSize={minimum}
         className="chart-result__chart-pane" data-min-percent={minimum.toFixed(3)}>
         <div className="chart-result__pane-heading"><span>{result.meta.typeNameZh}</span><strong>{result.rings.length} {t('chart.workbench.rings')} · {result.aspects.length} {t('chart.workbench.aspects')}</strong></div>
-        <p>{t('chart.workbench.chartPending')}</p>
+        <InteractiveChart result={result} reference={reference} onRevealSelection={onRevealSelection} />
       </Panel>
       <PanelResizeHandle className="chart-result__resize" aria-label={t('chart.workbench.resizeSplit')} />
       <Panel id={`${route}-${orientation}-data`} order={2} defaultSize={ratio[1]} minSize={minimum} className="chart-result__data-pane">

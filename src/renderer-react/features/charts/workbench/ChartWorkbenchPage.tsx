@@ -116,7 +116,7 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
       onPatch={(patch) => store.getState().editDraft(route, patch)} onCalculate={calculation.calculate}
       onReset={() => store.getState().resetDraft(route, createDefaultDraft(route, environment))}
       onCancel={calculation.cancel} />
-    <ChartResultShell route={route} state={routeState} profilesAvailable={profiles.length > 0}
+    <ChartResultShell route={route} state={routeState} reference={reference} profilesAvailable={profiles.length > 0}
       validDraft={validation.valid} startupError={startupError ? `${t('chart.workbench.catalogError')}：${errorMessage(startupError)}` : null}
       onRetry={startupError ? retryStartup : calculation.retry} onCancel={calculation.cancel} />
   </section>;

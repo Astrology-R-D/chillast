@@ -6,6 +6,7 @@ import { I18nProvider } from '../../../i18n/I18nProvider';
 import { ChartWorkspaceProvider, createChartWorkspaceStore, type ChartRouteState } from '../../../stores/chartWorkspace';
 import { setObservedSize } from '../../../test/setup';
 import type { NormalizedChartResult } from '../contracts';
+import { chartReference, twoRingResult } from '../svg/chartTestFixtures';
 import type { ChartDraft, SubmittedChartSnapshot } from './chartDraft';
 import { ChartResultShell, resultPaneMinimumPercent } from './ChartResultShell';
 
@@ -19,11 +20,9 @@ const submitted = {
   request: { type: 'natal', primary: { id: 'p1' }, settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: [], orbOverrides: {} } }, options: {} },
 } as unknown as SubmittedChartSnapshot;
 const result = {
-  resultId: 'result-1', identities: [],
+  ...twoRingResult, resultId: 'result-1',
   meta: { type: 'natal', typeNameZh: '本命盘', title: '林岚本命盘', subtitle: '测试摘要', settings: { houseSystem: 'placidus', zodiac: 'tropical' }, generatedAt: '2026-08-02T12:35:00.000Z', instantUtc: '2026-08-02T04:34:00.000Z', firdaria: { ruler: 'Sun' }, unknown: { retained: true } },
   subjects: [{ role: 'primary', nameZh: '林岚', nameEn: 'Lan', gender: 'other', birthLabel: '2000', location: { label: '北京', latitude: 39.9, longitude: 116.4 } }],
-  rings: [{ id: 'primary', identity: 'ring:primary', role: 'primary', label: '本命', points: [{ id: 'primary:sun' }] }],
-  aspects: [{ id: 'aspect:a:sun:x:a:moon' }], houses: [], angles: {}, distributions: { elements: {}, modalities: {} },
 } as unknown as NormalizedChartResult;
 
 function routeState(patch: Partial<ChartRouteState> = {}): ChartRouteState {
@@ -44,7 +43,7 @@ function renderShell(state: ChartRouteState, props: Partial<React.ComponentProps
   const retry = vi.fn();
   const view = render(<I18nProvider dictionary={dictionary}><ChartWorkspaceProvider store={store}>
     <div className="chart-workbench"><div className="chart-filter-band">filters</div><ChartResultShell route="personal"
-      state={state} profilesAvailable validDraft onRetry={retry} onCancel={vi.fn()} {...props} /></div>
+      state={state} reference={chartReference} profilesAvailable validDraft onRetry={retry} onCancel={vi.fn()} {...props} /></div>
   </ChartWorkspaceProvider></I18nProvider>);
   return { ...view, store, retry, resultElement: view.container.querySelector('.chart-result')! };
 }
@@ -112,5 +111,11 @@ describe('chart result shell', () => {
     expect(container.querySelector('.chart-filter-band')?.closest('.chart-result')).toBeNull();
     await user.click(screen.getByRole('button', { name: '重试' }));
     expect(retry).toHaveBeenCalledOnce();
+  });
+
+  test('renders the successful wheel in the chart pane and keeps the data placeholder', () => {
+    const { container } = renderShell(routeState({ accepted: submitted, lastSuccessfulResult: result, requestStatus: 'success' }));
+    expect(container.querySelector('.chart-result__chart-pane svg')).toBeInTheDocument();
+    expect(screen.getByText('数据浏览器将在后续增量显示')).toBeInTheDocument();
   });
 });
