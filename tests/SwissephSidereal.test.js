@@ -71,6 +71,17 @@ function cast(zodiac, instantUtc = knownValues.instantUtc) {
   };
 }
 
+test('records reproducible independent Lahiri oracle provenance', () => {
+  assert.equal(knownValues.source.package, 'pyswisseph');
+  assert.equal(knownValues.source.packageVersion, '2.10.3.2');
+  assert.equal(knownValues.source.swissEphemerisVersion, '2.10.03');
+  assert.equal(knownValues.applicationSwissEphemerisVersion, '2.09.03');
+  assert.match(knownValues.source.url, /^https:\/\/pypi\.org\//);
+  assert.match(knownValues.source.commands.install, /pyswisseph==2\.10\.3\.2/);
+  assert.match(knownValues.source.commands.generate, /generate-swisseph-lahiri-oracle\.py/);
+  assert.ok(knownValues.maximumAngularError <= 0.01);
+});
+
 test('matches independently pinned tropical and Lahiri positions', () => {
   for (const zodiac of ['tropical', 'sidereal']) {
     const actual = cast(zodiac);
