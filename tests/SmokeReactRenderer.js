@@ -554,13 +554,14 @@ app.whenReady().then(async () => {
       const markup = svg.outerHTML;
       const bounds = svg.getBoundingClientRect();
       const viewBox = svg.getAttribute('viewBox');
-       const semanticGroups = svg.querySelectorAll('[data-chart-identity]').length;
-       const rings = svg.querySelectorAll('[data-ring-id]').length;
+      const semanticGroups = svg.querySelectorAll('[data-chart-identity]').length;
+      const rings = svg.querySelectorAll('[data-ring-id]').length;
+      const tabStops = svg.querySelectorAll('[role="button"][tabindex="0"]:not([hidden])').length;
       const transformGroup = svg.querySelector('[data-chart-transform]')?.getAttribute('transform');
       const squareError = Math.abs(bounds.width - bounds.height);
-       return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && rings === 2 && bounds.width > 0 && bounds.height > 0
+       return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && rings === 2 && tabStops === 1 && bounds.width > 0 && bounds.height > 0
          && squareError <= 1 && Boolean(transformGroup) && !/NaN|Infinity|undefined/.test(markup), value: {
-         viewBox, semanticGroups, rings, width: bounds.width, height: bounds.height, squareError, transformGroup,
+         viewBox, semanticGroups, rings, tabStops, width: bounds.width, height: bounds.height, squareError, transformGroup,
        } };
      });
 
@@ -573,7 +574,7 @@ app.whenReady().then(async () => {
       const outerPoint = outerRing.querySelector('[data-chart-kind="point"]');
       const outerIdentity = outerPoint.getAttribute('data-chart-identity');
       const accessible = outerPoint.getAttribute('role') === 'button'
-        && outerPoint.getAttribute('tabindex') === '0' && Boolean(outerPoint.getAttribute('aria-label'));
+        && ['0', '-1'].includes(outerPoint.getAttribute('tabindex')) && Boolean(outerPoint.getAttribute('aria-label'));
       window.__plan3OuterIdentity = outerIdentity;
       outerPoint.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       return { outerIdentity, accessible };
@@ -581,6 +582,7 @@ app.whenReady().then(async () => {
     const selected = await poll(win, 'outer-ring point selection', () => {
       const outerPoint = window.__currentChartSvg().querySelector('[data-chart-identity="' + CSS.escape(window.__plan3OuterIdentity) + '"]');
       const locked = outerPoint.getAttribute('data-focused') === 'true'
+        && outerPoint.getAttribute('tabindex') === '0'
         && document.querySelector('.interactive-chart__status')?.textContent.includes(outerPoint.getAttribute('aria-label'));
       const linkedTab = document.querySelector('.chart-result__data-pane')?.getAttribute('data-active-tab');
       return { ready: locked && linkedTab === 'planets', value: { locked, linkedTab } };
@@ -607,6 +609,8 @@ app.whenReady().then(async () => {
       const transform = window.__readChartTransform();
       return { ready: transform.scale > 1, value: transform };
     });
+    const panBefore = await win.webContents.executeJavaScript(`window.__readChartTransform()`);
+    await win.webContents.executeJavaScript(`window.__smokePanBefore = ${JSON.stringify(panBefore)}`);
     const panPoints = await win.webContents.executeJavaScript(`(() => { const rect = window.__currentChartSvg().getBoundingClientRect(); return { start: { x: Math.round(rect.left + 100), y: Math.round(rect.top + 100) }, end: { x: Math.round(rect.left + 130), y: Math.round(rect.top + 120) } }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...panPoints.start });
     win.webContents.sendInputEvent({ type: 'mouseDown', ...panPoints.start, button: 'left', clickCount: 1 });
@@ -614,7 +618,10 @@ app.whenReady().then(async () => {
     win.webContents.sendInputEvent({ type: 'mouseUp', ...panPoints.end, button: 'left', clickCount: 1 });
     const panned = await poll(win, 'chart pointer pan', () => {
       const transform = window.__readChartTransform();
-      return { ready: transform.x !== 0, value: transform };
+      const before = window.__smokePanBefore;
+      const delta = { x: transform.x - before.x, y: transform.y - before.y };
+      return { ready: Math.abs(transform.x - before.x) > 0.1 || Math.abs(transform.y - before.y) > 0.1,
+        value: { ...transform, before, delta } };
     });
     const resetPoint = await win.webContents.executeJavaScript(`(() => { const rect = Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '重置视图').getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', x: resetPoint.x, y: resetPoint.y });

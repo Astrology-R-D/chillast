@@ -48,7 +48,6 @@ export function applyLayers(
     const identity = node.dataset.chartIdentity as ChartIdentity;
     const visible = isIdentityVisible(identity, result, reference, layers);
     setVisible(node, visible);
-    if (node.getAttribute('role') === 'button') node.setAttribute('tabindex', visible ? '0' : '-1');
   }
   for (const node of svg.querySelectorAll('[data-chart-part="label"], [data-chart-part="leader"]')) setVisible(node, layers.labels);
   for (const node of svg.querySelectorAll('[data-chart-part="angle"]')) setVisible(node, layers.houses);

@@ -37,6 +37,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
   const { t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [svgElement, setSvgElement] = useState<SVGSVGElement | null>(null);
+  const [activeIdentity, setActiveIdentity] = useState<ChartIdentity | null>(null);
   const markup = useMemo(() => createLegacySvg(result, reference, config).markup, [result, reference, config]);
   const focusedIdentity = useChartWorkspace((state) => state.focusedIdentity);
   const hoverIdentity = useChartWorkspace((state) => state.hoverIdentity);
@@ -58,7 +59,6 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     transformGroup.dataset.chartTransform = '';
     for (const child of [...svg.children]) if (child.tagName.toLowerCase() !== 'defs') transformGroup.append(child);
     svg.append(transformGroup);
-    svg.setAttribute('tabindex', '0');
     setSvgElement(svg);
   }, [markup]);
 
@@ -72,8 +72,9 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     const host = hostRef.current;
     const svg = host?.querySelector('svg');
     if (!host || !(svg instanceof SVGSVGElement)) return undefined;
-    svg.setAttribute('role', 'group');
-    svg.setAttribute('aria-label', result.meta.title);
+    svg.setAttribute('role', 'application');
+    svg.removeAttribute('tabindex');
+    svg.setAttribute('aria-label', t('chart.svg.applicationLabel', { title: result.meta.title }));
 
     const selectable = [...svg.querySelectorAll<SVGGElement>('[data-chart-identity]')];
     result.rings.forEach((ring, index) => svg.querySelector(`[data-ring-id="${CSS.escape(ring.id)}"]`)?.setAttribute('data-ring-style', String(index % 3)));
@@ -81,7 +82,6 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
       const identity = node.dataset.chartIdentity as ChartIdentity;
       if (!selectionTargetForIdentity(result, identity)) continue;
       node.setAttribute('role', 'button');
-      node.setAttribute('tabindex', '0');
       node.setAttribute('aria-label', objectLabel(result, identity, t));
       if (focusedIdentity === identity) node.setAttribute('data-focused', 'true');
       else node.removeAttribute('data-focused');
@@ -106,29 +106,69 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
       setFocus(identity);
       if (target) onRevealSelection?.(target);
     };
-    const click = (event: MouseEvent) => activate(identityFromEvent(event));
+    const makeCurrent = (identity: ChartIdentity | null, focus = false) => {
+      if (!identity) return;
+      setActiveIdentity(identity);
+      const node = svg.querySelector<SVGGElement>(`[data-chart-identity="${CSS.escape(identity)}"]`);
+      if (focus) node?.focus();
+    };
+    const click = (event: MouseEvent) => {
+      const identity = identityFromEvent(event);
+      makeCurrent(identity);
+      activate(identity);
+    };
+    const focusIn = (event: FocusEvent) => makeCurrent(identityFromEvent(event));
     const keyDown = (event: KeyboardEvent) => {
+      const identity = identityFromEvent(event);
+      const navigation = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key);
+      if (navigation && identity) {
+        const visible = [...svg.querySelectorAll<SVGGElement>('[role="button"][data-chart-identity]:not([hidden])')]
+          .filter((node) => !node.closest('[hidden]'));
+        const currentIndex = visible.findIndex((node) => node.dataset.chartIdentity === identity);
+        const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? visible.length - 1
+          : event.key === 'ArrowRight' || event.key === 'ArrowDown'
+            ? Math.min(visible.length - 1, currentIndex + 1)
+            : Math.max(0, currentIndex - 1);
+        event.preventDefault();
+        event.stopPropagation();
+        const next = visible[nextIndex]?.dataset.chartIdentity as ChartIdentity | undefined;
+        makeCurrent(next ?? null, true);
+        return;
+      }
       if (event.key === 'Enter' || event.key === ' ') {
-        const identity = identityFromEvent(event);
         if (identity) { event.preventDefault(); activate(identity); }
       }
     };
     host.addEventListener('pointerover', pointerOver);
     host.addEventListener('pointerout', pointerOut);
     host.addEventListener('click', click);
-    host.addEventListener('keydown', keyDown);
+    host.addEventListener('focusin', focusIn);
+    host.addEventListener('keydown', keyDown, true);
     return () => {
       host.removeEventListener('pointerover', pointerOver);
       host.removeEventListener('pointerout', pointerOut);
       host.removeEventListener('click', click);
-      host.removeEventListener('keydown', keyDown);
+      host.removeEventListener('focusin', focusIn);
+      host.removeEventListener('keydown', keyDown, true);
     };
   }, [clearFocus, focusedIdentity, hoverIdentity, onRevealSelection, result, setFocus, setHover, markup, t]);
 
   useLayoutEffect(() => {
     const svg = hostRef.current?.querySelector('svg');
-    if (svg instanceof SVGSVGElement) applyLayers(svg, result, reference, layers);
-  }, [focusedIdentity, hoverIdentity, layers, markup, reference, result]);
+    if (!(svg instanceof SVGSVGElement)) return;
+    const focusedNode = document.activeElement instanceof Element
+      ? document.activeElement.closest<SVGGElement>('[role="button"][data-chart-identity]') : null;
+    applyLayers(svg, result, reference, layers);
+    const selectable = [...svg.querySelectorAll<SVGGElement>('[role="button"][data-chart-identity]')];
+    const visible = selectable.filter((node) => !node.hasAttribute('hidden') && !node.closest('[hidden]'));
+    const activeVisible = visible.find((node) => node.dataset.chartIdentity === activeIdentity);
+    const focusedVisible = visible.find((node) => node.dataset.chartIdentity === focusedIdentity);
+    const current = activeVisible ?? focusedVisible ?? visible[0] ?? null;
+    for (const node of selectable) node.setAttribute('tabindex', node === current ? '0' : '-1');
+    if (focusedNode && svg.contains(focusedNode) && !visible.includes(focusedNode)) current?.focus();
+    const nextIdentity = current?.dataset.chartIdentity as ChartIdentity | undefined;
+    if ((nextIdentity ?? null) !== activeIdentity) setActiveIdentity(nextIdentity ?? null);
+  }, [activeIdentity, focusedIdentity, hoverIdentity, layers, markup, reference, result]);
 
   useLayoutEffect(() => {
     hostRef.current?.querySelector('[data-chart-transform]')?.setAttribute(

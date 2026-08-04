@@ -110,3 +110,11 @@ test('React smoke resolves every transform from the current connected chart SVG'
   assert.match(source, /numbers\.length !== 3 \|\| !numbers\.every\(Number\.isFinite\)/);
   assert.doesNotMatch(source, /window\.__readChartTransform\s*=\s*\(\)\s*=>\s*\{\s*const value = svg\.querySelector/);
 });
+
+test('React smoke proves pointer pan changes the transform from its immediate baseline', () => {
+  assert.match(source, /const panBefore = await win\.webContents\.executeJavaScript\(`window\.__readChartTransform\(\)`\)/);
+  assert.match(source, /window\.__smokePanBefore = \$\{JSON\.stringify\(panBefore\)\}/);
+  assert.match(source, /Math\.abs\(transform\.x - before\.x\) > 0\.1/);
+  assert.match(source, /Math\.abs\(transform\.y - before\.y\) > 0\.1/);
+  assert.doesNotMatch(source, /ready: transform\.x !== 0/);
+});
