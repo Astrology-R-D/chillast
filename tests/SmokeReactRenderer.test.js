@@ -88,7 +88,7 @@ test('React smoke captures exact logical viewports as untouched native-DPI image
 
 test('React smoke verifies chart remaining-height geometry at narrow and desktop viewports', () => {
   assert.match(source, /generatedChart/);
-  assert.match(source, /\.interactive-chart__svg > svg/);
+  assert.match(source, /\.chart-svg-host svg/);
   assert.match(source, /data-chart-identity/);
   assert.match(source, /viewBox === '0 0 740 740'/);
   assert.match(source, /squareError/);
@@ -100,4 +100,13 @@ test('React smoke verifies chart remaining-height geometry at narrow and desktop
   assert.match(source, /remainingHeightError/);
   assert.match(source, /availableWidthError/);
   assert.match(source, /resultHeight/);
+});
+
+test('React smoke resolves every transform from the current connected chart SVG', () => {
+  assert.match(source, /window\.__currentChartSvg\s*=\s*\(\)\s*=>/);
+  assert.match(source, /document\.querySelector\('\.chart-svg-host svg'\)/);
+  assert.match(source, /if \(!svg \|\| !svg\.isConnected\)/);
+  assert.match(source, /if \(!group \|\| !group\.isConnected\)/);
+  assert.match(source, /numbers\.length !== 3 \|\| !numbers\.every\(Number\.isFinite\)/);
+  assert.doesNotMatch(source, /window\.__readChartTransform\s*=\s*\(\)\s*=>\s*\{\s*const value = svg\.querySelector/);
 });

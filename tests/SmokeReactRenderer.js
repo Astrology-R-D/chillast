@@ -532,10 +532,25 @@ app.whenReady().then(async () => {
         .find((button) => button.textContent === '计算');
       return { ready: Boolean(command && !command.disabled) };
     });
+    await win.webContents.executeJavaScript(`(() => {
+      window.__currentChartSvg = () => {
+        const svg = document.querySelector('.chart-svg-host svg');
+        if (!svg || !svg.isConnected) throw new Error('Current chart SVG is missing or disconnected');
+        return svg;
+      };
+      window.__readChartTransform = () => {
+        const svg = window.__currentChartSvg();
+        const group = svg.querySelector('[data-chart-transform]');
+        if (!group || !group.isConnected) throw new Error('Current chart transform group is missing or disconnected');
+        const value = group.getAttribute('transform');
+        const numbers = (value?.match(/-?(?:\\d+\\.?\\d*|\\.\\d+)/g) ?? []).map(Number);
+        if (numbers.length !== 3 || !numbers.every(Number.isFinite)) throw new Error('Current chart transform is missing or nonfinite: ' + value);
+        return { value, x: numbers[0], y: numbers[1], scale: numbers[2] };
+      };
+    })()`);
     await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算').click()`);
     const generatedChart = await poll(win, 'real generated interactive chart', () => {
-      const svg = document.querySelector('.interactive-chart__svg > svg');
-      if (!svg) return { ready: false };
+      const svg = window.__currentChartSvg();
       const markup = svg.outerHTML;
       const bounds = svg.getBoundingClientRect();
       const viewBox = svg.getAttribute('viewBox');
@@ -553,23 +568,18 @@ app.whenReady().then(async () => {
     win.focus();
     await new Promise((resolve) => setTimeout(resolve, 50));
     const selectionStarted = await win.webContents.executeJavaScript(`(() => {
-      const svg = document.querySelector('.interactive-chart__svg > svg');
+      const svg = window.__currentChartSvg();
       const outerRing = svg.querySelector('[data-ring-id="secondary"]');
       const outerPoint = outerRing.querySelector('[data-chart-kind="point"]');
       const outerIdentity = outerPoint.getAttribute('data-chart-identity');
       const accessible = outerPoint.getAttribute('role') === 'button'
         && outerPoint.getAttribute('tabindex') === '0' && Boolean(outerPoint.getAttribute('aria-label'));
-      window.__readChartTransform = () => {
-        const value = svg.querySelector('[data-chart-transform]').getAttribute('transform');
-        const numbers = value.match(/-?(?:\\d+\\.?\\d*|\\.\\d+)/g).map(Number);
-        return { value, x: numbers[0], y: numbers[1], scale: numbers[2] };
-      };
       window.__plan3OuterIdentity = outerIdentity;
       outerPoint.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       return { outerIdentity, accessible };
     })()`);
     const selected = await poll(win, 'outer-ring point selection', () => {
-      const outerPoint = document.querySelector('[data-chart-identity="' + CSS.escape(window.__plan3OuterIdentity) + '"]');
+      const outerPoint = window.__currentChartSvg().querySelector('[data-chart-identity="' + CSS.escape(window.__plan3OuterIdentity) + '"]');
       const locked = outerPoint.getAttribute('data-focused') === 'true'
         && document.querySelector('.interactive-chart__status')?.textContent.includes(outerPoint.getAttribute('aria-label'));
       const linkedTab = document.querySelector('.chart-result__data-pane')?.getAttribute('data-active-tab');
@@ -582,7 +592,7 @@ app.whenReady().then(async () => {
       ringToggles[ringToggles.length - 1].click();
     })()`);
     const hidden = await poll(win, 'outer ring and cross-aspects hidden', () => {
-      const svg = document.querySelector('.interactive-chart__svg > svg');
+      const svg = window.__currentChartSvg();
       const outerRing = svg.querySelector('[data-ring-id="secondary"]');
       const crossAspects = Array.from(svg.querySelectorAll('[data-chart-kind="aspect"]'))
         .filter((node) => node.getAttribute('data-chart-identity').includes(':secondary:'));
@@ -597,7 +607,7 @@ app.whenReady().then(async () => {
       const transform = window.__readChartTransform();
       return { ready: transform.scale > 1, value: transform };
     });
-    const panPoints = await win.webContents.executeJavaScript(`(() => { const rect = document.querySelector('.interactive-chart__svg > svg').getBoundingClientRect(); return { start: { x: Math.round(rect.left + 100), y: Math.round(rect.top + 100) }, end: { x: Math.round(rect.left + 130), y: Math.round(rect.top + 120) } }; })()`);
+    const panPoints = await win.webContents.executeJavaScript(`(() => { const rect = window.__currentChartSvg().getBoundingClientRect(); return { start: { x: Math.round(rect.left + 100), y: Math.round(rect.top + 100) }, end: { x: Math.round(rect.left + 130), y: Math.round(rect.top + 120) } }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...panPoints.start });
     win.webContents.sendInputEvent({ type: 'mouseDown', ...panPoints.start, button: 'left', clickCount: 1 });
     win.webContents.sendInputEvent({ type: 'mouseMove', ...panPoints.end, movementX: 30, movementY: 20 });
@@ -624,12 +634,12 @@ app.whenReady().then(async () => {
     const fittedResult = await poll(win, 'chart fit visible geometry', () => {
       const fitted = window.__readChartTransform();
       if (fitted.value === 'translate(0 0) scale(1)') {
-        const geometry = document.querySelector('.interactive-chart__svg [data-chart-geometry]');
+        const geometry = window.__currentChartSvg().querySelector('[data-chart-geometry]');
         const bbox = geometry.getBBox();
         Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '适合可见内容').click();
         return { ready: false, value: { bbox: { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height } } };
       }
-      const svg = document.querySelector('.interactive-chart__svg > svg');
+      const svg = window.__currentChartSvg();
       const geometry = svg.querySelector('[data-chart-geometry]');
       const bbox = geometry.getBBox();
       const outerWheel = geometry.querySelector('circle').getBBox();

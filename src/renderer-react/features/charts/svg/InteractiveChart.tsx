@@ -138,7 +138,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
 
   return <div className="interactive-chart" onKeyDownCapture={(event) => { if (event.key === 'Escape') clearFocus(); }}>
     <ChartToolbar result={result} svg={svgElement} transform={transform} onChange={setTransform} />
-    <div ref={hostRef} className="interactive-chart__svg" />
+    <div ref={hostRef} className="interactive-chart__svg chart-svg-host" />
     {hoverIdentity && <div role="tooltip" className="interactive-chart__tooltip">{t('chart.svg.hoverFact', { fact: objectLabel(result, hoverIdentity, t) })}</div>}
     <div role="status" aria-live="polite" className="interactive-chart__status">
       {focusedIdentity ? t('chart.svg.lockedFact', { fact: objectLabel(result, focusedIdentity, t) }) : t('chart.svg.selectionCleared')}
