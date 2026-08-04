@@ -4,6 +4,8 @@ import { useChartWorkspace } from '../../../stores/chartWorkspace';
 import type { ChartIdentity, ChartReferenceData, NormalizedChartResult } from '../contracts';
 import { selectionTargetForIdentity, type ChartSelectionTarget } from './chartSelection';
 import { createLegacySvg } from './legacyGeometry';
+import { applyLayers } from './chartLayers';
+import { ChartLayerMenu } from './ChartLayerMenu';
 
 export interface InteractiveChartProps {
   result: NormalizedChartResult;
@@ -37,6 +39,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
   const setFocus = useChartWorkspace((state) => state.setFocus);
   const clearFocus = useChartWorkspace((state) => state.clearFocus);
   const setHover = useChartWorkspace((state) => state.setHover);
+  const layers = useChartWorkspace((state) => state.layers);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -105,7 +108,13 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     };
   }, [clearFocus, focusedIdentity, hoverIdentity, onRevealSelection, result, setFocus, setHover, markup]);
 
+  useLayoutEffect(() => {
+    const svg = hostRef.current?.querySelector('svg');
+    if (svg instanceof SVGSVGElement) applyLayers(svg, result, reference, layers);
+  }, [focusedIdentity, hoverIdentity, layers, markup, reference, result]);
+
   return <div className="interactive-chart">
+    <div className="chart-toolbar"><ChartLayerMenu result={result} /></div>
     <div ref={hostRef} className="interactive-chart__svg" />
     {hoverIdentity && <div role="tooltip" className="interactive-chart__tooltip">{objectLabel(result, hoverIdentity)}</div>}
     <div role="status" aria-live="polite" className="interactive-chart__status">

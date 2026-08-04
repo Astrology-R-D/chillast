@@ -174,16 +174,16 @@ export class ChartWheel {
         const inner = this._polar(6, cusp.cuspLongitude, ctx.rotation);
         const outer = this._polar(this.R.houseOuter, cusp.cuspLongitude, ctx.rotation);
         out += `<g data-chart-kind="house" data-chart-identity="house:${escapeAttribute(cusp.index)}">`;
-        out += line(inner.x, inner.y, outer.x, outer.y,
-          'stroke:rgba(60,60,60,0.22);stroke-width:0.5');
+        out += `<g data-chart-part="cusp">${line(inner.x, inner.y, outer.x, outer.y,
+          'stroke:rgba(60,60,60,0.22);stroke-width:0.5')}</g>`;
       } else {
         out += `<g data-chart-kind="house" data-chart-identity="house:${escapeAttribute(cusp.index)}">`;
       }
       const next = houses[(i + 1) % houses.length];
       const mid = midLongitude(cusp.cuspLongitude, next.cuspLongitude);
       const np = this._polar(this.R.houseNumber, mid, ctx.rotation);
-      out += text(np.x, np.y, String(cusp.index),
-        'fill:rgba(100,100,100,0.38);font-size:10px;font-weight:400');
+      out += `<g data-chart-part="house-number">${text(np.x, np.y, String(cusp.index),
+        'fill:rgba(100,100,100,0.38);font-size:10px;font-weight:400')}</g>`;
       out += '</g>';
     }
     return out;
@@ -203,11 +203,13 @@ export class ChartWheel {
       if (!a) continue;
       const inner = this._polar(5, a.longitude, ctx.rotation);
       const outer = this._polar(this.R.zodiacOuter, a.longitude, ctx.rotation);
+      out += '<g data-chart-part="angle">';
       out += line(inner.x, inner.y, outer.x, outer.y,
         'stroke:rgba(200,200,200,0.45);stroke-width:1.2');
       const lp = this._polar(this.R.outerRim + 5, a.longitude, ctx.rotation);
       out += text(lp.x, lp.y, label,
         'fill:#4fc1ff;font-size:11px;font-weight:400');
+      out += '</g>';
     }
     return out;
   }
@@ -281,20 +283,20 @@ export class ChartWheel {
 
       out += `<g data-planet-key="${escapeAttribute(p.key)}" data-planet-ring="${escapeAttribute(ringId)}" data-chart-kind="point" data-chart-identity="${escapeAttribute(`${ringId}:${p.key}`)}" style="cursor:pointer">`;
 
-      out += line(leaderStart.x, leaderStart.y, dotPos.x, dotPos.y,
-        `stroke:${pColor};stroke-opacity:0.30;stroke-width:0.6`);
+      out += `<g data-chart-part="leader">${line(leaderStart.x, leaderStart.y, dotPos.x, dotPos.y,
+        `stroke:${pColor};stroke-opacity:0.30;stroke-width:0.6`)}</g>`;
 
-      out += `<circle cx="${f(dotPos.x)}" cy="${f(dotPos.y)}" r="2" style="fill:${pColor};opacity:0.70"/>`;
+      out += `<circle data-chart-part="dot" cx="${f(dotPos.x)}" cy="${f(dotPos.y)}" r="2" style="fill:${pColor};opacity:0.70"/>`;
 
-      out += text(glyphPos.x, glyphPos.y, pLabel,
-        `fill:${pColor};font-size:20px;font-weight:400`);
+      out += `<g data-chart-part="glyph">${text(glyphPos.x, glyphPos.y, pLabel,
+        `fill:${pColor};font-size:20px;font-weight:400`)}</g>`;
 
       const signChar = this._signShort(p.longitude);
       const degPos = this._polar(radius + 13, dispLong, ctx.rotation);
       const retroMark = p.retrograde ? '℞' : '';
       const degLabel = `${signChar}${Math.floor(p.degreeInSign)}°${retroMark}`;
-      out += text(degPos.x, degPos.y, degLabel,
-        `fill:${p.retrograde ? '#f44747' : 'rgba(130,130,130,0.60)'};font-size:8.5px;font-weight:400`);
+      out += `<g data-chart-part="label">${text(degPos.x, degPos.y, degLabel,
+        `fill:${p.retrograde ? '#f44747' : 'rgba(130,130,130,0.60)'};font-size:8.5px;font-weight:400`)}</g>`;
 
       out += '</g>';
     });

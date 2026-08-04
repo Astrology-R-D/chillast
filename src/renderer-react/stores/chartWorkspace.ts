@@ -66,6 +66,7 @@ export interface ChartWorkspaceState {
   clearFocus(): void;
   setHover(identity: ChartIdentity | null): void;
   setLayers(patch: Partial<LayerState>): void;
+  resetLayers(result: NormalizedChartResult): void;
   setTransform(transform: ChartTransform): void;
   setActiveTab(tab: ExplorerTab): void;
   setComparisonMode(mode: ComparisonMode): void;
@@ -247,6 +248,10 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
       clearFocus: () => set({ focusedIdentity: null }),
       setHover: (hoverIdentity) => set({ hoverIdentity }),
       setLayers: (patch) => set({ layers: { ...get().layers, ...patch } }),
+      resetLayers: (result) => set({ layers: {
+        majorAspects: true, minorAspects: false, houses: true, labels: true,
+        rings: Object.fromEntries(result.rings.map(({ id }) => [id, true])),
+      } }),
       setTransform: (transform) => set({ transform }),
       setActiveTab: (activeTab) => set({ activeTab }),
       setComparisonMode: (comparisonMode) => set({ comparisonMode }),

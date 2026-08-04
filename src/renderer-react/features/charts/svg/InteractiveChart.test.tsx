@@ -72,7 +72,22 @@ describe('interactive chart', () => {
       <InteractiveChart result={twoRingResult} reference={chartReference} onSvgReady={ready} />
     </ChartWorkspaceProvider></I18nProvider>);
     expect(store.getState()).toMatchObject({ focusedIdentity: 'natal:sun', activeTab: 'houses' });
-    expect(container.querySelector('svg')).toBeInstanceOf(SVGSVGElement);
-    expect(ready).toHaveBeenLastCalledWith(container.querySelector('svg'));
+    const svg = container.querySelector('.interactive-chart__svg svg');
+    expect(svg).toBeInstanceOf(SVGSVGElement);
+    expect(ready).toHaveBeenLastCalledWith(svg);
+  });
+
+  test('hides a ring and coupled aspects without clearing locked focus, then resets only layers', async () => {
+    const user = userEvent.setup();
+    const { container, store } = renderChart();
+    store.getState().setFocus('transit:saturn');
+    store.getState().setTransform({ scale: 2, x: 3, y: 4 });
+    await user.click(screen.getByRole('button', { name: /图层|layers/i }));
+    await user.click(screen.getByRole('checkbox', { name: /行运/ }));
+    expect(container.querySelector('[data-ring-id="transit"]')).toHaveAttribute('hidden');
+    expect(store.getState()).toMatchObject({ focusedIdentity: 'transit:saturn', transform: { scale: 2, x: 3, y: 4 } });
+    await user.click(screen.getByRole('button', { name: /重置图层/ }));
+    expect(container.querySelector('[data-ring-id="transit"]')).not.toHaveAttribute('hidden');
+    expect(store.getState()).toMatchObject({ focusedIdentity: 'transit:saturn', transform: { scale: 2, x: 3, y: 4 } });
   });
 });
