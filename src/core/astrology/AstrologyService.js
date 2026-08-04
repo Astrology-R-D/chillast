@@ -6,6 +6,18 @@ const {
   ZODIAC_SIGNS, CELESTIAL_POINTS, ASPECTS, ELEMENTS, MODALITIES, HOUSE_SYSTEMS,
 } = require('./Constants');
 
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+const OPTION_FIELDS = {
+  targetDate: ['targetDate'],
+  year: ['year'],
+  location: ['latitude', 'longitude', 'locationLabel'],
+};
+
 /**
  * Catalogue of chart types exposed to the UI. `requiresSecondary` drives whether
  * a second profile must be chosen; `options` lists the extra inputs each type
@@ -77,13 +89,32 @@ class AstrologyService {
    * @returns {object} ChartData DTO.
    */
   computeChart(request) {
+    if (!isPlainObject(request)) throw new Error('星盘请求必须是对象');
     const definition = CHART_TYPES.find((t) => t.type === request.type);
     if (!definition) throw new Error(`未知的星盘类型: ${request.type}`);
+    if (request.settings !== undefined && !isPlainObject(request.settings)) {
+      throw new Error('settings 必须是对象');
+    }
+    if (request.options !== undefined && !isPlainObject(request.options)) {
+      throw new Error('options 必须是对象');
+    }
+
+    const options = request.options || {};
+    const allowedOptions = new Set(definition.options.flatMap((name) => OPTION_FIELDS[name]));
+    for (const key of Object.keys(options)) {
+      if (!allowedOptions.has(key)) throw new Error(`星盘类型 ${request.type} 不支持选项: ${key}`);
+    }
+    if (!definition.requiresSecondary && request.secondary) {
+      throw new Error('个人星盘不接受次体档案 secondary');
+    }
 
     const primary = this._normalizeSubject(request.primary, '主体档案');
     const secondary = definition.requiresSecondary
       ? this._normalizeSubject(request.secondary, '次体档案')
       : (request.secondary ? this._normalizeSubject(request.secondary, '次体档案') : null);
+    if (definition.requiresSecondary && primary.id && secondary.id && primary.id === secondary.id) {
+      throw new Error('关系盘需要两个不同档案');
+    }
 
     const strategy = this.factory.create(request.type);
     return strategy.build({
@@ -91,7 +122,7 @@ class AstrologyService {
       primary,
       secondary,
       settings: request.settings || {},
-      options: request.options || {},
+      options,
     });
   }
 
