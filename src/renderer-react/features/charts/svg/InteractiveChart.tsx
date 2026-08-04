@@ -73,7 +73,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     const svg = host?.querySelector('svg');
     if (!host || !(svg instanceof SVGSVGElement)) return undefined;
     svg.setAttribute('role', 'application');
-    svg.removeAttribute('tabindex');
+    svg.setAttribute('tabindex', '0');
     svg.setAttribute('aria-label', t('chart.svg.applicationLabel', { title: result.meta.title }));
 
     const selectable = [...svg.querySelectorAll<SVGGElement>('[data-chart-identity]')];

@@ -346,6 +346,19 @@ keyboard activation locks exactly one planet/point, house, or aspect in Zustand.
 Activating the already focused identity unlocks it; `Escape` also clears focus.
 A new focus replaces the prior one.
 
+The SVG interaction surface has exactly two sequential chart-domain tab stops:
+the root canvas/viewport and one visible semantic object in a roving-tabindex
+composite. The root uses `role="application"`, `tabindex="0"`, and an accessible
+name that explains both modes. Plain Arrow keys pan the canvas by 16 SVG units;
+`Shift+Arrow` pans by 48. Canvas focus, `Enter`, and `Space` never lock or clear
+an object. Within the object composite, exactly one visible object has
+`tabindex="0"` and all other visible objects have `tabindex="-1"`; Arrow keys
+move focus in non-wrapping DOM order, `Home`/`End` move to the first/last visible
+object, and object key handling stops propagation so it cannot pan the canvas.
+Only object `Enter`/`Space` activates selection. `Tab` and `Shift+Tab` move
+deterministically between the canvas and current object, and `Escape` from
+either clears the locked selection.
+
 Chart focus switches the explorer to Planets, Houses, or Aspects and scrolls
 the corresponding row into view. Focusing a table row updates the same chart
 identity and chart emphasis. A user-initiated tab switch does not clear focus;
@@ -384,7 +397,9 @@ layout.
 
 The default transform fits the original full 740-unit wheel viewBox in the
 available chart pane with centered aspect-ratio preservation. Wheel/pinch zoom
-is bounded to `0.5x..8x`; pointer pan and keyboard pan update one transform.
+is bounded to `0.5x..8x`; pointer pan and root-canvas keyboard pan update one
+transform. Arrow keys focused on semantic objects perform roving navigation and
+never update that transform.
 
 Reset View restores the default full-wheel transform only. It does not reset
 layers or selection. Fit Visible computes the union of `getBBox()` bounds for
@@ -584,8 +599,10 @@ relabels tropical longitude cannot pass.
   controls or the retained successful result.
 - Calculate, layer, fit/reset, export, tab, and split controls have accessible
   names. Icon-only commands use Lucide icons and tooltips.
-- The split handle, layer menu, chart identities, and tables are keyboard
-  operable. Focus rings are visible in both themes and densities.
+- The split handle, layer menu, chart canvas, roving chart identities, and
+  tables are keyboard operable. The chart contributes two efficient
+  chart-domain stops rather than one stop per SVG object. Focus rings are
+  visible in both themes and densities.
 - Status changes use `role="status"` with `aria-live="polite"`; repeated hover
   facts are excluded from that live region.
 - Color is not the only encoding for rings, aspect class, stale state,

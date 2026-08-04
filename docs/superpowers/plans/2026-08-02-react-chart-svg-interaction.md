@@ -234,14 +234,21 @@ git commit -m "feat(charts): unify chart selection identity"
 
 - [ ] **Step 1: Write failing pointer, keyboard, and accessibility tests**
 
-Render a two-ring result and assert all point/house/aspect groups have
-`tabIndex=0`, `role=button`, and an accessible name containing ring/point or
-house/aspect facts. Pointer enter shows a concise tooltip and writes hover only;
-pointer leave clears hover. Click and Enter lock one ID and call
+Render a realistic two-ring result with 130 semantic objects and assert exactly
+two sequential chart-domain tab stops: the root SVG canvas at `tabIndex=0` and
+one visible point/house/aspect group at `tabIndex=0`. Every other visible
+semantic group has `tabIndex=-1`; all have `role=button` and an accessible name
+containing ring/point or house/aspect facts. Assert deterministic `Tab` and
+`Shift+Tab` movement between canvas and current object. Object Arrow keys move
+the non-wrapping roving stop in DOM order, `Home`/`End` move to its bounds, and
+none of those keys changes the chart transform. Pointer enter shows a concise
+tooltip and writes hover only; pointer leave clears hover. Click and object
+Enter/Space lock one ID and call
 `onRevealSelection({ identity, tab })`; clicking the focused ID unlocks it.
-Escape from any chart descendant clears focus. A user tab switch does not clear
-chart emphasis. Re-render after failed/cancelled request retains focus; accepted
-result missing the ID clears via store logic.
+Canvas focus and canvas Enter/Space do not change locked selection. Escape from
+the canvas or an object clears focus. A user tab switch does not clear chart
+emphasis. Re-render after failed/cancelled request retains focus; accepted result
+missing the ID clears via store logic.
 
 Assert hover facts are not inside the polite live status region and focused vs
 hovered states have separate data attributes.
@@ -265,9 +272,12 @@ export interface InteractiveChartProps {
 ```
 
 Generate markup with `createLegacySvg`, render it into a chart-only host, then in
-`useLayoutEffect` decorate `[data-chart-identity]` nodes with role, tabindex,
-`aria-label`, and current `data-focused`/`data-hovered`. Use event delegation on
-the host and `closest('[data-chart-identity]')`; validate the identity against
+`useLayoutEffect` decorate the root SVG as an accessible `role="application"`
+canvas with `tabindex="0"` and keyboard instructions. Decorate
+`[data-chart-identity]` nodes with role, roving tabindex, `aria-label`, and
+current `data-focused`/`data-hovered`; exactly one visible semantic node is `0`
+and all others are `-1`. Use event delegation on the host and
+`closest('[data-chart-identity]')`; validate the identity against
 `result.identities` before store actions. Build labels from normalized objects,
 not from parsing SVG text. Remove listeners in cleanup.
 
@@ -385,8 +395,11 @@ git commit -m "feat(charts): add wheel layer controls"
 - [ ] **Step 1: Write failing transform math and controller tests**
 
 Assert `zoomAt({scale:1,x:0,y:0}, 2, {x:370,y:370})` preserves the cursor's
-logical point; scales clamp to `0.5` and `8`; pointer/keyboard pan update x/y;
-Reset returns `{ scale:1,x:0,y:0 }`; resize does not change logical transform.
+logical point; scales clamp to `0.5` and `8`; pointer pan and Arrow keys focused
+on the root canvas update x/y by 16 units, while `Shift+Arrow` uses 48. Assert
+object-focused Arrow keys move roving focus, stop propagation, and leave the
+transform unchanged. Reset returns `{ scale:1,x:0,y:0 }`; resize does not change
+logical transform.
 
 Mock visible `getBBox()` values `{x:10,y:20,width:100,height:80}` and
 `{x:200,y:100,width:50,height:50}`; assert union plus 24 units is
@@ -421,10 +434,13 @@ bounds return reset.
 - [ ] **Step 4: Implement one pointer/wheel/pinch/keyboard controller**
 
 `useChartTransform({ svgRef, transform, onChange })` handles wheel with
-`preventDefault`, two-pointer pinch, one-pointer pan with capture, and arrow-key
-pan in 16 SVG-unit steps (`Shift` uses 48). Convert client coordinates through
-`getScreenCTM().inverse()` when available and a finite viewBox/clientRect
-fallback in tests. Cleanup pointer maps/listeners on unmount.
+`preventDefault`, two-pointer pinch, one-pointer pan with capture, and root-SVG
+arrow-key pan in 16 SVG-unit steps (`Shift` uses 48). The delegated semantic
+object controller intercepts object Arrow/Home/End keys during capture, moves
+the roving stop, and stops propagation before this transform controller runs.
+Convert client coordinates through `getScreenCTM().inverse()` when available
+and a finite viewBox/clientRect fallback in tests. Cleanup pointer maps/listeners
+on unmount.
 
 - [ ] **Step 5: Render toolbar and transform wrapper**
 

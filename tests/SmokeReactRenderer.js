@@ -556,12 +556,14 @@ app.whenReady().then(async () => {
       const viewBox = svg.getAttribute('viewBox');
       const semanticGroups = svg.querySelectorAll('[data-chart-identity]').length;
       const rings = svg.querySelectorAll('[data-ring-id]').length;
-      const tabStops = svg.querySelectorAll('[role="button"][tabindex="0"]:not([hidden])').length;
+      const objectTabStops = svg.querySelectorAll('[role="button"][tabindex="0"]:not([hidden])').length;
+      const canvasTabStop = svg.getAttribute('tabindex') === '0';
       const transformGroup = svg.querySelector('[data-chart-transform]')?.getAttribute('transform');
       const squareError = Math.abs(bounds.width - bounds.height);
-       return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && rings === 2 && tabStops === 1 && bounds.width > 0 && bounds.height > 0
+       return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && rings === 2 && canvasTabStop && objectTabStops === 1 && bounds.width > 0 && bounds.height > 0
          && squareError <= 1 && Boolean(transformGroup) && !/NaN|Infinity|undefined/.test(markup), value: {
-         viewBox, semanticGroups, rings, tabStops, width: bounds.width, height: bounds.height, squareError, transformGroup,
+         viewBox, semanticGroups, rings, canvasTabStop, objectTabStops, totalChartTabStops: Number(canvasTabStop) + objectTabStops,
+         width: bounds.width, height: bounds.height, squareError, transformGroup,
        } };
      });
 
@@ -586,6 +588,48 @@ app.whenReady().then(async () => {
         && document.querySelector('.interactive-chart__status')?.textContent.includes(outerPoint.getAttribute('aria-label'));
       const linkedTab = document.querySelector('.chart-result__data-pane')?.getAttribute('data-active-tab');
       return { ready: locked && linkedTab === 'planets', value: { locked, linkedTab } };
+    });
+    const keyboardCanvasBefore = await win.webContents.executeJavaScript(`(() => {
+      const svg = window.__currentChartSvg();
+      svg.focus();
+      const transform = window.__readChartTransform();
+      window.__smokeKeyboardCanvasBefore = transform;
+      return { focusedCanvas: document.activeElement === svg, transform };
+    })()`);
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'RIGHT' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'RIGHT' });
+    const keyboardCanvasPan = await poll(win, 'chart keyboard canvas pan', () => {
+      const transform = window.__readChartTransform();
+      const before = window.__smokeKeyboardCanvasBefore;
+      const keyboardPanValid = transform.x - before.x === 16 && transform.y === before.y;
+      return { ready: keyboardPanValid, value: { keyboardPanValid, before, after: transform } };
+    });
+    const keyboardObjectBefore = await win.webContents.executeJavaScript(`(() => {
+      const svg = window.__currentChartSvg();
+      const objects = Array.from(svg.querySelectorAll('[role="button"][data-chart-identity]:not([hidden])'))
+        .filter((node) => !node.closest('[hidden]'));
+      const current = svg.querySelector('[data-chart-identity="' + CSS.escape(window.__plan3OuterIdentity) + '"]');
+      const index = objects.indexOf(current);
+      const forward = index < objects.length - 1;
+      const expectedIdentity = objects[index + (forward ? 1 : -1)].getAttribute('data-chart-identity');
+      current.focus();
+      const transform = window.__readChartTransform();
+      window.__smokeKeyboardObjectBefore = { expectedIdentity, transform };
+      return { focusedIdentity: document.activeElement?.getAttribute('data-chart-identity'), expectedIdentity,
+        keyCode: forward ? 'RIGHT' : 'LEFT', transform };
+    })()`);
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: keyboardObjectBefore.keyCode });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: keyboardObjectBefore.keyCode });
+    const keyboardObjectNavigation = await poll(win, 'chart keyboard object navigation', () => {
+      const svg = window.__currentChartSvg();
+      const before = window.__smokeKeyboardObjectBefore;
+      const transform = window.__readChartTransform();
+      const focusedIdentity = document.activeElement?.getAttribute('data-chart-identity');
+      const lockRetained = svg.querySelector('[data-chart-identity="' + CSS.escape(window.__plan3OuterIdentity) + '"]')?.getAttribute('data-focused') === 'true';
+      const transformUnchanged = transform.value === before.transform.value;
+      const objectNavigationValid = focusedIdentity === before.expectedIdentity && transformUnchanged && lockRetained;
+      return { ready: objectNavigationValid, value: { objectNavigationValid, focusedIdentity, expectedIdentity: before.expectedIdentity,
+        transformUnchanged, lockRetained } };
     });
     await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '图层').click()`);
     await poll(win, 'chart layer menu open', () => ({ ready: Boolean(document.querySelector('.chart-layer-menu__popover')) }));
@@ -703,10 +747,13 @@ app.whenReady().then(async () => {
       URL.revokeObjectURL = window.__smokeOriginalRevoke;
       HTMLAnchorElement.prototype.click = window.__smokeOriginalAnchorClick;
     })()`);
-    const plan3Interactions = { ...selectionStarted, ...selected, ...hidden, zoomed, panned, reset,
+    const plan3Interactions = { ...selectionStarted, ...selected, keyboardCanvasBefore, keyboardCanvasPan,
+      keyboardObjectBefore, keyboardObjectNavigation, ...hidden, zoomed, panned, reset,
       ...fittedResult, transformsValid: true, ...exported };
     if (!plan3Interactions.outerIdentity.startsWith('secondary:') || !plan3Interactions.accessible || !plan3Interactions.locked
       || plan3Interactions.linkedTab !== 'planets' || !plan3Interactions.hiddenState
+      || !plan3Interactions.keyboardCanvasBefore.focusedCanvas || !plan3Interactions.keyboardCanvasPan.keyboardPanValid
+      || !plan3Interactions.keyboardObjectNavigation.objectNavigationValid
       || !plan3Interactions.transformsValid || !plan3Interactions.exportValid || !plan3Interactions.downloadName.endsWith('.svg')) {
       throw new Error(`invalid Plan 3 interactions: ${JSON.stringify(plan3Interactions)}`);
     }

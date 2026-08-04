@@ -25,7 +25,7 @@ function renderChart(onRevealSelection = vi.fn(), result = twoRingResult) {
 function denseResult(): NormalizedChartResult {
   const result = structuredClone(twoRingResult);
   const template = result.aspects[0];
-  result.aspects = Array.from({ length: 105 }, (_, index) => ({
+  result.aspects = Array.from({ length: 125 }, (_, index) => ({
     ...template,
     id: `aspect:natal:moon:trine-${index}:natal:sun`,
   }));
@@ -44,14 +44,15 @@ describe('interactive chart', () => {
   test('decorates selectable geometry with normalized accessible facts', () => {
     const { container } = renderChart(vi.fn(), denseResult());
     expect(container.querySelector('.chart-svg-host svg')).toBeInTheDocument();
-    const svg = container.querySelector('.interactive-chart__svg svg');
+    const svg = container.querySelector<SVGSVGElement>('.interactive-chart__svg svg');
     expect(svg).toHaveAttribute('role', 'application');
-    expect(svg).not.toHaveAttribute('tabindex');
-    expect(svg).toHaveAccessibleName(/方向键.*Home.*End.*Enter|Home.*End.*Enter.*方向键/i);
+    expect(svg).toHaveAttribute('tabindex', '0');
+    expect(svg).toHaveAccessibleName(/方向键.*平移.*Shift.*对象.*Home.*End.*Enter/i);
     const selectable = semanticObjects(container);
-    expect(selectable.length).toBeGreaterThan(100);
+    expect(selectable).toHaveLength(130);
     expect(selectable.filter((node) => node.tabIndex === 0)).toHaveLength(1);
     expect(selectable.filter((node) => node.tabIndex === -1)).toHaveLength(selectable.length - 1);
+    expect([svg, ...selectable].filter((node) => node?.tabIndex === 0)).toHaveLength(2);
     for (const node of selectable) {
       expect(node).toHaveAttribute('role', 'button');
       expect(node).toHaveAccessibleName();
@@ -65,9 +66,11 @@ describe('interactive chart', () => {
     const user = userEvent.setup();
     const { container, store, onRevealSelection } = renderChart(vi.fn(), denseResult());
     const objects = semanticObjects(container);
+    const transform = store.getState().transform;
     objects[0].focus();
     await user.keyboard('{ArrowRight}');
     expect(document.activeElement).toBe(objects[1]);
+    expect(store.getState().transform).toEqual(transform);
     await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(objects[2]);
     await user.keyboard('{ArrowLeft}');
@@ -89,6 +92,32 @@ describe('interactive chart', () => {
     expect(document.activeElement).toBe(objects[0]);
     await user.keyboard(' ');
     expect(store.getState().focusedIdentity).toBe(objects[0].dataset.chartIdentity);
+  });
+
+  test('keeps canvas pan and object activation as deterministic independent tab stops', async () => {
+    const user = userEvent.setup();
+    const { container, store, onRevealSelection } = renderChart(vi.fn(), denseResult());
+    const svg = container.querySelector<SVGSVGElement>('.interactive-chart__svg svg')!;
+    const activeObject = semanticObjects(container).find((node) => node.tabIndex === 0)!;
+    store.getState().setFocus('natal:sun');
+
+    svg.focus();
+    expect(svg).toHaveFocus();
+    expect(store.getState().focusedIdentity).toBe('natal:sun');
+    await user.keyboard('{ArrowRight}');
+    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 16, y: 0 }, focusedIdentity: 'natal:sun' });
+    await user.keyboard('{Shift>}{ArrowDown}{/Shift}');
+    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 16, y: 48 }, focusedIdentity: 'natal:sun' });
+    await user.keyboard('{Enter} ');
+    expect(store.getState().focusedIdentity).toBe('natal:sun');
+    expect(onRevealSelection).not.toHaveBeenCalled();
+
+    await user.tab();
+    expect(activeObject).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(svg).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(store.getState().focusedIdentity).toBeNull();
   });
 
   test('click makes an object current while keeping roving identity separate from locked selection', async () => {

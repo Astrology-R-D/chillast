@@ -118,3 +118,13 @@ test('React smoke proves pointer pan changes the transform from its immediate ba
   assert.match(source, /Math\.abs\(transform\.y - before\.y\) > 0\.1/);
   assert.doesNotMatch(source, /ready: transform\.x !== 0/);
 });
+
+test('React smoke verifies separate canvas pan and roving object keyboard paths', () => {
+  assert.match(source, /canvasTabStop/);
+  assert.match(source, /objectTabStops/);
+  assert.match(source, /chart keyboard canvas pan/);
+  assert.match(source, /keyCode: 'RIGHT'/);
+  assert.match(source, /chart keyboard object navigation/);
+  assert.match(source, /keyboardObjectBefore/);
+  assert.match(source, /document\.activeElement\?\.getAttribute\('data-chart-identity'\)/);
+});
