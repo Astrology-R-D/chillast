@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
+import { ClipboardCopy, FileDown } from 'lucide-react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n/I18nProvider';
 import { useChartWorkspace } from '../../../stores/chartWorkspace';
 import type { ComparisonMode, ExplorerTab, TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
@@ -15,6 +16,7 @@ import {
   strategyMetadataRows,
   type ExplorerRow,
 } from './explorerRows';
+import { copyExplorerData, downloadCsv, selectExportRows, type ExportColumn } from './tabularExport';
 
 const TABS: ExplorerTab[] = ['planets', 'houses', 'aspects', 'distributions', 'comparison'];
 const MODES: ComparisonMode[] = ['merged', 'sideBySide', 'difference'];
@@ -37,6 +39,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
 }>(function ChartDataExplorer({ result, chartType }, forwardedRef) {
   const { t } = useI18n();
   const gridRef = useRef<ChartDataGridHandle>(null);
+  const [exportStatus, setExportStatus] = useState('');
   const pendingReveal = useRef<ChartSelectionTarget | null>(null);
   const tableLayout = useChartWorkspace((state) => state.workspace.tableLayouts[chartType]);
   const selected = useChartWorkspace((state) => state.bulkSelection);
@@ -68,6 +71,27 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
   const updateTabLayout = (layout: TabLayoutV1) => {
     setTableLayout(chartType, { ...tableLayout, tabs: { ...tableLayout.tabs, [activeTab]: layout } });
   };
+  const exportData = () => {
+    const exportColumns: ExportColumn[] = (gridRef.current?.getVisibleColumnIds() ?? [])
+      .filter((id) => id !== 'selected')
+      .map((id) => ({ id, visible: true }));
+    const filteredRows = gridRef.current?.getFilteredRows() ?? [];
+    return { exportColumns, exportRows: selectExportRows(filteredRows, new Set(selected)) };
+  };
+  const copy = async () => {
+    const { exportColumns, exportRows } = exportData();
+    try {
+      await copyExplorerData(exportColumns, exportRows);
+      setExportStatus('Copied');
+    } catch {
+      setExportStatus('Copy failed');
+    }
+  };
+  const csv = () => {
+    const { exportColumns, exportRows } = exportData();
+    downloadCsv(exportColumns, exportRows, `${chartType}-${activeTab}.csv`);
+    setExportStatus('CSV downloaded');
+  };
 
   useImperativeHandle(forwardedRef, () => ({
     revealSelection(target) {
@@ -96,10 +120,12 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
         aria-controls={`chart-explorer-panel-${tab}`} onClick={() => chooseTab(tab)}>{tab}</button>)}
     </div>
     <div className="chart-data-explorer__toolbar">
+      <button type="button" onClick={() => void copy()} aria-label="Copy explorer data"><ClipboardCopy size={15} />Copy</button>
+      <button type="button" onClick={csv} aria-label="Download CSV"><FileDown size={15} />CSV</button>
       {activeTab === 'comparison' && result.rings.length >= 2 && <div className="chart-data-explorer__modes" aria-label="Comparison mode">
         {MODES.map((item) => <button key={item} type="button" aria-pressed={mode === item} onClick={() => chooseMode(item)}>{item}</button>)}
       </div>}
-      <output aria-live="polite">{selected.length ? `${selected.length} selected` : ''}</output>
+      <output aria-live="polite">{exportStatus || (selected.length ? `${selected.length} selected` : '')}</output>
     </div>
     <div id={`chart-explorer-panel-${activeTab}`} role="tabpanel" className="chart-data-explorer__panel">
       {activeTab === 'comparison' && result.rings.length < 2

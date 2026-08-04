@@ -1,7 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import dictionary from '../../../../../locale/zh.json';
 import { I18nProvider } from '../../../i18n/I18nProvider';
 import { ChartWorkspaceProvider, createChartWorkspaceStore } from '../../../stores/chartWorkspace';
@@ -76,5 +76,22 @@ describe('chart data explorer', () => {
     expect(container.querySelector('[data-row-id="firdaria:major"]')).toBeInTheDocument();
     expect(container.querySelector('[data-row-id="profection:age"]')).toBeInTheDocument();
     expect(container.querySelector('[data-row-id="metadata:strategyFacts"]')).toBeInTheDocument();
+  });
+
+  it('copies and downloads the current filtered visible machine columns', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async (_text: string) => undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:explorer');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderExplorer();
+    await user.click(screen.getByRole('button', { name: /copy/i }));
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0][0]).toMatch(/^ring\tpoint\tlongitude\tsign\tdegreeInSign\thouse\tretrograde\r\n/);
+    await user.click(screen.getByRole('button', { name: /csv/i }));
+    expect((createObjectURL.mock.calls[0][0] as Blob).type).toBe('text/csv;charset=utf-8');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:explorer');
   });
 });
