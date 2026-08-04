@@ -60,7 +60,11 @@ export function useChartTransform({ svg, transform, onChange }: Options): void {
         pinch = { distance, midpoint };
       }
     };
-    const pointerUp = (event: PointerEvent) => { pointers.delete(event.pointerId); pinch = null; };
+    const pointerUp = (event: PointerEvent) => {
+      pointers.delete(event.pointerId);
+      pinch = null;
+      if (svg.hasPointerCapture?.(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+    };
     const keyDown = (event: KeyboardEvent) => {
       const step = event.shiftKey ? 48 : 16;
       const delta = event.key === 'ArrowLeft' ? [-step, 0] : event.key === 'ArrowRight' ? [step, 0]

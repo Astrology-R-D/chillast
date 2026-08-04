@@ -92,6 +92,24 @@ describe('interactive chart', () => {
     expect(store.getState()).toMatchObject({ focusedIdentity: 'transit:saturn', transform: { scale: 2, x: 3, y: 4 } });
   });
 
+  test('clears locked selection from toolbar and layer descendants while Escape closes the layer menu', async () => {
+    const user = userEvent.setup();
+    const { container, store } = renderChart();
+    await user.click(container.querySelector('[data-chart-identity="transit:saturn"]')!);
+    const zoom = screen.getByRole('button', { name: /放大|zoom in/i });
+    zoom.focus();
+    await user.keyboard('{Escape}');
+    expect(store.getState().focusedIdentity).toBeNull();
+
+    await user.click(container.querySelector('[data-chart-identity="transit:saturn"]')!);
+    await user.click(screen.getByRole('button', { name: /图层|layers/i }));
+    const ringToggle = screen.getByRole('checkbox', { name: /行运/ });
+    ringToggle.focus();
+    await user.keyboard('{Escape}');
+    expect(store.getState().focusedIdentity).toBeNull();
+    expect(screen.queryByRole('menu', { name: /图层|layers/i })).not.toBeInTheDocument();
+  });
+
   test('applies toolbar, wheel, and keyboard transforms without changing layers or focus', async () => {
     const user = userEvent.setup();
     const { container, store } = renderChart();
@@ -112,6 +130,10 @@ describe('interactive chart', () => {
   test('supports one-pointer pan and bounded two-pointer pinch', () => {
     const { container, store } = renderChart();
     const svg = container.querySelector<SVGSVGElement>('.interactive-chart__svg svg')!;
+    const releasePointerCapture = vi.fn();
+    svg.setPointerCapture = vi.fn();
+    svg.hasPointerCapture = vi.fn(() => true);
+    svg.releasePointerCapture = releasePointerCapture;
     const pointer = (type: string, pointerId: number, clientX: number, clientY: number) => {
       const event = new Event(type, { bubbles: true, cancelable: true });
       Object.defineProperties(event, { pointerId: { value: pointerId }, clientX: { value: clientX }, clientY: { value: clientY } });
@@ -121,6 +143,7 @@ describe('interactive chart', () => {
     pointer('pointermove', 1, 120, 130);
     expect(store.getState().transform).toMatchObject({ x: 20, y: 30 });
     pointer('pointerup', 1, 120, 130);
+    expect(releasePointerCapture).toHaveBeenCalledWith(1);
     store.getState().setTransform({ scale: 1, x: 0, y: 0 });
     pointer('pointerdown', 1, 100, 100);
     pointer('pointerdown', 2, 200, 100);

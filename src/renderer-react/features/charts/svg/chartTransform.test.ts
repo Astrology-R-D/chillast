@@ -20,27 +20,41 @@ describe('chart transform math', () => {
     expect(RESET_TRANSFORM).toEqual({ scale: 1, x: 0, y: 0 });
   });
 
-  test('unions only visible nonzero geometry and fits it with 24 units padding', () => {
+  test('uses actual geometry-root bboxes, excluding hidden, zero, export, and control geometry', () => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const boxes = [
-      { x: 10, y: 20, width: 100, height: 80 },
-      { x: 200, y: 100, width: 50, height: 50 },
+      { x: 10, y: 8, width: 720, height: 724 },
+      { x: -1000, y: -1000, width: 3000, height: 3000 },
       { x: 0, y: 0, width: 0, height: 0 },
+      { x: -500, y: -500, width: 2000, height: 2000 },
+      { x: -250, y: -250, width: 1000, height: 1000 },
     ];
-    boxes.forEach((box, index) => {
+    const getBoxes = boxes.map((box) => vi.fn(() => box));
+    boxes.forEach((_box, index) => {
       const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      group.dataset.chartIdentity = `ring:${index}`;
-      Object.defineProperty(group, 'getBBox', { value: vi.fn(() => box) });
-      if (index === 2) group.setAttribute('hidden', '');
+      group.dataset.chartGeometry = '';
+      Object.defineProperty(group, 'getBBox', { value: getBoxes[index] });
+      if (index === 1) group.setAttribute('hidden', '');
+      if (index === 3) group.dataset.exportExclude = 'true';
+      if (index === 4) group.dataset.chartControl = '';
       svg.append(group);
     });
     const bounds = visibleBounds(svg);
-    expect(bounds).toEqual({ x: 10, y: 20, width: 240, height: 130 });
+    expect(bounds).toEqual({ x: 10, y: 8, width: 720, height: 724 });
+    if (!bounds) throw new Error('expected visible chart geometry');
+    expect(getBoxes.map((getBox) => getBox.mock.calls.length)).toEqual([1, 0, 1, 0, 0]);
     const fitted = fitBounds(bounds, { width: 740, height: 740 });
-    const padded = { x: -14, y: -4, width: 288, height: 178 };
-    expect(fitted.scale).toBeCloseTo(740 / padded.width);
-    expect(fitted.x + padded.x * fitted.scale).toBeCloseTo(0);
-    expect(fitted.y + padded.y * fitted.scale).toBeCloseTo((740 - padded.height * fitted.scale) / 2);
+    const left = fitted.x + bounds.x * fitted.scale;
+    const top = fitted.y + bounds.y * fitted.scale;
+    const right = fitted.x + (bounds.x + bounds.width) * fitted.scale;
+    const bottom = fitted.y + (bounds.y + bounds.height) * fitted.scale;
+    expect(fitted.scale).toBeCloseTo(740 / (bounds.height + 48));
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(top).toBeGreaterThanOrEqual(0);
+    expect(right).toBeLessThanOrEqual(740);
+    expect(bottom).toBeLessThanOrEqual(740);
+    expect(top).toBeCloseTo(24 * fitted.scale);
+    expect(740 - bottom).toBeCloseTo(24 * fitted.scale);
     expect(fitBounds(null, { width: 740, height: 740 })).toEqual(RESET_TRANSFORM);
   });
 });

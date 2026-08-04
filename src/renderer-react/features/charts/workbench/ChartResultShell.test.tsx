@@ -118,4 +118,18 @@ describe('chart result shell', () => {
     expect(container.querySelector('.chart-result__chart-pane svg')).toBeInTheDocument();
     expect(screen.getByText('数据浏览器将在后续增量显示')).toBeInTheDocument();
   });
+
+  test('publishes an exact outer-ring selection to the pre-Plan-4 linkage state and callback', async () => {
+    const user = userEvent.setup();
+    const onRevealSelection = vi.fn();
+    const { container, store } = renderShell(
+      routeState({ accepted: submitted, lastSuccessfulResult: result, requestStatus: 'success' }),
+      { onRevealSelection },
+    );
+    store.getState().setActiveTab('houses');
+    await user.click(container.querySelector('[data-chart-identity="transit:saturn"]')!);
+    expect(store.getState()).toMatchObject({ focusedIdentity: 'transit:saturn', activeTab: 'planets' });
+    expect(onRevealSelection).toHaveBeenCalledWith({ identity: 'transit:saturn', tab: 'planets' });
+    expect(container.querySelector('.chart-result__data-pane')).toHaveAttribute('data-active-tab', 'planets');
+  });
 });

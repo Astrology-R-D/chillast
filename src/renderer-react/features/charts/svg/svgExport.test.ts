@@ -5,7 +5,7 @@ function liveSvg(): SVGSVGElement {
   const host = document.createElement('div');
   host.innerHTML = `<svg viewBox="0 0 740 740" class="external-chart" xmlns="http://www.w3.org/2000/svg">
     <g data-chart-transform transform="translate(12 24) scale(2)">
-      <g data-chart-identity="natal:sun" data-focused="true" role="button" tabindex="0" aria-label="Sun"><circle class="external-mark" cx="10" cy="20" r="2"/></g>
+      <g data-chart-identity="natal:sun" data-focused="true" role="button" tabindex="0" aria-label="Sun" cursor="pointer" style="cursor:pointer;opacity:0.8"><circle class="external-mark" style="cursor:crosshair" cx="10" cy="20" r="2"/></g>
       <g data-chart-identity="transit:saturn" hidden aria-hidden="true"><circle cx="30" cy="40" r="2"/></g>
       <g data-export-exclude="true" data-tooltip="true"><text x="1" y="2">tooltip</text></g>
     </g>
@@ -30,6 +30,8 @@ describe('standalone SVG export', () => {
     expect(output).toContain('Maple Mono NF CN');
     expect(output).toContain('[data-ring-style="1"]');
     expect(output).not.toMatch(/transit:saturn|tooltip|data-focused|data-hovered|tabindex|role="button"|aria-label="Sun"/);
+    expect(output).not.toMatch(/cursor\s*[:=]/i);
+    expect(output).toContain('opacity: 0.8');
     expect(output).not.toMatch(/NaN|Infinity|undefined/);
     expect(svg.outerHTML).toBe(before);
   });

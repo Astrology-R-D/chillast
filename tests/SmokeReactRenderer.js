@@ -507,7 +507,7 @@ app.whenReady().then(async () => {
     await poll(win, 'delete duplicate', () => ({ ready: document.querySelectorAll('.profile-row').length === 3 && !document.querySelector('.profile-dialog') }));
 
     await win.webContents.executeJavaScript(`
-      document.querySelectorAll('.shell-nav__button')[1].click();
+      document.querySelectorAll('.shell-nav__button')[2].click();
       const selects = document.querySelectorAll('.workspace__appearance select');
       selects[0].value = 'dark';
       selects[0].dispatchEvent(new Event('change', { bubbles: true }));
@@ -515,10 +515,18 @@ app.whenReady().then(async () => {
       selects[1].dispatchEvent(new Event('change', { bubbles: true }));
     `);
     await poll(win, 'route and preferences', () => ({
-      ready: document.querySelector('h1')?.textContent === '个人星盘'
+      ready: document.querySelector('h1')?.textContent === '合盘分析'
         && document.documentElement.dataset.theme === 'dark'
         && document.documentElement.dataset.density === 'comfortable',
     }));
+    await win.webContents.executeJavaScript(`(() => {
+      const primary = document.querySelector('[data-control="primaryProfile"] select');
+      const secondary = document.querySelector('[data-control="secondaryProfile"] select');
+      primary.value = 'smoke-profile';
+      primary.dispatchEvent(new Event('change', { bubbles: true }));
+      secondary.value = 'anchor-profile';
+      secondary.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
     await poll(win, 'chart calculate command', () => {
       const command = Array.from(document.querySelectorAll('.chart-filter-band button'))
         .find((button) => button.textContent === '计算');
@@ -531,14 +539,160 @@ app.whenReady().then(async () => {
       const markup = svg.outerHTML;
       const bounds = svg.getBoundingClientRect();
       const viewBox = svg.getAttribute('viewBox');
-      const semanticGroups = svg.querySelectorAll('[data-chart-identity]').length;
+       const semanticGroups = svg.querySelectorAll('[data-chart-identity]').length;
+       const rings = svg.querySelectorAll('[data-ring-id]').length;
       const transformGroup = svg.querySelector('[data-chart-transform]')?.getAttribute('transform');
       const squareError = Math.abs(bounds.width - bounds.height);
-      return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && bounds.width > 0 && bounds.height > 0
-        && squareError <= 1 && Boolean(transformGroup) && !/NaN|Infinity|undefined/.test(markup), value: {
-        viewBox, semanticGroups, width: bounds.width, height: bounds.height, squareError, transformGroup,
-      } };
+       return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && rings === 2 && bounds.width > 0 && bounds.height > 0
+         && squareError <= 1 && Boolean(transformGroup) && !/NaN|Infinity|undefined/.test(markup), value: {
+         viewBox, semanticGroups, rings, width: bounds.width, height: bounds.height, squareError, transformGroup,
+       } };
+     });
+
+    win.show();
+    win.focus();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const selectionStarted = await win.webContents.executeJavaScript(`(() => {
+      const svg = document.querySelector('.interactive-chart__svg > svg');
+      const outerRing = svg.querySelector('[data-ring-id="secondary"]');
+      const outerPoint = outerRing.querySelector('[data-chart-kind="point"]');
+      const outerIdentity = outerPoint.getAttribute('data-chart-identity');
+      const accessible = outerPoint.getAttribute('role') === 'button'
+        && outerPoint.getAttribute('tabindex') === '0' && Boolean(outerPoint.getAttribute('aria-label'));
+      window.__readChartTransform = () => {
+        const value = svg.querySelector('[data-chart-transform]').getAttribute('transform');
+        const numbers = value.match(/-?(?:\\d+\\.?\\d*|\\.\\d+)/g).map(Number);
+        return { value, x: numbers[0], y: numbers[1], scale: numbers[2] };
+      };
+      window.__plan3OuterIdentity = outerIdentity;
+      outerPoint.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      return { outerIdentity, accessible };
+    })()`);
+    const selected = await poll(win, 'outer-ring point selection', () => {
+      const outerPoint = document.querySelector('[data-chart-identity="' + CSS.escape(window.__plan3OuterIdentity) + '"]');
+      const locked = outerPoint.getAttribute('data-focused') === 'true'
+        && document.querySelector('.interactive-chart__status')?.textContent.includes(outerPoint.getAttribute('aria-label'));
+      const linkedTab = document.querySelector('.chart-result__data-pane')?.getAttribute('data-active-tab');
+      return { ready: locked && linkedTab === 'planets', value: { locked, linkedTab } };
     });
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '图层').click()`);
+    await poll(win, 'chart layer menu open', () => ({ ready: Boolean(document.querySelector('.chart-layer-menu__popover')) }));
+    await win.webContents.executeJavaScript(`(() => {
+      const ringToggles = document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]');
+      ringToggles[ringToggles.length - 1].click();
+    })()`);
+    const hidden = await poll(win, 'outer ring and cross-aspects hidden', () => {
+      const svg = document.querySelector('.interactive-chart__svg > svg');
+      const outerRing = svg.querySelector('[data-ring-id="secondary"]');
+      const crossAspects = Array.from(svg.querySelectorAll('[data-chart-kind="aspect"]'))
+        .filter((node) => node.getAttribute('data-chart-identity').includes(':secondary:'));
+      const hiddenState = outerRing.hasAttribute('hidden') && outerRing.querySelectorAll('[data-chart-kind="point"]').length > 0
+        && crossAspects.length > 0 && crossAspects.every((node) => node.hasAttribute('hidden'));
+      return { ready: hiddenState, value: { hiddenState, crossAspectCount: crossAspects.length } };
+    });
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '图层').click()`);
+    await poll(win, 'chart layer menu close', () => ({ ready: !document.querySelector('.chart-layer-menu__popover') }));
+    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '放大').click()`);
+    const zoomed = await poll(win, 'chart zoom', () => {
+      const transform = window.__readChartTransform();
+      return { ready: transform.scale > 1, value: transform };
+    });
+    const panPoints = await win.webContents.executeJavaScript(`(() => { const rect = document.querySelector('.interactive-chart__svg > svg').getBoundingClientRect(); return { start: { x: Math.round(rect.left + 100), y: Math.round(rect.top + 100) }, end: { x: Math.round(rect.left + 130), y: Math.round(rect.top + 120) } }; })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', ...panPoints.start });
+    win.webContents.sendInputEvent({ type: 'mouseDown', ...panPoints.start, button: 'left', clickCount: 1 });
+    win.webContents.sendInputEvent({ type: 'mouseMove', ...panPoints.end, movementX: 30, movementY: 20 });
+    win.webContents.sendInputEvent({ type: 'mouseUp', ...panPoints.end, button: 'left', clickCount: 1 });
+    const panned = await poll(win, 'chart pointer pan', () => {
+      const transform = window.__readChartTransform();
+      return { ready: transform.x !== 0, value: transform };
+    });
+    const resetPoint = await win.webContents.executeJavaScript(`(() => { const rect = Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '重置视图').getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }; })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: resetPoint.x, y: resetPoint.y });
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: resetPoint.x, y: resetPoint.y, button: 'left', clickCount: 1 });
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: resetPoint.x, y: resetPoint.y, button: 'left', clickCount: 1 });
+    const reset = await poll(win, 'chart transform reset', () => {
+      const transform = window.__readChartTransform();
+      if (transform.scale !== 1 || transform.x !== 0 || transform.y !== 0) {
+        Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '重置视图').click();
+      }
+      return { ready: transform.scale === 1 && transform.x === 0 && transform.y === 0, value: transform };
+    });
+    const fitPoint = await win.webContents.executeJavaScript(`(() => { const rect = Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '适合可见内容').getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }; })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: fitPoint.x, y: fitPoint.y });
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: fitPoint.x, y: fitPoint.y, button: 'left', clickCount: 1 });
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: fitPoint.x, y: fitPoint.y, button: 'left', clickCount: 1 });
+    const fittedResult = await poll(win, 'chart fit visible geometry', () => {
+      const fitted = window.__readChartTransform();
+      if (fitted.value === 'translate(0 0) scale(1)') {
+        const geometry = document.querySelector('.interactive-chart__svg [data-chart-geometry]');
+        const bbox = geometry.getBBox();
+        Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '适合可见内容').click();
+        return { ready: false, value: { bbox: { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height } } };
+      }
+      const svg = document.querySelector('.interactive-chart__svg > svg');
+      const geometry = svg.querySelector('[data-chart-geometry]');
+      const bbox = geometry.getBBox();
+      const outerWheel = geometry.querySelector('circle').getBBox();
+      const fittedEdges = {
+        left: fitted.x + bbox.x * fitted.scale, top: fitted.y + bbox.y * fitted.scale,
+        right: fitted.x + (bbox.x + bbox.width) * fitted.scale,
+        bottom: fitted.y + (bbox.y + bbox.height) * fitted.scale,
+      };
+      const outerWheelEdges = {
+        left: fitted.x + outerWheel.x * fitted.scale, top: fitted.y + outerWheel.y * fitted.scale,
+        right: fitted.x + (outerWheel.x + outerWheel.width) * fitted.scale,
+        bottom: fitted.y + (outerWheel.y + outerWheel.height) * fitted.scale,
+      };
+      const valid = [fitted.x, fitted.y, fitted.scale, ...Object.values(fittedEdges), ...Object.values(outerWheelEdges)].every(Number.isFinite)
+        && fitted.scale >= 0.5 && fitted.scale <= 8 && fittedEdges.left >= -0.01 && fittedEdges.top >= -0.01
+        && fittedEdges.right <= 740.01 && fittedEdges.bottom <= 740.01
+        && outerWheelEdges.left >= -0.01 && outerWheelEdges.top >= -0.01
+        && outerWheelEdges.right <= 740.01 && outerWheelEdges.bottom <= 740.01;
+      return { ready: valid, value: { fitted, fittedEdges, outerWheelEdges } };
+    });
+    await win.webContents.executeJavaScript(`(() => {
+      const button = Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '导出 SVG');
+      window.__smokeSvgDownload = null;
+      window.__smokeOriginalCreate = URL.createObjectURL;
+      window.__smokeOriginalRevoke = URL.revokeObjectURL;
+      window.__smokeOriginalAnchorClick = HTMLAnchorElement.prototype.click;
+      URL.createObjectURL = (blob) => {
+        blob.text().then((content) => { window.__smokeSvgDownload = { content, type: blob.type }; });
+        return 'blob:smoke-chart';
+      };
+      URL.revokeObjectURL = () => {};
+      HTMLAnchorElement.prototype.click = function click() { window.__smokeDownloadName = this.download; };
+      button.click();
+    })()`);
+    const exported = await poll(win, 'standalone chart SVG export', () => {
+      const download = window.__smokeSvgDownload;
+      if (!download) return { ready: false };
+      const fitted = window.__readChartTransform();
+      const checks = {
+        type: download.type === 'image/svg+xml;charset=utf-8',
+        standalone: download.content.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'),
+        transform: download.content.includes(fitted.value),
+        hiddenRingRemoved: !download.content.includes('secondary:'),
+        clean: !/hidden|cursor\s*[:=]/i.test(download.content) && !/NaN|Infinity|undefined/.test(download.content),
+      };
+      const exportValid = Object.values(checks).every(Boolean);
+      return { ready: exportValid, value: { exportValid, checks,
+        invalidToken: download.content.match(/hidden|cursor\s*[:=]/i)?.[0]
+          ?? download.content.match(/NaN|Infinity|undefined/)?.[0] ?? null,
+        downloadName: window.__smokeDownloadName } };
+    });
+    await win.webContents.executeJavaScript(`(() => {
+      URL.createObjectURL = window.__smokeOriginalCreate;
+      URL.revokeObjectURL = window.__smokeOriginalRevoke;
+      HTMLAnchorElement.prototype.click = window.__smokeOriginalAnchorClick;
+    })()`);
+    const plan3Interactions = { ...selectionStarted, ...selected, ...hidden, zoomed, panned, reset,
+      ...fittedResult, transformsValid: true, ...exported };
+    if (!plan3Interactions.outerIdentity.startsWith('secondary:') || !plan3Interactions.accessible || !plan3Interactions.locked
+      || plan3Interactions.linkedTab !== 'planets' || !plan3Interactions.hiddenState
+      || !plan3Interactions.transformsValid || !plan3Interactions.exportValid || !plan3Interactions.downloadName.endsWith('.svg')) {
+      throw new Error(`invalid Plan 3 interactions: ${JSON.stringify(plan3Interactions)}`);
+    }
 
     const beforeResize = await win.webContents.executeJavaScript(`(() => {
       const handle = document.querySelectorAll('[role="separator"]')[0];
@@ -615,7 +769,7 @@ app.whenReady().then(async () => {
         noOverlap: nr.right <= mr.left + 10 && mr.right <= ar.left + 10,
       } };
     });
-    if (restored.heading !== '个人星盘' || restored.theme !== 'dark' || restored.density !== 'comfortable' || !restored.noOverlap) {
+    if (restored.heading !== '合盘分析' || restored.theme !== 'dark' || restored.density !== 'comfortable' || !restored.noOverlap) {
       throw new Error(`desktop state was not retained: ${JSON.stringify(restored)}`);
     }
     chartGeometry.push(await measureChartGeometry(win, 'chart-1440x920'));
@@ -729,7 +883,7 @@ app.whenReady().then(async () => {
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, generatedChart, chartGeometry, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, generatedChart, plan3Interactions, chartGeometry, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {

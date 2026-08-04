@@ -31,8 +31,8 @@ export function panBy(transform: ChartTransform, dx: number, dy: number): ChartT
 
 export function visibleBounds(svg: SVGSVGElement): SvgBounds | null {
   let left = Infinity; let top = Infinity; let right = -Infinity; let bottom = -Infinity;
-  for (const node of svg.querySelectorAll<SVGGraphicsElement>('[data-chart-identity]')) {
-    if (node.hasAttribute('hidden') || node.closest('[hidden]') || typeof node.getBBox !== 'function') continue;
+  for (const node of svg.querySelectorAll<SVGGraphicsElement>('[data-chart-geometry]')) {
+    if (node.closest('[hidden], [data-export-exclude], [data-chart-control]') || typeof node.getBBox !== 'function') continue;
     try {
       const box = node.getBBox();
       if (![box.x, box.y, box.width, box.height].every(Number.isFinite) || box.width <= 0 || box.height <= 0) continue;

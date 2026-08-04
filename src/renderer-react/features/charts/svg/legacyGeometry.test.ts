@@ -22,7 +22,27 @@ describe('legacy chart geometry adapter', () => {
       'ring:natal', 'natal:sun', 'house:1', 'aspect:natal:moon:trine:natal:sun',
       'ring:transit', 'transit:saturn',
     ]));
+    expect(adapted.document.querySelectorAll('[data-chart-geometry]')).toHaveLength(1);
     expect(geometry(adapted.document)).toMatchSnapshot();
+  });
+
+  test('uses reference aspect levels for visual line encoding even when names are reclassified', () => {
+    const reference = structuredClone(chartReference);
+    reference.aspects.trine.level = 'minor';
+    reference.aspects.semisquare.level = 'major';
+    const result = structuredClone(twoRingResult);
+    result.aspects = [
+      { ...result.aspects[0], level: 'major' },
+      { ...result.aspects[0], id: 'aspect:natal:sun:semisquare:transit:saturn', aspectKey: 'semisquare',
+        ringA: 'natal', point1: 'sun', ringB: 'transit', point2: 'saturn', level: 'minor' },
+    ];
+    const { document } = createLegacySvg(result, reference);
+    const trine = document.querySelector('[data-chart-identity="aspect:natal:moon:trine:natal:sun"] line');
+    const semisquare = document.querySelector('[data-chart-identity="aspect:natal:sun:semisquare:transit:saturn"] line');
+    expect(trine?.getAttribute('style')).toContain('stroke-width:0.6');
+    expect(trine?.getAttribute('style')).toContain('stroke-dasharray:3 3');
+    expect(semisquare?.getAttribute('style')).toContain('stroke-width:1.2');
+    expect(semisquare?.getAttribute('style')).not.toContain('stroke-dasharray');
   });
 
   test('rejects non-finite output and keeps clustered points separately targetable', () => {

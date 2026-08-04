@@ -108,7 +108,6 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     };
     const click = (event: MouseEvent) => activate(identityFromEvent(event));
     const keyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { clearFocus(); return; }
       if (event.key === 'Enter' || event.key === ' ') {
         const identity = identityFromEvent(event);
         if (identity) { event.preventDefault(); activate(identity); }
@@ -137,7 +136,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     );
   }, [markup, transform]);
 
-  return <div className="interactive-chart">
+  return <div className="interactive-chart" onKeyDownCapture={(event) => { if (event.key === 'Escape') clearFocus(); }}>
     <ChartToolbar result={result} svg={svgElement} transform={transform} onChange={setTransform} />
     <div ref={hostRef} className="interactive-chart__svg" />
     {hoverIdentity && <div role="tooltip" className="interactive-chart__tooltip">{t('chart.svg.hoverFact', { fact: objectLabel(result, hoverIdentity, t) })}</div>}

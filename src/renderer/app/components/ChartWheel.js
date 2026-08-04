@@ -76,6 +76,7 @@ export { DEFAULT_PLANET_COLOR as PLANET_COLOR, DEFAULT_ASPECT_TYPE_COLOR as ASPE
 export class ChartWheel {
   constructor(reference, chartConfig) {
     this.signs = reference.signs;
+    this.aspects = reference.aspects || {};
     this.locale = reference._wheelLocale || {};
     const cc = chartConfig || {};
     this.SIZE = cc.svgSize || DEFAULT_SIZE;
@@ -109,7 +110,7 @@ export class ChartWheel {
     ];
 
     const svgFont = `<defs><style>text{font-family:'Maple Mono NF CN','Segoe UI',sans-serif}</style></defs>`;
-    return `<svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" xmlns="http://www.w3.org/2000/svg" role="img">${svgFont}${layers.join('')}</svg>`;
+    return `<svg viewBox="0 0 ${this.SIZE} ${this.SIZE}" xmlns="http://www.w3.org/2000/svg" role="img">${svgFont}<g data-chart-geometry="">${layers.join('')}</g></svg>`;
   }
 
   _polar(r, longitude, rotation) {
@@ -242,7 +243,7 @@ export class ChartWheel {
       const a = this._polar(i1.dotR, i1.lon, ctx.rotation);
       const b = this._polar(i2.dotR, i2.lon, ctx.rotation);
       const color = this.ATC[asp.aspectKey] || '#555';
-      const isMajor = ['conjunction', 'opposition', 'trine', 'square', 'sextile'].includes(asp.aspectKey);
+      const isMajor = this.aspects[asp.aspectKey]?.level !== 'minor';
       const opacity = (0.35 + 0.45 * (asp.strength || 0)).toFixed(2);
       const width = isMajor ? 1.2 : 0.6;
       const dash = isMajor ? '' : 'stroke-dasharray:3 3;';

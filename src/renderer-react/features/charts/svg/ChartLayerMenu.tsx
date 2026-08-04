@@ -12,7 +12,8 @@ export function ChartLayerMenu({ result }: { result: NormalizedChartResult }) {
   const resetLayers = useChartWorkspace((state) => state.resetLayers);
   const toggle = (key: 'majorAspects' | 'minorAspects' | 'houses' | 'labels') =>
     setLayers({ [key]: !layers[key] });
-  return <div className="chart-layer-menu" data-export-exclude="true">
+  return <div className="chart-layer-menu" data-export-exclude="true"
+    onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}>
     <button type="button" className="chart-toolbar__button" aria-label={t('chart.svg.layers')} title={t('chart.svg.layers')} aria-expanded={open}
       onClick={() => setOpen((value) => !value)}><Layers size={17} /></button>
     {open && <div className="chart-layer-menu__popover" role="menu" aria-label={t('chart.svg.layers')}>

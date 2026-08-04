@@ -30,6 +30,9 @@ export function serializeChartSvg(svg: SVGSVGElement, options: SvgExportOptions)
   for (const node of [cloneSource, ...cloneSource.querySelectorAll<SVGElement>('*')]) {
     for (const attribute of ['data-focused', 'data-hovered', 'data-tooltip', 'tabindex', 'aria-label', 'aria-pressed']) node.removeAttribute(attribute);
     if (node.getAttribute('role') === 'button') node.removeAttribute('role');
+    node.removeAttribute('cursor');
+    node.style.removeProperty('cursor');
+    if (!node.getAttribute('style')?.trim()) node.removeAttribute('style');
   }
 
   const root = document.createElementNS(SVG_NS, 'svg');
