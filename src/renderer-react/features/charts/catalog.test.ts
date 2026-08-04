@@ -1,10 +1,22 @@
 import { describe, expect, test } from 'vitest';
 import type {
+  AspectIdentity,
+  ChartAngle,
+  ChartAspect,
   ChartCatalogDefinition,
   ChartDescriptor,
+  ChartHouse,
+  ChartIdentity,
+  ChartMeta,
   ChartOptions,
+  ChartPoint,
+  ChartRing,
   ChartRoute,
   ChartType,
+  HouseIdentity,
+  NormalizedChartResult,
+  PointIdentity,
+  RingIdentity,
 } from './contracts';
 import {
   assertCatalogMatchesDescriptors,
@@ -20,6 +32,43 @@ const RELOCATION_OPTIONS = {
   locationLabel: 'Shanghai',
 } satisfies ChartOptions;
 void RELOCATION_OPTIONS;
+
+const RING_IDENTITY = 'ring:natal' satisfies ChartIdentity;
+const POINT_IDENTITY = 'natal:sun' satisfies ChartIdentity;
+const HOUSE_IDENTITY = 'house:1' satisfies ChartIdentity;
+const ASPECT_IDENTITY = 'aspect:natal:sun:conjunction:transit:moon' satisfies AspectIdentity;
+const NULL_POINT_HOUSE = null satisfies ChartPoint['house'];
+const NULL_CHART_INSTANT = null satisfies ChartMeta['instantUtc'];
+const STRUCTURED_DMS = { degrees: 12, minutes: 34, seconds: 56 } satisfies ChartPoint['dms'];
+const STRUCTURED_ANGLE_DMS = STRUCTURED_DMS satisfies ChartAngle['dms'];
+const RESULT_ID = 'result-1' satisfies NormalizedChartResult['resultId'];
+const RESULT_IDENTITIES = [
+  RING_IDENTITY,
+  POINT_IDENTITY,
+  HOUSE_IDENTITY,
+  ASPECT_IDENTITY,
+] satisfies NormalizedChartResult['identities'];
+const CHART_RING_IDENTITY = RING_IDENTITY satisfies ChartRing['identity'];
+type SameType<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends
+  (<Value>() => Value extends Right ? 1 : 2) ? true : false;
+const RING_IDENTITY_IS_EXACT = true satisfies SameType<ChartRing['identity'], RingIdentity>;
+const POINT_IDENTITY_IS_EXACT = true satisfies SameType<ChartPoint['id'], PointIdentity>;
+const HOUSE_IDENTITY_IS_EXACT = true satisfies SameType<ChartHouse['id'], HouseIdentity>;
+const ASPECT_IDENTITY_IS_EXACT = true satisfies SameType<ChartAspect['id'], AspectIdentity>;
+void [
+  NULL_POINT_HOUSE,
+  NULL_CHART_INSTANT,
+  STRUCTURED_DMS,
+  STRUCTURED_ANGLE_DMS,
+  RESULT_ID,
+  RESULT_IDENTITIES,
+  CHART_RING_IDENTITY,
+  RING_IDENTITY_IS_EXACT,
+  POINT_IDENTITY_IS_EXACT,
+  HOUSE_IDENTITY_IS_EXACT,
+  ASPECT_IDENTITY_IS_EXACT,
+];
 
 const EXPECTED_DESCRIPTORS = [
   { type: 'natal', route: 'personal', requiresSecondary: false, serviceOptions: [], controls: [] },
@@ -88,6 +137,23 @@ describe('assertCatalogMatchesDescriptors', () => {
     );
     expect(() => assertCatalogMatchesDescriptors(SERVICE_CATALOG.slice(0, -1))).toThrow(
       'Chart catalog count mismatch: expected 20, received 19',
+    );
+  });
+
+  test('rejects an extra known chart through the count branch', () => {
+    const extra = [...SERVICE_CATALOG, { ...SERVICE_CATALOG[0] }];
+
+    expect(() => assertCatalogMatchesDescriptors(extra)).toThrow(
+      'Chart catalog count mismatch: expected 20, received 21',
+    );
+  });
+
+  test('rejects service catalog order mismatches with the failing index', () => {
+    const reordered = SERVICE_CATALOG.map((entry) => ({ ...entry }));
+    [reordered[0], reordered[1]] = [reordered[1], reordered[0]];
+
+    expect(() => assertCatalogMatchesDescriptors(reordered)).toThrow(
+      'Chart catalog order mismatch at index 0: expected natal, received transit',
     );
   });
 

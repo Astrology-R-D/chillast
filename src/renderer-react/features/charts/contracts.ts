@@ -30,9 +30,11 @@ export type AspectLevel = 'major' | 'minor';
 export type ChartOptionName = 'targetDate' | 'year' | 'location';
 export type DynamicControl = 'secondaryProfile' | 'targetDate' | 'returnYear' | 'relocationPlace';
 
-export type ChartPointId = `${string}:${string}`;
-export type ChartHouseId = `house:${number}`;
-export type ChartAspectId = `aspect:${string}:${string}:${string}:${string}:${string}`;
+export type RingIdentity = `ring:${string}`;
+export type PointIdentity = `${string}:${string}`;
+export type HouseIdentity = `house:${number}`;
+export type AspectIdentity = `aspect:${string}:${string}:${string}:${string}:${string}`;
+export type ChartIdentity = RingIdentity | PointIdentity | HouseIdentity | AspectIdentity;
 
 export interface ChartCatalogDefinition {
   type: string;
@@ -78,10 +80,10 @@ export interface ChartRequest {
 }
 
 export interface ChartPoint {
-  id: ChartPointId;
+  id: PointIdentity;
   ringId: string;
   key: string;
-  kind: 'body' | 'point' | 'angle';
+  kind: 'body' | 'point';
   glyph: string;
   nameEn: string;
   nameZh: string;
@@ -91,20 +93,21 @@ export interface ChartPoint {
   signNameZh: string;
   signIndex: number;
   degreeInSign: number;
-  dms: string;
+  dms: { degrees: number; minutes: number; seconds: number };
   retrograde: boolean;
-  house: number;
+  house: number | null;
 }
 
 export interface ChartRing {
   id: string;
-  role: 'primary' | 'secondary' | 'transit' | 'progressed' | 'composite';
+  identity: RingIdentity;
+  role: string;
   label: string;
   points: ChartPoint[];
 }
 
 export interface ChartHouse {
-  id: ChartHouseId;
+  id: HouseIdentity;
   index: number;
   cuspLongitude: number;
   signKey: string;
@@ -122,11 +125,11 @@ export interface ChartAngle {
   signGlyph: string;
   signIndex: number;
   degreeInSign: number;
-  dms: string;
+  dms: { degrees: number; minutes: number; seconds: number };
 }
 
 export interface ChartAspect {
-  id: ChartAspectId;
+  id: AspectIdentity;
   ringA: string;
   point1: string;
   aspectKey: string;
@@ -159,7 +162,7 @@ export interface ChartMeta {
   subtitle: string;
   settings: Pick<ChartSettings, 'houseSystem' | 'zodiac'>;
   generatedAt: string;
-  instantUtc: string;
+  instantUtc: string | null;
   [key: string]: unknown;
 }
 
@@ -169,6 +172,8 @@ export interface ChartDistributions {
 }
 
 export interface NormalizedChartResult {
+  resultId: string;
+  identities: ChartIdentity[];
   meta: ChartMeta;
   subjects: ChartSubject[];
   houses: ChartHouse[];
