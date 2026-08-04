@@ -211,7 +211,7 @@ app.whenReady().then(async () => {
       preload: path.join(root, 'src', 'preload', 'Preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
     },
   });

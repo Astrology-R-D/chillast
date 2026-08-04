@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -9,6 +10,20 @@ const {
   isAllowedExternalUrl,
   resolveSmokeReportPath,
 } = require('../src/main/MainPolicy');
+
+test('all staged renderer windows enforce the sandboxed preload policy', () => {
+  for (const relativePath of [
+    '../src/main/Main.js',
+    './SmokeRenderer.js',
+    './SmokeReactRenderer.js',
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, relativePath), 'utf8');
+    assert.match(source, /contextIsolation:\s*true/, relativePath);
+    assert.match(source, /nodeIntegration:\s*false/, relativePath);
+    assert.match(source, /sandbox:\s*true/, relativePath);
+    assert.doesNotMatch(source, /sandbox:\s*false/, relativePath);
+  }
+});
 
 test('external URL policy allows only credential-free HTTPS and valid mail addresses', () => {
   for (const value of [

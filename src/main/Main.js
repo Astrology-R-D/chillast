@@ -218,7 +218,7 @@ class Main {
         preload: path.join(__dirname, '..', 'preload', 'Preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false,
+        sandbox: true,
         backgroundThrottling: false,
       },
     });
