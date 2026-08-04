@@ -221,7 +221,7 @@ export class ChartWorkbenchView {
       const chart = await ApiClient.computeChart({
         type: this.state.type,
         primary,
-        secondary,
+        ...(def.requiresSecondary ? { secondary } : {}),
         settings: { houseSystem: this.state.houseSystem, zodiac: this.state.zodiac },
         options: this._buildOptions(),
       });

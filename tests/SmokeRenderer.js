@@ -154,6 +154,34 @@ app.whenReady().then(async () => {
       out.svgLen = svg.length;
       return out;
     })()`);
+
+    // Reload so the saved profile enters the real legacy store, then calculate
+    // through the workbench controls instead of calling the bridge directly.
+    await win.webContents.reload();
+    await poll(win, 'legacy shell reload', () => ({
+      ready: Boolean(window.mystApi && document.querySelectorAll('.nav-item').length >= 3),
+    }));
+    const uiSelection = await win.webContents.executeJavaScript(`(() => {
+      const personalNav = document.querySelectorAll('.nav-item')[1];
+      personalNav.click();
+      const typeSelect = document.querySelectorAll('.workbench-bar select')[1];
+      typeSelect.value = 'natal';
+      typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      const calculate = document.querySelector('.workbench-bar .btn-primary');
+      calculate.click();
+      return { type: typeSelect.value, buttonText: calculate.textContent };
+    })()`);
+    const uiResult = await poll(win, 'legacy personal workbench calculation', () => {
+      const svg = document.querySelector('.chart-svg-host svg');
+      const error = document.querySelector('.chart-col .empty-state .big')?.textContent === '⚠'
+        ? document.querySelector('.chart-col .empty-state p')?.textContent
+        : '';
+      return { ready: Boolean(svg || error), value: svg ? {
+        title: (document.querySelector('.chart-title-row h2') || {}).textContent || '',
+        ringPoints: document.querySelectorAll('[data-planet-key]').length,
+      } : { error } };
+    });
+    report.uiPersonalNatal = { ...uiSelection, ...uiResult };
     consoleErrors.push(...await win.webContents.executeJavaScript('window.__legacySmokeErrors || []'));
 
     console.log('\nSmoke report:', JSON.stringify(report, null, 2));
@@ -167,6 +195,10 @@ app.whenReady().then(async () => {
     if (!report.saveOk) problems.push('profile save failed');
     if (!report.chartOk) problems.push('chart compute failed');
     if (report.ringPoints < 10) problems.push('chart has too few points');
+    if (report.uiPersonalNatal.type !== 'natal') problems.push('workbench did not select natal');
+    if (report.uiPersonalNatal.error) problems.push(`workbench natal error: ${report.uiPersonalNatal.error}`);
+    if (!report.uiPersonalNatal.title) problems.push('workbench natal calculation failed');
+    if (report.uiPersonalNatal.ringPoints < 10) problems.push('workbench natal chart has too few points');
     if (!report.svgValid) problems.push('SVG invalid');
     if (report.svgHasNaN) problems.push('SVG contains NaN coordinates');
     if (consoleErrors.length) problems.push(`renderer console errors: ${consoleErrors.join(' | ')}`);
