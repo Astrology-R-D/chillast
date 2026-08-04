@@ -17,6 +17,7 @@ test('React smoke registers the complete profile and location bridge before load
   for (const channel of [
     'profiles:list', 'profiles:get', 'profiles:save', 'profiles:remove',
     'cities:search', 'chinese:searchCities', 'locations:resolve',
+    'reference:get', 'chartTypes:get', 'chart:compute',
   ]) assert.match(source, new RegExp(`registerEnvelope\\('${channel.replace(':', '\\:')}'`), channel);
   assert.ok(source.indexOf("registerEnvelope('profiles:list'") < source.indexOf('win.loadFile('));
 });

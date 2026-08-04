@@ -7,6 +7,7 @@ const { runElectronSmokeController } = require('./ElectronSmokeController');
 const { imageMetrics } = require('./NativeImageMetrics');
 const CloseGuard = require('../src/main/CloseGuard');
 const IpcRouter = require('../src/main/IpcRouter');
+const AstrologyService = require('../src/core/astrology/AstrologyService');
 
 runElectronSmokeController('chillast-react-smoke-', app);
 
@@ -165,6 +166,7 @@ function registerEnvelope(channel, handler) {
 }
 
 app.whenReady().then(async () => {
+  const astrology = new AstrologyService();
   const config = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
   const locale = JSON.parse(fs.readFileSync(path.join(root, 'locale', 'zh.json'), 'utf8'));
   registerEnvelope('config:get', () => config);
@@ -202,6 +204,9 @@ app.whenReady().then(async () => {
   registerEnvelope('locations:resolve', () => ({
     timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1990-01-01T16:00:00.000Z',
   }));
+  registerEnvelope('reference:get', () => astrology.referenceData());
+  registerEnvelope('chartTypes:get', () => astrology.chartTypes());
+  registerEnvelope('chart:compute', (request) => astrology.computeChart(request));
 
   win = new BrowserWindow({
     show: false,
