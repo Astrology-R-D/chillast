@@ -147,10 +147,10 @@ export interface ChartAspect {
 }
 
 export interface ChartSubject {
-  role: 'primary' | 'secondary';
+  role: string;
   nameZh: string;
   nameEn: string;
-  gender: Profile['gender'];
+  gender: string;
   birthLabel: string;
   location: GeoLocation;
 }
