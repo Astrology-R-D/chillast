@@ -140,22 +140,25 @@ describe('chart workspace request state', () => {
         chartTypes: ['natal', 'transit'], houseSystems: ['deleted', 'placidus'],
         zodiacs: ['sidereal', 'tropical'],
         relocationPlaces: [
-          { id: 'old', label: 'Old', latitude: 1, longitude: 2 },
-          { id: 'kept', label: 'Kept', latitude: 3, longitude: 4 },
+          { id: '1.000000:2.000000', label: 'Old', latitude: 1, longitude: 2 },
+          { id: '3.000000:4.000000', label: 'Kept', latitude: 3, longitude: 4 },
         ],
       },
     } });
     store.getState().reconcileRecents({
       profileIds: ['p1', 'p2'], chartTypes: ['natal'], houseSystems: ['placidus'],
-      zodiacs: ['tropical'], relocationIds: ['kept'],
+      zodiacs: ['tropical'],
     });
     expect(store.getState().workspace.recents).toEqual({
       primaryProfileIds: ['p1'], secondaryProfileIds: ['p2'], chartTypes: ['natal'],
       houseSystems: ['placidus'], zodiacs: ['tropical'],
-      relocationPlaces: [{ id: 'kept', label: 'Kept', latitude: 3, longitude: 4 }],
+      relocationPlaces: [
+        { id: '1.000000:2.000000', label: 'Old', latitude: 1, longitude: 2 },
+        { id: '3.000000:4.000000', label: 'Kept', latitude: 3, longitude: 4 },
+      ],
     });
-    expect(memory.getItem('chillast.westernChartWorkspace')).toContain('"kept"');
-    expect(memory.getItem('chillast.westernChartWorkspace')).not.toContain('"old"');
+    expect(memory.getItem('chillast.westernChartWorkspace')).toContain('"3.000000:4.000000"');
+    expect(memory.getItem('chillast.westernChartWorkspace')).toContain('"1.000000:2.000000"');
   });
 
   test('defaults foundation minor aspects off', () => {

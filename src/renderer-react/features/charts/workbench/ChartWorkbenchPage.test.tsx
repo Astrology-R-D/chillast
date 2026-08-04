@@ -7,6 +7,7 @@ import { apiClient } from '../../../api/client';
 import type { Profile } from '../../../api/contracts';
 import { I18nProvider } from '../../../i18n/I18nProvider';
 import { ChartWorkspaceProvider, createChartWorkspaceStore } from '../../../stores/chartWorkspace';
+import { defaultWesternWorkspace, writeWesternWorkspace } from '../../../stores/chartWorkspacePersistence';
 import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { CHART_DESCRIPTORS } from '../catalog';
 import { CHART_TYPES, type ChartReferenceData, type NormalizedChartResult } from '../contracts';
@@ -43,12 +44,12 @@ function storage(): Storage {
     key: (index) => [...values.keys()][index] ?? null, removeItem: (key) => values.delete(key), setItem: (key, value) => values.set(key, value) };
 }
 
-function setup(route: 'personal' | 'relationship', availableProfiles = profiles) {
+function setup(route: 'personal' | 'relationship', availableProfiles = profiles, memory = storage()) {
   vi.spyOn(apiClient, 'listProfiles').mockResolvedValue(availableProfiles);
   vi.spyOn(apiClient, 'getChartCatalog').mockResolvedValue(catalog);
   vi.spyOn(apiClient, 'getChartReference').mockResolvedValue(reference);
   const compute = vi.spyOn(apiClient, 'computeChart').mockResolvedValue(result);
-  const store = createChartWorkspaceStore(storage());
+  const store = createChartWorkspaceStore(memory);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const view = render(<QueryClientProvider client={client}><I18nProvider dictionary={dictionary}>
     <ChartWorkspaceProvider store={store}><ChartWorkbenchPage route={route} /></ChartWorkspaceProvider>
@@ -126,16 +127,21 @@ test('keeps catalog failure result-local with stable controls and retries all st
   expect(getReference).toHaveBeenCalledTimes(2);
 });
 
-test('reconciles persisted recents in the production load path', async () => {
-  const { store } = setup('personal');
-  store.setState({ workspace: { ...store.getState().workspace, recents: {
-    primaryProfileIds: ['deleted', 'p1'], secondaryProfileIds: ['p2', 'deleted'],
-    chartTypes: ['natal'], houseSystems: ['deleted', 'placidus'], zodiacs: ['tropical'],
-    relocationPlaces: [{ id: 'old', label: 'Old', latitude: 1, longitude: 2 }],
-  } } });
-  await waitFor(() => expect(store.getState().workspace.recents).toMatchObject({
-    primaryProfileIds: ['p1'], secondaryProfileIds: ['p2'], houseSystems: ['placidus'], relocationPlaces: [],
+test('production reload prunes deleted profiles but retains trusted search-city recents', async () => {
+  const memory = storage();
+  const workspace = defaultWesternWorkspace();
+  workspace.recents.primaryProfileIds = ['deleted', 'p1'];
+  workspace.recents.secondaryProfileIds = ['p2', 'deleted'];
+  workspace.recents.relocationPlaces = [{ id: '31.230400:121.473700', label: '上海 / Shanghai', latitude: 31.2304, longitude: 121.4737 }];
+  writeWesternWorkspace(memory, workspace);
+
+  const first = setup('personal', profiles, memory);
+  await waitFor(() => expect(first.store.getState().workspace.recents).toMatchObject({
+    primaryProfileIds: ['p1'], secondaryProfileIds: ['p2'], relocationPlaces: workspace.recents.relocationPlaces,
   }));
+  first.unmount();
+  const second = setup('personal', profiles, memory);
+  await waitFor(() => expect(second.store.getState().workspace.recents.relocationPlaces).toEqual(workspace.recents.relocationPlaces));
 });
 
 test('invalidates edited relocation text so old coordinates cannot be submitted', async () => {
@@ -146,6 +152,9 @@ test('invalidates edited relocation text so old coordinates cannot be submitted'
   await user.selectOptions(type, 'relocation');
   const relocation = await screen.findByRole('combobox', { name: '迁移地点' });
   expect(relocation).toHaveValue('北京');
+  await user.click(screen.getByRole('button', { name: '清除搜索' }));
+  expect(relocation).toHaveValue('北京');
+  expect(screen.getByRole('button', { name: '计算' })).toBeEnabled();
   await user.type(relocation, 'x');
   expect(screen.getByRole('button', { name: '计算' })).toBeDisabled();
   expect(compute).not.toHaveBeenCalled();

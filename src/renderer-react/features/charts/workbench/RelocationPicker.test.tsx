@@ -36,13 +36,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test('invalidates selected coordinates on any visible text edit and query clear', async () => {
+test('clear search preserves selection text while typing and backspace invalidate it', async () => {
   const user = userEvent.setup();
   const props = renderPicker();
   const input = screen.getByRole('combobox', { name: '迁移地点' });
+  await user.click(screen.getByRole('button', { name: '清除搜索' }));
+  expect(input).toHaveValue(beijing.label);
+  expect(props.onChange).not.toHaveBeenCalled();
   await user.type(input, 'x');
   expect(props.onChange).toHaveBeenLastCalledWith(null);
-  await user.click(screen.getByRole('button', { name: '清除搜索' }));
+  vi.mocked(props.onChange).mockClear();
+  await user.keyboard('{Backspace}');
   expect(props.onChange).toHaveBeenLastCalledWith(null);
 });
 

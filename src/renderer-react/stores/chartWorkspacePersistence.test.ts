@@ -78,18 +78,36 @@ describe('western chart workspace persistence', () => {
     })).toBe(before);
   });
 
-  test('reconciles deleted profile and relocation IDs', () => {
+  test('reconciles profile IDs while retaining, sanitizing, deduplicating, and bounding places', () => {
     const workspace = defaultWesternWorkspace();
     workspace.recents.primaryProfileIds = ['deleted', 'p1'];
     workspace.recents.secondaryProfileIds = ['p2', 'deleted'];
     workspace.recents.relocationPlaces = [
-      { id: 'old', label: 'Old', latitude: 1, longitude: 2 },
-      { id: 'kept', label: 'Kept', latitude: 3, longitude: 4 },
+      ...Array.from({ length: 9 }, (_, index) => ({
+        id: `${index.toFixed(6)}:${index.toFixed(6)}`, label: `Place ${index}`, latitude: index, longitude: index,
+      })),
+      { id: '0.000000:0.000000', label: 'Duplicate', latitude: 0, longitude: 0 },
+      { id: 'malformed', label: '', latitude: Number.NaN, longitude: 2 },
     ];
-    const result = reconcileWorkspace(workspace, ['p1', 'p2'], ['kept']);
+    const result = reconcileWorkspace(workspace, ['p1', 'p2']);
     expect(result.recents.primaryProfileIds).toEqual(['p1']);
     expect(result.recents.secondaryProfileIds).toEqual(['p2']);
-    expect(result.recents.relocationPlaces.map(({ id }) => id)).toEqual(['kept']);
+    expect(result.recents.relocationPlaces).toHaveLength(8);
+    expect(result.recents.relocationPlaces[0]).toMatchObject({ id: '0.000000:0.000000', label: 'Place 0' });
+    expect(result.recents.relocationPlaces.some(({ id }) => id === 'malformed')).toBe(false);
+  });
+
+  test('parsing prunes malformed places without resetting valid sibling histories', () => {
+    const workspace = defaultWesternWorkspace();
+    workspace.recents.primaryProfileIds = ['p1'];
+    const parsed = parseWesternWorkspace({ ...workspace, recents: { ...workspace.recents, relocationPlaces: [
+      { id: '31.230400:121.473700', label: 'Shanghai', latitude: 31.2304, longitude: 121.4737 },
+      { id: 'bad', label: 'Bad', latitude: Number.POSITIVE_INFINITY, longitude: 0 },
+    ] } });
+    expect(parsed.recents.primaryProfileIds).toEqual(['p1']);
+    expect(parsed.recents.relocationPlaces).toEqual([
+      { id: '31.230400:121.473700', label: 'Shanghai', latitude: 31.2304, longitude: 121.4737 },
+    ]);
   });
 
   test('reads and writes only its key and tolerates storage failures', () => {

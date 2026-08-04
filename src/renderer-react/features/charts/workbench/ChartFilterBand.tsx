@@ -130,11 +130,11 @@ export function ChartFilterBand(props: ChartFilterBandProps) {
             disabled={disabled} {...errorAttributes('advancedAspects')}
             min={0.1} max={15} step={0.1} value={draft.orbOverrides[key] ?? reference.aspects[key]?.defaultOrb ?? 5}
             onChange={(event) => onPatch({ orbOverrides: { ...draft.orbOverrides, [key]: Number(event.target.value) } })} /></div>;
-        })}</div><ErrorText id={errorId('advancedAspects')} message={localizeError(validation.fieldErrors.advancedAspects)} />
+        })}</div><ErrorText id={`${errorId('advancedAspects')}-dialog`} message={localizeError(validation.fieldErrors.advancedAspects)} />
         <div className="chart-dialog__actions"><button type="button" onClick={() => onPatch({ enabledAspects: [...DEFAULT_ASPECTS], orbOverrides: {} })}>{t('chart.workbench.resetAspects')}</button>
           <Dialog.Close asChild><button type="button">{t('chart.workbench.close')}</button></Dialog.Close></div>
       </Dialog.Content></Dialog.Portal>
-    </Dialog.Root></div>
+    </Dialog.Root><ErrorText id={errorId('advancedAspects')} message={localizeError(validation.fieldErrors.advancedAspects)} /></div>
     <Tooltip.Root><Tooltip.Trigger asChild><button type="button" className="icon-button chart-filter-band__reset" aria-label={t('chart.workbench.reset')}
       disabled={disabled} onClick={props.onReset}><RotateCcw size={16} /></button></Tooltip.Trigger><Tooltip.Portal><Tooltip.Content>{t('chart.workbench.reset')}</Tooltip.Content></Tooltip.Portal></Tooltip.Root>
     <div className="chart-filter-band__command" data-testid="chart-filter-control" data-control="calculate"><button type="button"

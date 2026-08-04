@@ -65,18 +65,19 @@ const tableLayoutSchema = z.object({
   comparisonMode: z.enum(['merged', 'sideBySide', 'difference']),
   tabs: z.object(Object.fromEntries(EXPLORER_TABS.map((tab) => [tab, tabLayoutSchema])) as Record<ExplorerTab, typeof tabLayoutSchema>),
 });
+const relocationRecentSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  latitude: finiteNumber.min(-90).max(90),
+  longitude: finiteNumber.min(-180).max(180),
+}).strict();
 const recentsSchema = z.object({
   primaryProfileIds: z.array(z.string()).max(8),
   secondaryProfileIds: z.array(z.string()).max(8),
   chartTypes: z.array(z.enum(CHART_TYPES)).max(8),
   houseSystems: z.array(z.string()).max(8),
   zodiacs: z.array(z.enum(['tropical', 'sidereal'])).max(8),
-  relocationPlaces: z.array(z.object({
-    id: z.string(),
-    label: z.string(),
-    latitude: finiteNumber.min(-90).max(90),
-    longitude: finiteNumber.min(-180).max(180),
-  })).max(8),
+  relocationPlaces: z.array(relocationRecentSchema).max(8),
 });
 const splitSchema = z.object({
   personal: z.object({ horizontal: splitTuple, vertical: splitTuple }),
@@ -126,7 +127,13 @@ export function parseWesternWorkspace(value: unknown): WesternChartWorkspaceV1 {
   const source = value as Record<string, unknown>;
   if (source.schema !== 'western-chart-workspace' || source.version !== 1) return defaultWesternWorkspace();
   const defaults = defaultWesternWorkspace();
-  const parsedRecents = recentsSchema.safeParse(source.recents);
+  const recentsSource = source.recents && typeof source.recents === 'object' && !Array.isArray(source.recents)
+    ? source.recents as Record<string, unknown>
+    : {};
+  const parsedRecents = recentsSchema.safeParse({
+    ...recentsSource,
+    relocationPlaces: sanitizeRelocationRecents(recentsSource.relocationPlaces),
+  });
   const parsedSplit = splitSchema.safeParse(source.split);
   const layouts = source.tableLayouts && typeof source.tableLayouts === 'object' && !Array.isArray(source.tableLayouts)
     ? source.tableLayouts as Record<string, unknown>
@@ -157,20 +164,34 @@ export function relocationRecentId(place: Pick<GeoLocation, 'latitude' | 'longit
   return `${place.latitude.toFixed(6)}:${place.longitude.toFixed(6)}`;
 }
 
+function sanitizeRelocationRecents(value: unknown): RelocationRecent[] {
+  if (!Array.isArray(value)) return [];
+  const places: RelocationRecent[] = [];
+  const ids = new Set<string>();
+  for (const candidate of value) {
+    const parsed = relocationRecentSchema.safeParse(candidate);
+    if (!parsed.success || !parsed.data.label.trim()) continue;
+    const id = relocationRecentId(parsed.data);
+    if (parsed.data.id !== id || ids.has(id)) continue;
+    ids.add(id);
+    places.push(parsed.data);
+    if (places.length === 8) break;
+  }
+  return places;
+}
+
 export function reconcileWorkspace(
   workspace: WesternChartWorkspaceV1,
   profileIds: readonly string[],
-  relocationIds: readonly string[],
 ): WesternChartWorkspaceV1 {
   const profiles = new Set(profileIds);
-  const places = new Set(relocationIds);
   return {
     ...workspace,
     recents: {
       ...workspace.recents,
       primaryProfileIds: workspace.recents.primaryProfileIds.filter((id) => profiles.has(id)),
       secondaryProfileIds: workspace.recents.secondaryProfileIds.filter((id) => profiles.has(id)),
-      relocationPlaces: workspace.recents.relocationPlaces.filter(({ id }) => places.has(id)),
+      relocationPlaces: sanitizeRelocationRecents(workspace.recents.relocationPlaces),
     },
   };
 }

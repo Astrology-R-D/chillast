@@ -77,7 +77,6 @@ export interface ChartWorkspaceState {
     chartTypes: readonly ChartType[];
     houseSystems: readonly string[];
     zodiacs: readonly Zodiac[];
-    relocationIds: readonly string[];
   }): void;
 }
 
@@ -253,7 +252,6 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
         const profilesAndPlaces = reconcileWorkspace(
           get().workspace,
           authority.profileIds,
-          authority.relocationIds,
         );
         const chartTypes = new Set(authority.chartTypes);
         const houseSystems = new Set(authority.houseSystems);

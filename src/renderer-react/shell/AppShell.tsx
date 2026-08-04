@@ -12,9 +12,36 @@ import { PanelLayout } from './PanelLayout';
 import { ROUTES, type RouteKey } from './routes';
 import { DirtyNavigationProvider, useDirtyNavigation } from './DirtyNavigationProvider';
 
-const ChartWorkbenchPage = lazy(() => import('../features/charts/workbench/ChartWorkbenchPage').then(
-  (module) => ({ default: module.ChartWorkbenchPage }),
-));
+type ChartWorkbenchModule = Awaited<ReturnType<typeof importChartWorkbench>>;
+
+let chartWorkbenchPromise: ReturnType<typeof importChartWorkbench> | undefined;
+let chartWorkbenchModule: ChartWorkbenchModule | undefined;
+
+function importChartWorkbench() {
+  return import('../features/charts/workbench/ChartWorkbenchPage');
+}
+
+function loadChartWorkbench() {
+  chartWorkbenchPromise ??= importChartWorkbench().then((module) => {
+    chartWorkbenchModule = module;
+    return module;
+  });
+  return chartWorkbenchPromise;
+}
+
+export async function preloadChartWorkbench(): Promise<void> {
+  await loadChartWorkbench();
+}
+
+const ChartWorkbenchPage = lazy(() => loadChartWorkbench().then((module) => ({ default: module.ChartWorkbenchPage })));
+
+function ChartWorkbenchRoute({ route }: { route: 'personal' | 'relationship' }) {
+  if (chartWorkbenchModule) {
+    const LoadedChartWorkbenchPage = chartWorkbenchModule.ChartWorkbenchPage;
+    return <LoadedChartWorkbenchPage route={route} />;
+  }
+  return <ChartWorkbenchPage route={route} />;
+}
 
 export function AppShell() {
   return <DirtyNavigationProvider><AppShellInner /></DirtyNavigationProvider>;
@@ -79,7 +106,7 @@ function AppShellInner() {
         {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} />
           : activeRoute === 'personal' || activeRoute === 'relationship'
             ? <Suspense fallback={<section className="chart-result"><div role="status" aria-live="polite">{t('chart.workbench.startupLoading')}</div></section>}>
-                <ChartWorkbenchPage route={activeRoute} />
+                <ChartWorkbenchRoute route={activeRoute} />
               </Suspense>
             : <section className="workspace__placeholder" aria-labelledby="workspace-title">
                 <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />

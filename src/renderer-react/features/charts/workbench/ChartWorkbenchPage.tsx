@@ -7,7 +7,6 @@ import { useProfiles } from '../../profiles/profileQueries';
 import { useI18n } from '../../../i18n/I18nProvider';
 import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { useChartWorkspaceStoreApi } from '../../../stores/chartWorkspace';
-import { relocationRecentId } from '../../../stores/chartWorkspacePersistence';
 import { CHART_DESCRIPTORS } from '../catalog';
 import type { ChartReferenceData, ChartRoute } from '../contracts';
 import { ChartFilterBand } from './ChartFilterBand';
@@ -54,7 +53,6 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
       chartTypes: catalogQuery.data.map(({ type }) => type),
       houseSystems: reference.houseSystems.map(({ value }) => value),
       zodiacs: ['tropical', 'sidereal'],
-      relocationIds: profiles.map(({ birthData }) => relocationRecentId(birthData.location)),
     });
     const current = store.getState().routes[route];
     const intent = profileWorkspaceStore.getState().chartIntent;

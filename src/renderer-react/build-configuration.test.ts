@@ -22,7 +22,8 @@ test('declares the accessible primitives used by chart filters', () => {
 
 test('loads the chart workbench outside the initial renderer chunk', () => {
   const shell = readFileSync(resolve(repositoryRoot, 'src/renderer-react/shell/AppShell.tsx'), 'utf8');
-  expect(shell).toMatch(/lazy\(\(\) => import\(['"]\.\.\/features\/charts\/workbench\/ChartWorkbenchPage['"]\)/);
+  expect(shell).toMatch(/return import\(['"]\.\.\/features\/charts\/workbench\/ChartWorkbenchPage['"]\)/);
+  expect(shell).toMatch(/lazy\(\(\) => loadChartWorkbench\(\)/);
   expect(shell).not.toMatch(/^import .*ChartWorkbenchPage.*from/m);
 });
 

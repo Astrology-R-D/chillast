@@ -70,12 +70,11 @@ export function RelocationPicker({ value, error, disabled = false, recents, onCh
 
   const clearQuery = () => {
     sequence.current += 1;
-    setQuery('');
+    setQuery(value?.label ?? '');
     setResults([]);
     setStatus('idle');
-    setOpen(true);
+    setOpen(false);
     setActiveIndex(-1);
-    onChange(null);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

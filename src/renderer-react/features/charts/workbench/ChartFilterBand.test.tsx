@@ -138,6 +138,17 @@ describe('chart filter band', () => {
     expect(props.onPatch).toHaveBeenCalledWith({ enabledAspects: [...DEFAULT_ASPECTS], orbOverrides: {} });
   });
 
+  test('mounts the advanced error referenced by the closed trigger', () => {
+    renderBand(draftFor('natal'), {
+      validation: { valid: false, fieldErrors: { advancedAspects: 'errorAspects' } },
+    });
+    const trigger = screen.getByRole('button', { name: '高级相位' });
+    const describedBy = trigger.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)).toHaveTextContent('相位或容许度无效');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   test('equivalent unresolved submission disables only Calculate while controls remain usable', () => {
     renderBand(draftFor('natal'), { status: 'loading', equivalentInFlight: true });
     expect(screen.getByRole('button', { name: '计算' })).toBeDisabled();
