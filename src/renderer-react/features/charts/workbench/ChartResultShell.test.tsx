@@ -113,10 +113,10 @@ describe('chart result shell', () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  test('renders the successful wheel in the chart pane and keeps the data placeholder', () => {
+  test('renders the successful wheel and five-tab data explorer', () => {
     const { container } = renderShell(routeState({ accepted: submitted, lastSuccessfulResult: result, requestStatus: 'success' }));
     expect(container.querySelector('.chart-result__chart-pane svg')).toBeInTheDocument();
-    expect(screen.getByText('数据浏览器将在后续增量显示')).toBeInTheDocument();
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
   });
 
   test('publishes an exact outer-ring selection to the pre-Plan-4 linkage state and callback', async () => {

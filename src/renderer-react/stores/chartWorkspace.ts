@@ -14,6 +14,7 @@ import {
   relocationRecentId,
   writeWesternWorkspace,
   type ComparisonMode,
+  type ChartTableLayoutV1,
   type ExplorerTab,
   type WesternChartWorkspaceV1,
 } from './chartWorkspacePersistence';
@@ -76,6 +77,7 @@ export interface ChartWorkspaceState {
   setTransform(transform: ChartTransform): void;
   setActiveTab(tab: ExplorerTab): void;
   setComparisonMode(mode: ComparisonMode): void;
+  setTableLayout(chartType: ChartType, layout: ChartTableLayoutV1): void;
   setActiveCell(tab: ExplorerTab, cell: ActiveCellState): void;
   setBulkSelection(identities: string[]): void;
   pruneBulkSelection(visibleIds: ReadonlySet<string>): void;
@@ -264,6 +266,10 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
       setTransform: (transform) => set({ transform }),
       setActiveTab: (activeTab) => set({ activeTab }),
       setComparisonMode: (comparisonMode) => set({ comparisonMode }),
+      setTableLayout(chartType, layout) {
+        const workspace = get().workspace;
+        persist({ ...workspace, tableLayouts: { ...workspace.tableLayouts, [chartType]: layout } });
+      },
       setActiveCell: (tab, cell) => set({ activeCells: { ...get().activeCells, [tab]: cell } }),
       setBulkSelection: (bulkSelection) => set({ bulkSelection }),
       pruneBulkSelection: (visibleIds) => {

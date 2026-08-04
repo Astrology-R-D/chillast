@@ -6,6 +6,7 @@ import { useChartWorkspace, type ChartRouteState } from '../../../stores/chartWo
 import type { ChartReferenceData, ChartRoute } from '../contracts';
 import type { ChartSelectionTarget } from '../svg/chartSelection';
 import { InteractiveChart } from '../svg/InteractiveChart';
+import { ChartDataExplorer, type ChartDataExplorerHandle } from '../explorer/ChartDataExplorer';
 import { ChartResultSummary } from './ChartResultSummary';
 
 const DIVIDER_SIZE = 6;
@@ -49,12 +50,12 @@ function clampRatio(value: [number, number], minimum: number): [number, number] 
 export function ChartResultShell({ route, state, reference, profilesAvailable, validDraft, startupError, onRetry, onCancel, onRevealSelection }: ChartResultShellProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLElement>(null);
+  const explorerRef = useRef<ChartDataExplorerHandle>(null);
   const orientation = useResultOrientation(ref);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const stored = useChartWorkspace((workspace) => workspace.workspace.split[route]);
   const setSplit = useChartWorkspace((workspace) => workspace.setSplit);
   const activeTab = useChartWorkspace((workspace) => workspace.activeTab);
-  const setActiveTab = useChartWorkspace((workspace) => workspace.setActiveTab);
   useEffect(() => {
     const element = ref.current;
     if (!element) return undefined;
@@ -96,15 +97,15 @@ export function ChartResultShell({ route, state, reference, profilesAvailable, v
         className="chart-result__chart-pane" data-min-percent={minimum.toFixed(3)}>
         <div className="chart-result__pane-heading"><span>{result.meta.typeNameZh}</span><strong>{result.rings.length} {t('chart.workbench.rings')} · {result.aspects.length} {t('chart.workbench.aspects')}</strong></div>
         <InteractiveChart result={result} reference={reference} onRevealSelection={(target) => {
-          setActiveTab(target.tab);
+          explorerRef.current?.revealSelection(target);
           onRevealSelection?.(target);
         }} />
       </Panel>
       <PanelResizeHandle className="chart-result__resize" aria-label={t('chart.workbench.resizeSplit')} />
       <Panel id={`${route}-${orientation}-data`} order={2} defaultSize={ratio[1]} minSize={minimum} className="chart-result__data-pane"
         data-active-tab={activeTab}>
-        <p className="chart-result__pending">{t('chart.workbench.dataPending')}</p>
         <ChartResultSummary result={result} submitted={accepted} />
+        <ChartDataExplorer ref={explorerRef} result={result} chartType={accepted.type} />
       </Panel>
     </PanelGroup>}
   </section>;
