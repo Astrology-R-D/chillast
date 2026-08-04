@@ -195,3 +195,17 @@ test('resolves every translation referenced by Task 6 profile components', () =>
     }
   }
 });
+
+test('contains the complete chart workbench localization contract', () => {
+  const keys = [
+    'filters', 'primaryProfile', 'secondaryProfile', 'selectProfile', 'chartType', 'targetDate',
+    'returnYear', 'relocation', 'searchPlace', 'searchingPlace', 'placeSearchFailed', 'houseSystem',
+    'zodiac', 'tropical', 'sidereal', 'advanced', 'orb', 'resetAspects', 'reset', 'calculate',
+    'cancel', 'retry', 'clear', 'clearQuery', 'clearRecents', 'recents', 'close', 'empty',
+    'profileRequired', 'relationshipProfilesRequired', 'loading', 'stale', 'error', 'cancelled',
+    'parserError', 'ipcError', 'domainError', 'catalogError', 'resizeSplit', 'chartPane', 'dataPane',
+    'chartPending', 'dataPending', 'subjects', 'settings', 'rings', 'points', 'aspects', 'target',
+    'year', 'location', 'returnInstant', 'metadata', 'firdaria', 'profection',
+  ];
+  for (const key of keys) expect(resolveKey(`chart.workbench.${key}`), key).toEqual(expect.any(String));
+});
