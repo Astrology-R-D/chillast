@@ -36,3 +36,16 @@ test('uses distinct non-color hover, focus, and ring encodings', () => {
   expect(css).toMatch(/data-theme='light'[^}]*data-focused/s);
   expect(css).toMatch(/data-theme='dark'[^}]*data-focused/s);
 });
+
+test('defines a dense stable virtual explorer with confined overflow and non-color states', () => {
+  expect(css).toMatch(/\.chart-data-explorer\s*\{[^}]*grid-template-rows:[^}]*minmax\(0,\s*1fr\)/s);
+  expect(css).toMatch(/\.chart-data-grid\s*\{[^}]*height:\s*100%[^}]*overflow:\s*auto/s);
+  expect(css).toMatch(/\.chart-data-grid__header\s*\{[^}]*position:\s*sticky[^}]*height:\s*var\(--grid-header-height\)/s);
+  expect(css).toMatch(/\.chart-data-grid__row\s*\{[^}]*height:\s*var\(--row-height\)/s);
+  expect(css).toMatch(/data-pinned[^}]*box-shadow:/s);
+  expect(css).toMatch(/data-active[^}]*outline:/s);
+  expect(css).toMatch(/data-selected[^}]*border-inline-start:/s);
+  expect(css).toMatch(/data-focused[^}]*text-decoration:/s);
+  expect(css).toMatch(/\.chart-data-explorer__toolbar\s*\{[^}]*flex-wrap:\s*wrap/s);
+  expect(css).toMatch(/\.chart-result__data-pane\s*\{[^}]*overflow:\s*hidden/s);
+});

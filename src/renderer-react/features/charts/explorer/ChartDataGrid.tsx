@@ -13,6 +13,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import {
   forwardRef,
@@ -47,6 +48,20 @@ export interface ChartDataGridProps {
   onSelectionChange(ids: Set<string>): void;
   onFocusIdentity(identity: ChartIdentity): void;
   tab?: ExplorerTab;
+  sortLabel?: string;
+  filterLabel?: string;
+  selectLabel?: string;
+}
+
+const NUMERIC_FILTER_COLUMNS = new Set([
+  'longitude', 'degreeInSign', 'house', 'cuspLongitude', 'orb', 'strength', 'value', 'startAge', 'endAge',
+  'firstLongitude', 'firstHouse', 'secondLongitude', 'secondHouse', 'longitudeDelta', 'houseDelta',
+]);
+const BOOLEAN_FILTER_COLUMNS = new Set(['retrograde', 'firstRetrograde', 'secondRetrograde']);
+
+function readRowHeight(): number {
+  const value = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row-height'));
+  return Number.isFinite(value) && value > 0 ? value : 32;
 }
 
 function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
@@ -74,6 +89,9 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   onSelectionChange,
   onFocusIdentity,
   tab = 'planets',
+  sortLabel = 'Sort',
+  filterLabel = 'Filter',
+  selectLabel = 'Select',
 }, forwardedRef) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const restoredActive = useChartWorkspace((state) => state.activeCells[tab]);
@@ -84,6 +102,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(layout.columnPinning);
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(layout.columnOrder);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(layout.columnSizing);
+  const [rowHeight, setRowHeight] = useState(readRowHeight);
   const [active, setActive] = useState(() => restoredActive ?? {
     rowId: rows[0]?.id ?? '',
     columnId: columns[0]?.id ?? 'selected',
@@ -132,7 +151,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   const rowVirtualizer = useVirtualizer({
     count: modelRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 32,
+    estimateSize: () => rowHeight,
     overscan: 8,
     initialRect: { width: 960, height: 320 },
     observeElementRect(instance, callback) {
@@ -162,6 +181,13 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
       else element.scrollTop = offset;
     },
   });
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => setRowHeight(readRowHeight()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-density', 'style'] });
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => rowVirtualizer.measure(), [rowHeight, rowVirtualizer]);
 
   const visibleIds = useMemo(() => new Set(modelRows.map((row) => row.id)), [modelRows]);
   useLayoutEffect(() => {
@@ -255,6 +281,26 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     activate(nextRow, nextColumn, anchor);
   };
 
+  const filterValue = (id: string, value: unknown): string => {
+    if (BOOLEAN_FILTER_COLUMNS.has(id)) return typeof value === 'boolean' ? String(value) : '';
+    if (NUMERIC_FILTER_COLUMNS.has(id) && Array.isArray(value)) return `${value[0] ?? ''}..${value[1] ?? ''}`;
+    if (Array.isArray(value)) return value.join(',');
+    return value === undefined || value === null ? '' : String(value);
+  };
+  const setFilter = (id: string, raw: string, update: (value: unknown) => void) => {
+    if (!raw) { update(undefined); return; }
+    if (BOOLEAN_FILTER_COLUMNS.has(id)) { update(raw === 'true'); return; }
+    if (NUMERIC_FILTER_COLUMNS.has(id)) {
+      const [minimum, maximum] = raw.split('..');
+      update([
+        minimum === '' ? null : Number(minimum),
+        maximum === undefined || maximum === '' ? null : Number(maximum),
+      ]);
+      return;
+    }
+    update(raw.includes(',') ? raw.split(',').map((token) => token.trim()).filter(Boolean) : raw);
+  };
+
   return <div ref={scrollRef} className="chart-data-grid" role="grid" tabIndex={-1}
     aria-rowcount={modelRows.length + 1} aria-colcount={visibleColumns.length}>
     <div className="chart-data-grid__header" role="row" style={{ width: table.getTotalSize() }}>
@@ -262,7 +308,23 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
         aria-colindex={columnIndex + 1} aria-label={String(header.column.columnDef.header ?? header.column.id)}
         data-pinned={header.column.getIsPinned() || undefined}
         style={{ width: header.getSize(), ...pinnedStyle(header.column) }}>
-        {flexRender(header.column.columnDef.header, header.getContext())}
+        <div className="chart-data-grid__header-label">
+          {header.column.getCanSort() ? <button type="button" aria-label={`${sortLabel} ${String(header.column.columnDef.header ?? header.column.id)}`}
+            onClick={header.column.getToggleSortingHandler()}>
+            {flexRender(header.column.columnDef.header, header.getContext())}
+            {header.column.getIsSorted() === 'asc' ? <ArrowUp size={12} /> : header.column.getIsSorted() === 'desc' ? <ArrowDown size={12} /> : <ArrowUpDown size={12} />}
+          </button> : flexRender(header.column.columnDef.header, header.getContext())}
+        </div>
+        {header.column.getCanFilter() && (BOOLEAN_FILTER_COLUMNS.has(header.column.id)
+          ? <select className="chart-data-grid__filter" aria-label={`${filterLabel} ${String(header.column.columnDef.header ?? header.column.id)}`}
+            value={filterValue(header.column.id, header.column.getFilterValue())}
+            onChange={(event) => setFilter(header.column.id, event.target.value, header.column.setFilterValue)}>
+            <option value="">*</option><option value="true">true</option><option value="false">false</option>
+          </select>
+          : <input className="chart-data-grid__filter" aria-label={`${filterLabel} ${String(header.column.columnDef.header ?? header.column.id)}`}
+            inputMode={NUMERIC_FILTER_COLUMNS.has(header.column.id) ? 'decimal' : 'search'}
+            value={filterValue(header.column.id, header.column.getFilterValue())}
+            onChange={(event) => setFilter(header.column.id, event.target.value, header.column.setFilterValue)} />)}
       </div>)}
     </div>
     <div className="chart-data-grid__body" style={{ height: rowVirtualizer.getTotalSize(), width: table.getTotalSize(), position: 'relative' }}>
@@ -281,7 +343,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
               onFocus={() => activate(virtualRow.index, columnIndex)}
               onKeyDown={(event) => onCellKeyDown(event, virtualRow.index, columnIndex)}>
               {cell.column.id === 'selected'
-                ? <input type="checkbox" tabIndex={-1} checked={selected} aria-label={`Select ${row.id}`} onChange={() => toggleRow(row.id)} />
+                ? <input type="checkbox" tabIndex={-1} checked={selected} aria-label={`${selectLabel} ${row.id}`} onChange={() => toggleRow(row.id)} />
                 : String(cell.getValue<MachineValue>() ?? '')}
             </div>;
           })}

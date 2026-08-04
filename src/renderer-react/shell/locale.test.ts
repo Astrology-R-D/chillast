@@ -221,3 +221,22 @@ test('contains the complete interactive chart localization contract', () => {
   ];
   for (const key of keys) expect(resolveKey(`chart.svg.${key}`), key).toEqual(expect.any(String));
 });
+
+test('contains the complete chart explorer localization contract', () => {
+  const keys = [
+    'label', 'views', 'comparisonMode', 'copy', 'csv', 'copied', 'copyFailed', 'csvDownloaded',
+    'selectedCount', 'comparisonUnavailable', 'columnMenu', 'sort', 'filter', 'pinNone', 'pinLeft',
+    'pinRight', 'hide', 'show', 'moveLeft', 'moveRight', 'size', 'tabs.planets', 'tabs.houses',
+    'tabs.aspects', 'tabs.distributions', 'tabs.comparison', 'modes.merged', 'modes.sideBySide',
+    'modes.difference', 'metadata.firdaria', 'metadata.profection', 'metadata.unknown',
+  ];
+  for (const key of keys) expect(resolveKey(`chart.explorer.${key}`), key).toEqual(expect.any(String));
+  const columns = [
+    'selected', 'ring', 'point', 'longitude', 'sign', 'degreeInSign', 'house', 'retrograde',
+    'cuspLongitude', 'ringA', 'point1', 'aspect', 'ringB', 'point2', 'orb', 'strength',
+    'section', 'key', 'value', 'startAge', 'endAge', 'firstRing', 'firstLongitude', 'firstSign',
+    'firstHouse', 'firstRetrograde', 'secondRing', 'secondLongitude', 'secondSign', 'secondHouse',
+    'secondRetrograde', 'longitudeDelta', 'houseDelta',
+  ];
+  for (const key of columns) expect(resolveKey(`chart.explorer.columns.${key}`), key).toEqual(expect.any(String));
+});

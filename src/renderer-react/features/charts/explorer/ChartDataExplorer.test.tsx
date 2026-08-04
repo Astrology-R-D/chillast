@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -30,18 +30,20 @@ describe('chart data explorer', () => {
     oneRing.rings = [oneRing.rings[0]];
     const { store } = renderExplorer(oneRing);
     expect(screen.getAllByRole('tab')).toHaveLength(5);
-    await user.click(screen.getByRole('tab', { name: /comparison/i }));
-    expect(screen.getByText(/Comparison unavailable/i)).toHaveAttribute('role', 'status');
+    await user.click(screen.getByRole('tab', { name: /comparison|比较/i }));
+    expect(screen.getByText(/无法比较|Comparison unavailable/i)).toHaveAttribute('role', 'status');
     expect(store.getState().workspace.tableLayouts[oneRing.meta.type].activeTab).toBe('comparison');
   });
 
   it('switches all three two-ring comparison modes and persists exact chart layout', async () => {
     const user = userEvent.setup();
     const { store } = renderExplorer();
-    await user.click(screen.getByRole('tab', { name: /comparison/i }));
-    for (const mode of ['merged', 'sideBySide', 'difference']) {
-      await user.click(screen.getByRole('button', { name: new RegExp(mode, 'i') }));
-      expect(screen.getByRole('button', { name: new RegExp(mode, 'i') })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('tab', { name: /comparison|比较/i }));
+    const modeGroup = screen.getByLabelText('比较模式');
+    for (const mode of [['merged', '合并'], ['sideBySide', '并排'], ['difference', '差值']] as const) {
+      const name = new RegExp(`${mode[0]}|${mode[1]}`, 'i');
+      await user.click(within(modeGroup).getByRole('button', { name }));
+      expect(within(modeGroup).getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
     }
     expect(store.getState().workspace.tableLayouts.transit).toMatchObject({ activeTab: 'comparison', comparisonMode: 'difference' });
   });
@@ -51,13 +53,13 @@ describe('chart data explorer', () => {
     const ref = createRef<ChartDataExplorerHandle>();
     const { container, store } = renderExplorer(twoRingResult, ref);
     act(() => ref.current?.revealSelection({ identity: 'transit:saturn', tab: 'planets' }));
-    expect(screen.getByRole('tab', { name: /planets/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /planets|星体/i })).toHaveAttribute('aria-selected', 'true');
     expect(container.querySelector('[data-row-id="transit:saturn"] [tabindex="0"]')).toBeInTheDocument();
     const active = container.querySelector<HTMLElement>('[data-row-id="transit:saturn"] [tabindex="0"]')!;
     active.focus();
     await user.keyboard('{Enter}');
     expect(store.getState().focusedIdentity).toBe('transit:saturn');
-    await user.click(screen.getByRole('tab', { name: /houses/i }));
+    await user.click(screen.getByRole('tab', { name: /houses|宫位/i }));
     expect(store.getState().focusedIdentity).toBe('transit:saturn');
     act(() => ref.current?.revealSelection({ identity: 'house:2', tab: 'houses' }));
     expect(container.querySelector('[data-row-id="house:2"]')).toBeInTheDocument();
@@ -72,7 +74,7 @@ describe('chart data explorer', () => {
     const { container, store } = renderExplorer(result);
     store.getState().setLayers({ rings: { natal: false, transit: false } });
     expect(container.querySelectorAll('[data-row-id^="natal:"]').length).toBeGreaterThan(0);
-    await user.click(screen.getByRole('tab', { name: /distributions/i }));
+    await user.click(screen.getByRole('tab', { name: /distributions|分布/i }));
     expect(container.querySelector('[data-row-id="firdaria:major"]')).toBeInTheDocument();
     expect(container.querySelector('[data-row-id="profection:age"]')).toBeInTheDocument();
     expect(container.querySelector('[data-row-id="metadata:strategyFacts"]')).toBeInTheDocument();
@@ -87,11 +89,22 @@ describe('chart data explorer', () => {
     vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     renderExplorer();
-    await user.click(screen.getByRole('button', { name: /copy/i }));
+    await user.click(screen.getByRole('button', { name: /copy|复制/i }));
     expect(writeText).toHaveBeenCalledOnce();
     expect(writeText.mock.calls[0][0]).toMatch(/^ring\tpoint\tlongitude\tsign\tdegreeInSign\thouse\tretrograde\r\n/);
     await user.click(screen.getByRole('button', { name: /csv/i }));
     expect((createObjectURL.mock.calls[0][0] as Blob).type).toBe('text/csv;charset=utf-8');
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:explorer');
+  });
+
+  it('localizes explorer tabs, comparison controls, exports, and column tools', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    expect(screen.getByRole('tab', { name: '星体' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '复制数据' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '下载 CSV' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '列设置' }));
+    expect(screen.getByRole('group', { name: '列设置' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /隐藏.*ring/i })).toBeInTheDocument();
   });
 });
