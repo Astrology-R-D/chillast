@@ -1,0 +1,27 @@
+{
+  "source": "Direct swisseph-v2 API calls, independent of application adapters",
+  "ephemerisVersion": "2.09.03",
+  "siderealMode": "SE_SIDM_LAHIRI",
+  "instantUtc": "2000-01-01T12:00:00.000Z",
+  "coordinates": { "latitude": 51.4779, "longitude": 0 },
+  "maximumAngularError": 0.01,
+  "ayanamsha": 23.853222486029097,
+  "tropical": {
+    "sun": 280.368918669906,
+    "moon": 223.32375067918142,
+    "ascendant": 24.26618920267986,
+    "midheaven": 279.61108780028457
+  },
+  "sidereal": {
+    "sun": 256.5156961838769,
+    "moon": 199.47052819315232,
+    "ascendant": 0.41296671665079643,
+    "midheaven": 255.7578653142555
+  },
+  "boundary": {
+    "beforeUtc": "2026-04-14T00:00:00.000Z",
+    "beforeSun": 359.8348726562334,
+    "afterUtc": "2026-04-15T00:00:00.000Z",
+    "afterSun": 0.8148274171578817
+  }
+}
