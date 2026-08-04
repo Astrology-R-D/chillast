@@ -7,6 +7,7 @@ import {
 } from '../preferences/preferences';
 import { AiStatusPanel } from './AiStatusPanel';
 import { ProfilePage } from '../features/profiles/ProfilePage';
+import { ChartWorkbenchPage } from '../features/charts/workbench/ChartWorkbenchPage';
 import { Navigation } from './Navigation';
 import { PanelLayout } from './PanelLayout';
 import { ROUTES, type RouteKey } from './routes';
@@ -72,11 +73,13 @@ function AppShellInner() {
             </label>
           </div>
         </header>
-        {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} /> :
-          <section className="workspace__placeholder" aria-labelledby="workspace-title">
-            <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
-            <p>{t('shell.placeholder', { title })}</p>
-          </section>}
+        {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} />
+          : activeRoute === 'personal' || activeRoute === 'relationship'
+            ? <ChartWorkbenchPage route={activeRoute} />
+            : <section className="workspace__placeholder" aria-labelledby="workspace-title">
+                <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
+                <p>{t('shell.placeholder', { title })}</p>
+              </section>}
       </div>
     </PanelLayout>
   );

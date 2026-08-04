@@ -8,6 +8,9 @@ import { createMatchMediaController } from '../test/matchMedia';
 import { AppShell } from './AppShell';
 import locale from '../../../locale/zh.json';
 import type { Profile } from '../api/contracts';
+import { apiClient } from '../api/client';
+import type { ChartReferenceData } from '../features/charts/contracts';
+import { DEFAULT_ASPECTS } from '../features/charts/workbench/chartDraft';
 
 const dictionary = {
   ...locale,
@@ -18,7 +21,7 @@ const dictionary = {
     groupChinese: '命理', groupTools: '工具',
   },
   profiles: { ...locale.profiles, title: '档案管理', directory: '测试档案目录' },
-  chart: { personalTitle: '个人星盘', relationshipTitle: '合盘分析' },
+  chart: { ...locale.chart, personalTitle: '个人星盘', relationshipTitle: '合盘分析' },
   chinese: { title: '命理分析' }, tools: { solarTermTitle: '节气年历' },
   settings: { title: 'AI 设置', provider: '供应商', model: '模型' },
   shell: {
@@ -52,6 +55,12 @@ beforeEach(() => {
     profiles: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), save: vi.fn(), remove: vi.fn() },
     app: { onCloseRequested: vi.fn(() => () => {}), decideClose: vi.fn().mockResolvedValue({ ok: true, data: true }) },
   });
+  vi.spyOn(apiClient, 'getChartCatalog').mockResolvedValue([]);
+  vi.spyOn(apiClient, 'getChartReference').mockResolvedValue({
+    aspects: Object.fromEntries(DEFAULT_ASPECTS.map((key) => [key, { nameEn: key, nameZh: key, angle: 0, defaultOrb: 5, level: 'major', glyph: '*' }])),
+    houseSystems: [{ value: 'placidus', nameEn: 'Placidus', nameZh: '普拉西德' }],
+    chartTypes: [], signs: [], points: {}, elements: {}, modalities: {},
+  } as unknown as ChartReferenceData);
 });
 
 function renderShell() {
@@ -100,7 +109,7 @@ test('navigates localized placeholders and keeps route state across shell breakp
   expect(screen.getAllByRole('main')).toHaveLength(1);
   await user.click(screen.getByRole('button', { name: '个人星盘' }));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
-  expect(screen.getByText('个人星盘将在后续迁移阶段启用')).toBeInTheDocument();
+  expect(await screen.findByRole('group', { name: '星盘筛选' })).toBeInTheDocument();
 
   act(() => media.setMatches(true));
   act(() => media.setMatches(false));
