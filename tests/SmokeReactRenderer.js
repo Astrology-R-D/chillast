@@ -533,9 +533,10 @@ app.whenReady().then(async () => {
       const viewBox = svg.getAttribute('viewBox');
       const semanticGroups = svg.querySelectorAll('[data-chart-identity]').length;
       const transformGroup = svg.querySelector('[data-chart-transform]')?.getAttribute('transform');
+      const squareError = Math.abs(bounds.width - bounds.height);
       return { ready: viewBox === '0 0 740 740' && semanticGroups > 0 && bounds.width > 0 && bounds.height > 0
-        && Boolean(transformGroup) && !/NaN|Infinity|undefined/.test(markup), value: {
-        viewBox, semanticGroups, width: bounds.width, height: bounds.height, transformGroup,
+        && squareError <= 1 && Boolean(transformGroup) && !/NaN|Infinity|undefined/.test(markup), value: {
+        viewBox, semanticGroups, width: bounds.width, height: bounds.height, squareError, transformGroup,
       } };
     });
 

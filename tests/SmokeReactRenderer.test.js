@@ -91,6 +91,7 @@ test('React smoke verifies chart remaining-height geometry at narrow and desktop
   assert.match(source, /\.interactive-chart__svg > svg/);
   assert.match(source, /data-chart-identity/);
   assert.match(source, /viewBox === '0 0 740 740'/);
+  assert.match(source, /squareError/);
   assert.match(source, /NaN\|Infinity\|undefined/);
   assert.match(source, /chartGeometry/);
   assert.match(source, /chart-1100x720/);
