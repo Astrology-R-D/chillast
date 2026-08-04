@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const knownValues = require('./fixtures/swisseph-lahiri-known-values.json');
@@ -77,7 +78,14 @@ test('records reproducible independent Lahiri oracle provenance', () => {
   assert.equal(knownValues.source.swissEphemerisVersion, '2.10.03');
   assert.equal(knownValues.applicationSwissEphemerisVersion, '2.09.03');
   assert.match(knownValues.source.url, /^https:\/\/pypi\.org\//);
-  assert.match(knownValues.source.commands.install, /pyswisseph==2\.10\.3\.2/);
+  assert.match(knownValues.source.commands.install, /--require-hashes/);
+  assert.match(knownValues.source.commands.install, /pyswisseph-oracle-requirements\.txt/);
+  const requirements = fs.readFileSync(
+    path.join(__dirname, 'fixtures', 'pyswisseph-oracle-requirements.txt'),
+    'utf8',
+  );
+  assert.match(requirements, /pyswisseph==2\.10\.3\.2/);
+  assert.match(requirements, new RegExp(knownValues.source.sdistSha256));
   assert.match(knownValues.source.commands.generate, /generate-swisseph-lahiri-oracle\.py/);
   assert.ok(knownValues.maximumAngularError <= 0.01);
 });

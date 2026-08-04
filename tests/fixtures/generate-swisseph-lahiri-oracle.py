@@ -1,7 +1,7 @@
-"""Regenerate the offline Lahiri oracle with the independent Python binding.
+r"""Regenerate the offline Lahiri oracle with the independent Python binding.
 
 PowerShell:
-  python -m pip install --target "$env:TEMP\pyswisseph-oracle" pyswisseph==2.10.3.2
+  python -m pip install --require-hashes --no-binary=:all: --target "$env:TEMP\pyswisseph-oracle" -r tests/fixtures/pyswisseph-oracle-requirements.txt
   $env:PYTHONPATH="$env:TEMP\pyswisseph-oracle"; python tests/fixtures/generate-swisseph-lahiri-oracle.py
 """
 
@@ -50,7 +50,7 @@ fixture = {
         "url": "https://pypi.org/project/pyswisseph/2.10.3.2/",
         "sdistSha256": "c54c305e83dbd5d2b71e58d8a69d8ee41de24c4d3328ce09e2af860a3537624d",
         "commands": {
-            "install": "python -m pip install --target \"$env:TEMP\\pyswisseph-oracle\" pyswisseph==2.10.3.2",
+            "install": "python -m pip install --require-hashes --no-binary=:all: --target \"$env:TEMP\\pyswisseph-oracle\" -r tests/fixtures/pyswisseph-oracle-requirements.txt",
             "generate": "$env:PYTHONPATH=\"$env:TEMP\\pyswisseph-oracle\"; python tests/fixtures/generate-swisseph-lahiri-oracle.py",
         },
     },
