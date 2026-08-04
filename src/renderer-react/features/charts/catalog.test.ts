@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type {
+  AspectLevel,
   AspectIdentity,
   ChartAngle,
   ChartAspect,
@@ -10,6 +11,7 @@ import type {
   ChartMeta,
   ChartOptions,
   ChartPoint,
+  ChartReferenceData,
   ChartRing,
   ChartRoute,
   ChartType,
@@ -56,6 +58,28 @@ const RING_IDENTITY_IS_EXACT = true satisfies SameType<ChartRing['identity'], Ri
 const POINT_IDENTITY_IS_EXACT = true satisfies SameType<ChartPoint['id'], PointIdentity>;
 const HOUSE_IDENTITY_IS_EXACT = true satisfies SameType<ChartHouse['id'], HouseIdentity>;
 const ASPECT_IDENTITY_IS_EXACT = true satisfies SameType<ChartAspect['id'], AspectIdentity>;
+type ReferenceAspect = ChartReferenceData['aspects'][string];
+type ReferenceSign = ChartReferenceData['signs'][number];
+type ReferencePoint = ChartReferenceData['points'][string];
+type ReferenceHouseSystem = ChartReferenceData['houseSystems'][number];
+const CATALOG_TYPE_IS_EXACT = true satisfies SameType<ChartCatalogDefinition['type'], ChartType>;
+const REFERENCE_ASPECT_LEVEL_IS_EXACT = true satisfies SameType<ReferenceAspect['level'], AspectLevel>;
+const REFERENCE_ASPECT_ORB_IS_EXACT = true satisfies SameType<ReferenceAspect['defaultOrb'], number>;
+const REFERENCE_SIGN_KEY_IS_EXACT = true satisfies SameType<ReferenceSign['key'], string>;
+const REFERENCE_POINT_KIND_IS_EXACT = true satisfies SameType<ReferencePoint['kind'], 'body' | 'point' | 'angle'>;
+const REFERENCE_HOUSE_SYSTEM_IS_EXACT = true satisfies SameType<
+  ReferenceHouseSystem,
+  { value: string; nameEn: string; nameZh: string }
+>;
+const REFERENCE_ASPECT_WITH_EXTRA = {
+  level: 'major',
+  defaultOrb: 8,
+  nameEn: 'Conjunction',
+  nameZh: 'Conjunction',
+  angle: 0,
+  glyph: 'C',
+  color: 'red',
+} satisfies ReferenceAspect;
 void [
   NULL_POINT_HOUSE,
   NULL_CHART_INSTANT,
@@ -68,6 +92,13 @@ void [
   POINT_IDENTITY_IS_EXACT,
   HOUSE_IDENTITY_IS_EXACT,
   ASPECT_IDENTITY_IS_EXACT,
+  CATALOG_TYPE_IS_EXACT,
+  REFERENCE_ASPECT_LEVEL_IS_EXACT,
+  REFERENCE_ASPECT_ORB_IS_EXACT,
+  REFERENCE_SIGN_KEY_IS_EXACT,
+  REFERENCE_POINT_KIND_IS_EXACT,
+  REFERENCE_HOUSE_SYSTEM_IS_EXACT,
+  REFERENCE_ASPECT_WITH_EXTRA,
 ];
 
 const EXPECTED_DESCRIPTORS = [
@@ -130,7 +161,7 @@ describe('assertCatalogMatchesDescriptors', () => {
 
   test('rejects unknown and missing chart tokens with stable messages', () => {
     const unknown: ChartCatalogDefinition[] = SERVICE_CATALOG.map((entry) => ({ ...entry }));
-    unknown[0] = { ...unknown[0], type: 'unknownChart' };
+    unknown[0] = { ...unknown[0], type: 'unknownChart' } as unknown as ChartCatalogDefinition;
 
     expect(() => assertCatalogMatchesDescriptors(unknown)).toThrow(
       'Unknown chart type in service catalog: unknownChart',

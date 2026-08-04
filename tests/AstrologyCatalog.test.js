@@ -82,13 +82,14 @@ test('authoritative catalog exposes the exact tokens and option mappings', () =>
 for (const [type, options] of Object.entries(requests)) {
   test(`computes ${type} through the production Swiss factory`, () => {
     const definition = service.chartTypes().find((entry) => entry.type === type);
-    const result = service.computeChart({
+    const request = {
       type,
       primary,
-      secondary: definition.requiresSecondary ? secondary : undefined,
       settings,
       options,
-    });
+    };
+    if (definition.requiresSecondary) request.secondary = secondary;
+    const result = service.computeChart(request);
     assert.equal(result.meta.type, type);
     assert.equal(result.rings.length, twoRingTypes.has(type) ? 2 : 1);
     assertFiniteChart(result);
@@ -102,6 +103,8 @@ test('rejects equal relationship profiles', () => {
 test('rejects undeclared options, personal secondary profiles, and malformed envelopes', () => {
   assert.throws(() => service.computeChart({ type: 'natal', primary, settings, options: { targetDate: '2026-01-01T00:00:00.000Z' } }), /选项|option/i);
   assert.throws(() => service.computeChart({ type: 'natal', primary, secondary, settings, options: {} }), /次体|secondary/i);
+  assert.throws(() => service.computeChart({ type: 'natal', primary, secondary: null, settings, options: {} }), /次体|secondary/i);
+  assert.throws(() => service.computeChart({ type: 'natal', primary, secondary: undefined, settings, options: {} }), /次体|secondary/i);
   for (const request of [null, [], { type: 'natal', primary, settings: [], options: {} }, { type: 'natal', primary, settings, options: [] }]) {
     assert.throws(() => service.computeChart(request), /请求|settings|options|对象/i);
   }

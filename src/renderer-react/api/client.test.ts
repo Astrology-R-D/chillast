@@ -347,6 +347,16 @@ describe('chart API boundary', () => {
     expect((error as Error & { cause?: unknown }).cause).toBeTruthy();
   });
 
+  test.each([
+    ['inherited success fields', () => Object.create({ ok: true, data: chartCatalog })],
+    ['inherited success data', () => Object.assign(Object.create({ data: chartCatalog }), { ok: true })],
+    ['extra error on success', () => ({ ok: true, data: chartCatalog, error: 'opposite branch' })],
+    ['extra data on failure', () => ({ ok: false, error: 'domain rejected', data: chartCatalog })],
+  ])('rejects %s as a parser failure', async (_label, makeEnvelope) => {
+    installApi({ getChartTypes: () => Promise.resolve(makeEnvelope() as never) });
+    await expect(apiClient.getChartCatalog()).rejects.toMatchObject({ kind: 'parser' });
+  });
+
   test('rejects unknown catalog tokens as parser failures', async () => {
     installApi({ getChartTypes: () => ok([{ ...chartCatalog[0], type: 'unknown' }]) });
     await expect(apiClient.getChartCatalog()).rejects.toMatchObject({ kind: 'parser' });

@@ -152,6 +152,10 @@ describe('chart request and reference schemas', () => {
     request({ settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: ['unknown'], orbOverrides: {} } } }),
     request({ type: 'transit', options: { targetDate: 'not-an-instant' } }),
     request({ type: 'relocation', options: { latitude: 91, longitude: 0, locationLabel: 'X' } }),
+    request({ type: 'relocation', options: { latitude: 1, longitude: 2 } }),
+    request({ type: 'relocation', options: { longitude: 2, locationLabel: 'X' } }),
+    request({ type: 'relocation', options: { latitude: 1, locationLabel: 'X' } }),
+    request({ type: 'relocation', options: { latitude: 1, longitude: 2, locationLabel: '   ' } }),
   ])('rejects a request incompatible with reference or option constraints %#', (value) => {
     expect(() => parseChartRequest(value, reference())).toThrow('Chart request validation failed');
   });

@@ -31,7 +31,7 @@ export const chartOptionsSchema = z.object({
   year: z.number().int().min(1).max(3000).optional(),
   latitude: finite.min(-90).max(90).optional(),
   longitude: finite.min(-180).max(180).optional(),
-  locationLabel: z.string().min(1).optional(),
+  locationLabel: z.string().trim().min(1).optional(),
 }).strict();
 
 export const chartSettingsSchema = z.object({
@@ -105,6 +105,7 @@ export const chartRequestSchema = z.object({
   if (descriptor.serviceOptions.some((option) => option === 'location')) {
     if (request.options.latitude === undefined) context.addIssue({ code: z.ZodIssueCode.custom, message: 'latitude is required', path: ['options', 'latitude'] });
     if (request.options.longitude === undefined) context.addIssue({ code: z.ZodIssueCode.custom, message: 'longitude is required', path: ['options', 'longitude'] });
+    if (!request.options.locationLabel) context.addIssue({ code: z.ZodIssueCode.custom, message: 'locationLabel is required', path: ['options', 'locationLabel'] });
   }
 });
 

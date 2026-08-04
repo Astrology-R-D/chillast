@@ -37,7 +37,7 @@ export type AspectIdentity = `aspect:${string}:${string}:${string}:${string}:${s
 export type ChartIdentity = RingIdentity | PointIdentity | HouseIdentity | AspectIdentity;
 
 export interface ChartCatalogDefinition {
-  type: string;
+  type: ChartType;
   nameZh: string;
   nameEn: string;
   category: ChartRoute;
@@ -183,12 +183,61 @@ export interface NormalizedChartResult {
   distributions: ChartDistributions;
 }
 
+export interface ChartSignReference {
+  key: string;
+  nameEn: string;
+  nameZh: string;
+  shortZh: string;
+  glyph: string;
+  element: string;
+  modality: string;
+  ruler: string;
+  [key: string]: unknown;
+}
+
+export interface ChartPointReference {
+  nameEn: string;
+  nameZh: string;
+  glyph: string;
+  kind: 'body' | 'point' | 'angle';
+  [key: string]: unknown;
+}
+
+export interface ChartAspectReference {
+  nameEn: string;
+  nameZh: string;
+  angle: number;
+  defaultOrb: number;
+  level: AspectLevel;
+  glyph: string;
+  [key: string]: unknown;
+}
+
+export interface ChartElementReference {
+  nameEn: string;
+  nameZh: string;
+  token: string;
+  [key: string]: unknown;
+}
+
+export interface ChartModalityReference {
+  nameEn: string;
+  nameZh: string;
+  [key: string]: unknown;
+}
+
+export interface ChartHouseSystemReference {
+  value: string;
+  nameEn: string;
+  nameZh: string;
+}
+
 export interface ChartReferenceData {
-  signs: Array<Record<string, unknown>>;
-  points: Record<string, Record<string, unknown>>;
-  aspects: Record<string, Record<string, unknown>>;
-  elements: Record<string, Record<string, unknown>>;
-  modalities: Record<string, Record<string, unknown>>;
-  houseSystems: Array<Record<string, unknown>>;
+  signs: ChartSignReference[];
+  points: Record<string, ChartPointReference>;
+  aspects: Record<string, ChartAspectReference>;
+  elements: Record<string, ChartElementReference>;
+  modalities: Record<string, ChartModalityReference>;
+  houseSystems: ChartHouseSystemReference[];
   chartTypes: ChartCatalogDefinition[];
 }

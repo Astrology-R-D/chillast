@@ -104,7 +104,7 @@ class AstrologyService {
     for (const key of Object.keys(options)) {
       if (!allowedOptions.has(key)) throw new Error(`星盘类型 ${request.type} 不支持选项: ${key}`);
     }
-    if (!definition.requiresSecondary && request.secondary) {
+    if (!definition.requiresSecondary && Object.prototype.hasOwnProperty.call(request, 'secondary')) {
       throw new Error('个人星盘不接受次体档案 secondary');
     }
 

@@ -169,6 +169,11 @@ export class ChartBoundaryError extends Error {
   }
 }
 
+const chartIpcEnvelopeSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), data: z.unknown() }).strict(),
+  z.object({ ok: z.literal(false), error: z.string() }).strict(),
+]);
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -184,25 +189,25 @@ async function chartBoundary<T>(
     throw new ChartBoundaryError('ipc', errorMessage(error), { cause: error });
   }
 
-  if (!envelope || typeof envelope !== 'object' || !('ok' in envelope)) {
+  const prototype = envelope && typeof envelope === 'object' ? Object.getPrototypeOf(envelope) : undefined;
+  const parsedEnvelope = (prototype === Object.prototype || prototype === null)
+    ? chartIpcEnvelopeSchema.safeParse(envelope)
+    : { success: false as const };
+  if (!parsedEnvelope.success
+    || !Object.hasOwn(envelope as object, 'ok')
+    || (parsedEnvelope.data.ok
+      ? !Object.hasOwn(envelope as object, 'data')
+      : !Object.hasOwn(envelope as object, 'error'))) {
     const cause = new Error('Malformed IPC envelope');
     throw new ChartBoundaryError('parser', cause.message, { cause });
   }
-  if (envelope.ok === false) {
-    if (!('error' in envelope) || typeof envelope.error !== 'string') {
-      const cause = new Error('Malformed IPC envelope');
-      throw new ChartBoundaryError('parser', cause.message, { cause });
-    }
-    const cause = new Error(envelope.error);
+  if (parsedEnvelope.data.ok === false) {
+    const cause = new Error(parsedEnvelope.data.error);
     throw new ChartBoundaryError('domain', cause.message, { cause });
-  }
-  if (envelope.ok !== true || !('data' in envelope)) {
-    const cause = new Error('Malformed IPC envelope');
-    throw new ChartBoundaryError('parser', cause.message, { cause });
   }
 
   try {
-    return parse(envelope.data);
+    return parse(parsedEnvelope.data.data);
   } catch (error) {
     throw new ChartBoundaryError('parser', errorMessage(error), { cause: error });
   }
