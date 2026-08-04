@@ -7,6 +7,7 @@ import { createLegacySvg } from './legacyGeometry';
 import { applyLayers } from './chartLayers';
 import { ChartToolbar } from './ChartToolbar';
 import { useChartTransform } from './useChartTransform';
+import { useI18n, type InterpolationVariables } from '../../../i18n/I18nProvider';
 
 export interface InteractiveChartProps {
   result: NormalizedChartResult;
@@ -16,23 +17,24 @@ export interface InteractiveChartProps {
   onSvgReady?(svg: SVGSVGElement | null): void;
 }
 
-function objectLabel(result: NormalizedChartResult, identity: ChartIdentity): string {
+function objectLabel(result: NormalizedChartResult, identity: ChartIdentity, t: (key: string, values?: InterpolationVariables) => string): string {
   for (const ring of result.rings) {
     const point = ring.points.find(({ id }) => id === identity);
-    if (point) return `${ring.label} ${point.nameZh || point.nameEn} ${point.signNameZh} ${point.degreeInSign.toFixed(2)}°${point.retrograde ? ' 逆行' : ''}`;
+    if (point) return t('chart.svg.pointObject', { ring: ring.label, name: point.nameZh || point.nameEn, sign: point.signNameZh, degree: point.degreeInSign.toFixed(2), retrograde: point.retrograde ? ' 逆行' : '' });
   }
   const house = result.houses.find(({ id }) => id === identity);
-  if (house) return `第 ${house.index} 宫 ${house.signNameZh} ${house.degreeInSign.toFixed(2)}°`;
+  if (house) return t('chart.svg.houseObject', { index: house.index, sign: house.signNameZh, degree: house.degreeInSign.toFixed(2) });
   const aspect = result.aspects.find(({ id }) => id === identity);
   if (aspect) {
     const left = result.rings.find(({ id }) => id === aspect.ringA)?.points.find(({ key }) => key === aspect.point1);
     const right = result.rings.find(({ id }) => id === aspect.ringB)?.points.find(({ key }) => key === aspect.point2);
-    return `${left?.nameZh || aspect.point1} ${aspect.nameZh} ${right?.nameZh || aspect.point2} 容许度 ${aspect.orb.toFixed(2)}°`;
+    return t('chart.svg.aspectObject', { left: left?.nameZh || aspect.point1, aspect: aspect.nameZh, right: right?.nameZh || aspect.point2, orb: aspect.orb.toFixed(2) });
   }
   return identity;
 }
 
 export function InteractiveChart({ result, reference, config, onRevealSelection, onSvgReady }: InteractiveChartProps) {
+  const { t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [svgElement, setSvgElement] = useState<SVGSVGElement | null>(null);
   const markup = useMemo(() => createLegacySvg(result, reference, config).markup, [result, reference, config]);
@@ -73,12 +75,13 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     svg.setAttribute('aria-label', result.meta.title);
 
     const selectable = [...svg.querySelectorAll<SVGGElement>('[data-chart-identity]')];
+    result.rings.forEach((ring, index) => svg.querySelector(`[data-ring-id="${CSS.escape(ring.id)}"]`)?.setAttribute('data-ring-style', String(index % 3)));
     for (const node of selectable) {
       const identity = node.dataset.chartIdentity as ChartIdentity;
       if (!selectionTargetForIdentity(result, identity)) continue;
       node.setAttribute('role', 'button');
       node.setAttribute('tabindex', '0');
-      node.setAttribute('aria-label', objectLabel(result, identity));
+      node.setAttribute('aria-label', objectLabel(result, identity, t));
       if (focusedIdentity === identity) node.setAttribute('data-focused', 'true');
       else node.removeAttribute('data-focused');
       if (hoverIdentity === identity) node.setAttribute('data-hovered', 'true');
@@ -120,7 +123,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
       host.removeEventListener('click', click);
       host.removeEventListener('keydown', keyDown);
     };
-  }, [clearFocus, focusedIdentity, hoverIdentity, onRevealSelection, result, setFocus, setHover, markup]);
+  }, [clearFocus, focusedIdentity, hoverIdentity, onRevealSelection, result, setFocus, setHover, markup, t]);
 
   useLayoutEffect(() => {
     const svg = hostRef.current?.querySelector('svg');
@@ -136,9 +139,9 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
   return <div className="interactive-chart">
     <ChartToolbar result={result} svg={svgElement} transform={transform} onChange={setTransform} />
     <div ref={hostRef} className="interactive-chart__svg" />
-    {hoverIdentity && <div role="tooltip" className="interactive-chart__tooltip">{objectLabel(result, hoverIdentity)}</div>}
+    {hoverIdentity && <div role="tooltip" className="interactive-chart__tooltip">{t('chart.svg.hoverFact', { fact: objectLabel(result, hoverIdentity, t) })}</div>}
     <div role="status" aria-live="polite" className="interactive-chart__status">
-      {focusedIdentity ? objectLabel(result, focusedIdentity) : ''}
+      {focusedIdentity ? t('chart.svg.lockedFact', { fact: objectLabel(result, focusedIdentity, t) }) : t('chart.svg.selectionCleared')}
     </div>
   </div>;
 }

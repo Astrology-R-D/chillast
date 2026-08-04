@@ -212,3 +212,12 @@ test('contains the complete chart workbench localization contract', () => {
   ];
   for (const key of keys) expect(resolveKey(`chart.workbench.${key}`), key).toEqual(expect.any(String));
 });
+
+test('contains the complete interactive chart localization contract', () => {
+  const keys = [
+    'zoomIn', 'zoomOut', 'pan', 'panHint', 'resetView', 'fitVisible', 'layers', 'resetLayers',
+    'majorAspects', 'minorAspects', 'houses', 'labels', 'ringVisibility', 'exportSvg',
+    'pointObject', 'houseObject', 'aspectObject', 'lockedFact', 'hoverFact', 'selectionCleared',
+  ];
+  for (const key of keys) expect(resolveKey(`chart.svg.${key}`), key).toEqual(expect.any(String));
+});

@@ -16,3 +16,21 @@ test('bounds relocation results and popovers to viewport-safe scrolling blocks',
   expect(css).toMatch(/\.relocation-picker__list\s*\{[^}]*max-block-size:\s*min\([^}]*overflow:\s*auto/s);
   expect(css).toMatch(/\.chart-popover\s*\{[^}]*max-block-size:\s*min\([^}]*overflow:\s*auto/s);
 });
+
+test('keeps the interactive wheel square, nonzero, and clear of fixed density controls', () => {
+  expect(css).toMatch(/\.interactive-chart\s*\{[^}]*min-height:\s*320px[^}]*padding-top:/s);
+  expect(css).toMatch(/\.interactive-chart__svg\s*\{[^}]*min-width:\s*0[^}]*min-height:\s*0/s);
+  expect(css).toMatch(/\.interactive-chart__svg\s+svg\s*\{[^}]*width:\s*100%[^}]*height:\s*100%[^}]*aspect-ratio:\s*1/s);
+  expect(css).toMatch(/data-density='compact'[^}]*--chart-control-size:\s*32px/s);
+  expect(css).toMatch(/data-density='comfortable'[^}]*--chart-control-size:\s*36px/s);
+  expect(css).toMatch(/\.chart-toolbar__button\s*\{[^}]*width:\s*var\(--chart-control-size\)[^}]*height:\s*var\(--chart-control-size\)/s);
+  expect(css).toMatch(/\.chart-result__chart-pane[^}]*overflow:\s*hidden/s);
+});
+
+test('uses distinct non-color hover, focus, and ring encodings', () => {
+  expect(css).toMatch(/data-hovered='true'[^}]*opacity:/s);
+  expect(css).toMatch(/data-focused='true'[^}]*filter:/s);
+  expect(css).toMatch(/data-ring-style='1'[^}]*stroke-dasharray:/s);
+  expect(css).toMatch(/data-theme='light'[^}]*data-focused/s);
+  expect(css).toMatch(/data-theme='dark'[^}]*data-focused/s);
+});
