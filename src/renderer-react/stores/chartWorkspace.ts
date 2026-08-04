@@ -1,5 +1,6 @@
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { createContext, createElement, useContext, type ReactNode } from 'react';
 import type { ChartIdentity, ChartRoute, NormalizedChartResult } from '../features/charts/contracts';
 import {
   structurallyEqual,
@@ -246,6 +247,19 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
 
 export const chartWorkspaceStore = createChartWorkspaceStore(getBrowserStorage());
 
+const ChartWorkspaceContext = createContext<StoreApi<ChartWorkspaceState>>(chartWorkspaceStore);
+
+export function ChartWorkspaceProvider({
+  store,
+  children,
+}: { store: StoreApi<ChartWorkspaceState>; children: ReactNode }) {
+  return createElement(ChartWorkspaceContext.Provider, { value: store }, children);
+}
+
+export function useChartWorkspaceStoreApi(): StoreApi<ChartWorkspaceState> {
+  return useContext(ChartWorkspaceContext);
+}
+
 export function useChartWorkspace<T>(selector: (state: ChartWorkspaceState) => T): T {
-  return useStore(chartWorkspaceStore, selector);
+  return useStore(useChartWorkspaceStoreApi(), selector);
 }
