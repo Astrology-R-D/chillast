@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import dictionary from '../../../../../locale/zh.json';
@@ -50,12 +50,13 @@ function setup(route: 'personal' | 'relationship', availableProfiles = profiles,
   vi.spyOn(apiClient, 'getChartCatalog').mockResolvedValue(catalog);
   vi.spyOn(apiClient, 'getChartReference').mockResolvedValue(reference);
   const compute = vi.spyOn(apiClient, 'computeChart').mockResolvedValue(result);
+  const setAiContext = vi.spyOn(apiClient, 'setAiChartContext').mockResolvedValue(null);
   const store = providedStore ?? createChartWorkspaceStore(memory);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const view = render(<QueryClientProvider client={client}><I18nProvider dictionary={dictionary}>
     <ChartWorkspaceProvider store={store}><ChartWorkbenchPage route={route} /></ChartWorkspaceProvider>
   </I18nProvider></QueryClientProvider>);
-  return { ...view, store, compute };
+  return { ...view, store, compute, setAiContext };
 }
 
 beforeEach(() => {
@@ -84,6 +85,22 @@ test('marks a successful result stale after edit and clears stale after revert',
   expect(screen.getByText('筛选已更改，当前显示上次计算结果。')).toBeInTheDocument();
   await user.selectOptions(screen.getByRole('combobox', { name: '黄道' }), 'tropical');
   expect(screen.queryByText('筛选已更改，当前显示上次计算结果。')).not.toBeInTheDocument();
+});
+
+test('serially publishes accepted AI context and labels stale draft and focus changes', async () => {
+  const user = userEvent.setup();
+  const { store, setAiContext } = setup('personal');
+  await screen.findByRole('combobox', { name: '星盘类型' });
+  await user.click(screen.getByRole('button', { name: '计算' }));
+  await waitFor(() => expect(setAiContext).toHaveBeenLastCalledWith(expect.objectContaining({
+    kind: 'western-chart', resultId: 'result', draftIsStale: false, focusedIdentity: null,
+  })));
+  await user.selectOptions(screen.getByRole('combobox', { name: '黄道' }), 'sidereal');
+  await waitFor(() => expect(setAiContext).toHaveBeenLastCalledWith(expect.objectContaining({
+    resultId: 'result', draftIsStale: true, draftSummary: expect.objectContaining({ label: 'uncalculated', zodiac: 'sidereal' }),
+  })));
+  act(() => store.getState().setFocus('natal:sun'));
+  await waitFor(() => expect(setAiContext).toHaveBeenLastCalledWith(expect.objectContaining({ resultId: 'result', focusedIdentity: 'natal:sun' })));
 });
 
 test('keeps filters visible when no profiles exist', async () => {

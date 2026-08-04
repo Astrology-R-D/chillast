@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { apiClient } from '../../../api/client';
 import { useProfiles } from '../../profiles/profileQueries';
@@ -8,6 +8,7 @@ import { useI18n } from '../../../i18n/I18nProvider';
 import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { useChartWorkspaceStoreApi } from '../../../stores/chartWorkspace';
 import { CHART_DESCRIPTORS } from '../catalog';
+import { buildWesternChartAiContext } from '../context/chartAiContext';
 import type { ChartReferenceData, ChartRoute } from '../contracts';
 import { ChartFilterBand } from './ChartFilterBand';
 import { ChartResultShell } from './ChartResultShell';
@@ -28,6 +29,8 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
   const { t } = useI18n();
   const store = useChartWorkspaceStoreApi();
   const routeState = useStore(store, (state) => state.routes[route]);
+  const focusedIdentity = useStore(store, (state) => state.focusedIdentity);
+  const contextQueue = useRef<Promise<unknown>>(Promise.resolve());
   const persistedPrimaryId = useStore(profileWorkspaceStore, (state) => state.primaryProfileId);
   const profileRecents = useStore(profileWorkspaceStore, (state) => state.recentUses);
   const profilesQuery = useProfiles();
@@ -86,6 +89,22 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
       { type: nextDraft.type, primaryProfileId: nextDraft.primaryProfileId, secondaryProfileId: nextDraft.secondaryProfileId },
     )) profileWorkspaceStore.getState().consumeChartIntent();
   }, [startupReady, catalogQuery.data, profiles, reference, route, store]);
+
+  useEffect(() => {
+    if (!routeState) return;
+    const context = buildWesternChartAiContext({
+      routeState,
+      focusedIdentity,
+      bulkSelection: store.getState().bulkSelection,
+    }, { includeSelectedRows: false });
+    contextQueue.current = contextQueue.current
+      .catch(() => undefined)
+      .then(() => apiClient.setAiChartContext(context))
+      .then(
+        () => store.getState().setAiContextSource(context ? 'western-chart' : null),
+        (error: unknown) => store.getState().setAiContextSource(`error:${errorMessage(error)}`),
+      );
+  }, [focusedIdentity, routeState?.accepted, routeState?.draft, routeState?.isStale, routeState?.lastSuccessfulResult, store]);
 
   const calculation = useChartCalculation(route, environment);
   const validation = routeState

@@ -74,6 +74,7 @@ function installApi({
       decideClose: vi.fn().mockResolvedValue({ ok: true, data: false }),
     },
     ai: {
+      setContext: vi.fn(async () => ({ ok: true as const, data: null })),
       status: vi.fn().mockResolvedValue({ ok: true, data: status }),
       initStatus: vi.fn().mockResolvedValue({ ok: true, data: null }),
       onStatusChanged: vi.fn(() => () => {}),

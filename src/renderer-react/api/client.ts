@@ -12,6 +12,7 @@ import type {
   ProfileSaveInput,
   ResolveLocationInput,
   WesternCityRaw,
+  WesternChartAiContext,
 } from './contracts';
 import { assertCatalogMatchesDescriptors } from '../features/charts/catalog';
 import type {
@@ -314,6 +315,8 @@ export const apiClient = {
   ),
   getAiStatus: async (): Promise<AiStatus> =>
     parseAiStatus(await invoke<unknown>((api) => api.ai.status())),
+  setAiChartContext: (context: WesternChartAiContext | null): Promise<unknown> =>
+    invoke<unknown>((api) => api.ai.setContext(context)),
   listProfiles: async (): Promise<Profile[]> => {
     const value = await invoke<Profile[]>((api) => api.profiles.list());
     if (!Array.isArray(value)) throw new Error('档案数据无效');

@@ -42,7 +42,7 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
     app: { onCloseRequested: () => () => {}, decideClose: () => ok(false) },
     ai: {
       status: () => ok({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
-      initStatus: () => ok(null), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
+      initStatus: () => ok(null), setContext: () => ok(null), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
     },
     ...overrides,
   };
@@ -110,6 +110,7 @@ test('accesses mystApi when a request is made rather than at module load', async
         },
       }),
       initStatus: async () => ({ ok: true, data: null }),
+      setContext: () => ok(null),
       onStatusChanged: () => () => {},
       onInitProgress: () => () => {},
     },
@@ -282,6 +283,7 @@ test('getAiStatus rejects malformed successful IPC data', async () => {
     ai: {
       status: async () => ({ ok: true, data: { configured: true } }),
       initStatus: async () => ({ ok: true, data: null }),
+      setContext: () => ok(null),
       onStatusChanged: () => () => {},
       onInitProgress: () => () => {},
     },
@@ -379,5 +381,22 @@ describe('chart API boundary', () => {
   ])('rejects %s result data as a parser failure', async (_label, makeResult) => {
     installApi({ computeChart: () => ok(makeResult()) });
     await expect(apiClient.computeChart({} as never)).rejects.toMatchObject({ kind: 'parser' });
+  });
+});
+
+describe('AI chart context boundary', () => {
+  test('forwards constructed context through the existing bridge and requires a successful data envelope', async () => {
+    const api = installApi();
+    const context = {
+      kind: 'western-chart', resultId: 'result-a', chartType: 'natal', subjects: [],
+      successfulFilters: {} as never, result: {} as never, focusedIdentity: null,
+      draftIsStale: false, draftSummary: null,
+    } as unknown as import('./contracts').WesternChartAiContext;
+    const setContext = vi.fn(() => ok({ accepted: true }));
+    api.ai.setContext = setContext;
+    await expect(apiClient.setAiChartContext(context)).resolves.toEqual({ accepted: true });
+    expect(setContext).toHaveBeenCalledWith(context);
+    api.ai.setContext = () => Promise.resolve({ ok: true } as never);
+    await expect(apiClient.setAiChartContext(null)).rejects.toThrow('未知错误');
   });
 });

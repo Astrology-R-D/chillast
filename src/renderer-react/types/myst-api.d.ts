@@ -8,6 +8,7 @@ import type {
   Profile,
   ProfileSaveInput,
   ResolveLocationInput,
+  WesternChartAiContext,
 } from '../api/contracts';
 import type { ChartRequest } from '../features/charts/contracts';
 
@@ -17,6 +18,7 @@ declare global {
     initStatus(): Promise<IpcResult<AiInitProgress | null>>;
     onStatusChanged(callback: (status: unknown) => void): () => void;
     onInitProgress(callback: (progress: AiInitProgress) => void): () => void;
+    setContext(context: WesternChartAiContext | null): Promise<IpcResult<unknown>>;
   }
 
   interface MystApi {

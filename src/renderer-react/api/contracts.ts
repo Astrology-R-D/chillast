@@ -1,5 +1,8 @@
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+import type { ChartIdentity, ChartSubject, ChartType, NormalizedChartResult, Zodiac } from '../features/charts/contracts';
+import type { SubmittedChartSnapshot } from '../features/charts/workbench/chartDraft';
+
 export type Gender = 'male' | 'female' | 'other';
 export type CloseDecision = 'proceed' | 'cancel';
 
@@ -164,3 +167,24 @@ export type AiInitProgress =
   | { phase: 'indexing'; done: number; total: number }
   | { phase: 'ready'; docs: number; chunks?: number; fromCache?: boolean }
   | { phase: 'error'; message: string };
+
+export interface WesternChartAiContext {
+  kind: 'western-chart';
+  resultId: string;
+  chartType: ChartType;
+  subjects: ChartSubject[];
+  successfulFilters: SubmittedChartSnapshot;
+  result: NormalizedChartResult;
+  focusedIdentity: ChartIdentity | null;
+  draftIsStale: boolean;
+  draftSummary: null | {
+    label: 'uncalculated';
+    type: ChartType;
+    houseSystem: string;
+    zodiac: Zodiac;
+    targetLocal?: string;
+    returnYear?: number;
+    relocationLabel?: string;
+  };
+  selectedRows?: Array<{ id: string; values: Record<string, string | number | boolean | null> }>;
+}
