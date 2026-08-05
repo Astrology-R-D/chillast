@@ -36,8 +36,12 @@ class ChartStrategyFactory {
   constructor(deps = {}) {
     const explicitAdapter = deps && deps.EphemerisAdapter;
     const backend = (deps && deps.backend) || 'swisseph';
-    const AdapterClass = explicitAdapter
-      || (SwissephAdapter && backend !== 'horoscope' ? SwissephAdapter : HoroscopeAdapter);
+    let AdapterClass = explicitAdapter;
+    if (!AdapterClass && backend === 'horoscope') AdapterClass = HoroscopeAdapter;
+    else if (!AdapterClass && backend === 'swisseph') {
+      if (!SwissephAdapter) throw new Error('Swiss Ephemeris backend is unavailable');
+      AdapterClass = SwissephAdapter;
+    } else if (!AdapterClass) throw new Error(`Unknown ephemeris backend: ${backend}`);
     this.deps = {
       ...deps,
       EphemerisAdapter: AdapterClass,

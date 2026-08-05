@@ -5,6 +5,8 @@ const path = require('node:path');
 const test = require('node:test');
 const AstrologyService = require('../src/core/astrology/AstrologyService');
 const ChartStrategyFactory = require('../src/core/astrology/ChartStrategyFactory');
+const HoroscopeAdapter = require('../src/core/astrology/HoroscopeAdapter');
+const SwissephAdapter = require('../src/core/astrology/ephemeris/SwissephAdapter');
 const SwissEphCore = require('../src/core/astrology/ephemeris/SwissEphCore');
 
 SwissEphCore.configure({ ephePath: path.join(__dirname, '..', 'assets', 'ephemeris') });
@@ -53,6 +55,12 @@ const secondary = {
 const settings = { houseSystem: 'placidus', zodiac: 'tropical', aspects: {} };
 const service = new AstrologyService(new ChartStrategyFactory({ backend: 'swisseph' }));
 const twoRingTypes = new Set(['transit', 'progressed', 'tertiaryProgressed', 'solarArc', 'synastry', 'davisonSecondary', 'davisonTertiary']);
+
+test('requires an explicit known backend without silently replacing Swiss', () => {
+  assert.equal(new ChartStrategyFactory({ backend: 'swisseph' }).deps.EphemerisAdapter, SwissephAdapter);
+  assert.equal(new ChartStrategyFactory({ backend: 'horoscope' }).deps.EphemerisAdapter, HoroscopeAdapter);
+  assert.throws(() => new ChartStrategyFactory({ backend: 'unknown' }), /Unknown ephemeris backend/);
+});
 
 function assertFiniteChart(result) {
   assert.equal(typeof result.meta, 'object');

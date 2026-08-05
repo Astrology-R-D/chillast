@@ -99,3 +99,17 @@ test('smoke report path must stay inside userData and cannot be UNC', () => {
     );
   }
 });
+
+test('packaged React smoke drives a real sidereal chart, exports, and dirty close', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/main/Main.js'), 'utf8');
+  assert.match(source, /_collectPackagedChartSmoke/);
+  assert.match(source, /data-control="zodiac"/);
+  assert.match(source, /!calculate\.disabled/);
+  assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
+  assert.match(source, /\.chart-svg-host svg/);
+  assert.match(source, /data-column-id="longitude"/);
+  assert.match(source, /URL\.createObjectURL/);
+  assert.match(source, /typeof require/);
+  assert.match(source, /dirty packaged chart smoke/);
+  assert.match(source, /\.dirty-navigation__dialog/);
+});

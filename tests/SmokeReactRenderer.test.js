@@ -186,3 +186,9 @@ test('chart visual smoke captures the exact responsive matrix with pixel and geo
   assert.match(source, /svgColors < 16/);
   assert.match(source, /changedPixels < 100/);
 });
+
+test('package exposes canonical source and release chart verification scripts', () => {
+  assert.equal(packageJson.scripts['verify:package'], 'npm run build:renderer && npm run rebuild && electron-builder --dir && node tests/VerifyPackage.js && node tests/SmokePackagedRenderer.js');
+  assert.equal(packageJson.scripts['verify:charts'], 'node --test tests/AstrologyCatalog.test.js tests/SwissephSidereal.test.js tests/ChartVisualMetrics.test.js && npm run test:security && npm run test:preload && npm run test:renderer && npm run typecheck && npm run build:renderer && npm run smoke:react:charts');
+  assert.equal(packageJson.scripts['verify:charts:release'], 'npm run verify:charts && npm run smoke:react:charts:visual && npm run verify:package');
+});

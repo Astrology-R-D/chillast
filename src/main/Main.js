@@ -300,6 +300,94 @@ class Main {
     });
   }
 
+  async _waitForSmokeState(description, probe, timeout = 15000) {
+    const deadline = Date.now() + timeout;
+    let state = null;
+    while (Date.now() < deadline && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      state = await this.mainWindow.webContents.executeJavaScript(`(${probe})()`);
+      if (state && state.ready) return state.value;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`${description} timed out: ${JSON.stringify(state)}`);
+  }
+
+  async _collectPackagedChartSmoke() {
+    await this.mainWindow.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[1].click()`);
+    await this._waitForSmokeState('packaged personal chart route', () => ({
+      ready: document.querySelector('h1')?.textContent === '个人星盘'
+        && Boolean(document.querySelector('[data-control="primaryProfile"] select')
+          && document.querySelector('[data-control="zodiac"] select')),
+    }));
+    await this.mainWindow.webContents.executeJavaScript(`(() => {
+      const set = (selector, value) => {
+        const node = document.querySelector(selector);
+        Object.getOwnPropertyDescriptor(node.constructor.prototype, 'value').set.call(node, value);
+        node.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      set('[data-control="primaryProfile"] select', 'packaged-chart-smoke');
+      set('[data-control="zodiac"] select', 'sidereal');
+    })()`);
+    await this._waitForSmokeState('packaged chart controls', () => {
+      const calculate = Array.from(document.querySelectorAll('.chart-filter-band button'))
+        .find((button) => button.textContent === '计算');
+      return { ready: Boolean(calculate && !calculate.disabled) };
+    });
+    await this.mainWindow.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算').click()`);
+    const chart = await this._waitForSmokeState('packaged real sidereal natal', () => {
+      const svg = document.querySelector('.chart-svg-host svg');
+      const row = Array.from(document.querySelectorAll('.chart-data-grid [data-row-id]'))
+        .find((candidate) => candidate.getAttribute('data-row-id')?.endsWith(':sun'));
+      const longitude = Number(row?.querySelector('[data-column-id="longitude"]')?.textContent);
+      const markup = svg?.outerHTML ?? '';
+      return { ready: Boolean(svg && row && Number.isFinite(longitude) && markup.length > 1000), value: {
+        lahiriSun: longitude,
+        svgBytes: markup.length,
+        explorerRows: document.querySelectorAll('.chart-data-grid [data-row-id]').length,
+        finiteSvg: !/NaN|Infinity|undefined/.test(markup),
+      } };
+    });
+    await this.mainWindow.webContents.executeJavaScript(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
+    await this.mainWindow.webContents.executeJavaScript(`(() => {
+      window.__packagedChartExports = {};
+      URL.createObjectURL = (blob) => {
+        blob.arrayBuffer().then((buffer) => {
+          window.__packagedChartExports[blob.type.startsWith('text/csv') ? 'csvBytes' : 'svgBlobBytes'] = buffer.byteLength;
+        });
+        return 'blob:packaged-chart-smoke';
+      };
+      URL.revokeObjectURL = () => {};
+      HTMLAnchorElement.prototype.click = function click() {};
+      document.querySelector('[aria-label="下载 CSV"]').click();
+      document.querySelector('[aria-label="导出 SVG"]').click();
+    })()`);
+    const exports = await this._waitForSmokeState('packaged chart exports', () => ({
+      ready: window.__packagedChartExports?.csvBytes > 0 && window.__packagedChartExports?.svgBlobBytes > 0,
+      value: window.__packagedChartExports,
+    }));
+    const nodeAccess = await this.mainWindow.webContents.executeJavaScript(`typeof require !== 'undefined' || typeof process !== 'undefined' || typeof window.mystApi.ipcRenderer !== 'undefined'`);
+
+    await this.mainWindow.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+    await this._waitForSmokeState('packaged dirty profile source', () => ({
+      ready: Boolean(document.querySelector('[data-profile-id="packaged-chart-smoke"]')),
+    }));
+    await this.mainWindow.webContents.executeJavaScript(`(() => {
+      document.querySelector('[data-profile-id="packaged-chart-smoke"]').click();
+      document.querySelector('.profile-detail__actions button').click();
+    })()`);
+    await this._waitForSmokeState('packaged profile editor', () => ({
+      ready: Boolean(document.querySelector('.profile-form [name="notes"]')),
+    }));
+    await this.mainWindow.webContents.executeJavaScript(`(() => {
+      const notes = document.querySelector('.profile-form [name="notes"]');
+      Object.getOwnPropertyDescriptor(notes.constructor.prototype, 'value').set.call(notes, 'dirty packaged chart smoke');
+      notes.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    return {
+      chartType: 'natal', zodiac: 'sidereal', backend: 'swisseph',
+      ...chart, csvBytes: exports.csvBytes, svgBlobBytes: exports.svgBlobBytes, nodeAccess,
+    };
+  }
+
   async _reportSmokeWhenReady(rendererTarget, reportPath) {
     const deadline = Date.now() + 15000;
     let state = null;
@@ -318,15 +406,23 @@ class Main {
           };
         })()`);
         if (state.hasApi && state.marker && state.routes === 6 && state.title) {
+          const chartState = rendererTarget.kind === 'react-file'
+            ? await this._collectPackagedChartSmoke()
+            : {};
           const report = {
             targetKind: rendererTarget.kind,
             ...state,
+            ...chartState,
             errors: [...this.smokeErrors],
           };
           const exitCode = this.smokeErrors.length ? 1 : 0;
           if (rendererTarget.kind !== 'legacy') {
             this.pendingSmokeCloseReport = { path: reportPath, report: { ...report, closeStages: [] }, exitCode };
             this.mainWindow.close();
+            await this._waitForSmokeState('packaged dirty close dialog', () => ({
+              ready: Boolean(document.querySelector('.dirty-navigation__dialog')),
+            }));
+            await this.mainWindow.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '放弃更改').click()`);
           } else {
             this._writeSmokeReport(reportPath, report, exitCode);
           }

@@ -8,6 +8,8 @@ const { spawn } = require('node:child_process');
 
 const root = path.join(__dirname, '..');
 const executable = path.join(root, 'release', 'win-unpacked', 'CHILLAST.exe');
+const lahiriSun = 256.51569618387066;
+const fixtureTolerance = 0.01;
 
 async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), `chillast-packaged-${renderer}-`));
@@ -19,6 +21,13 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
     embeddings: { provider: 'none' },
     mcpServers: {},
   }));
+  if (renderer === 'react') fs.writeFileSync(path.join(dataDir, 'Profiles.json'), JSON.stringify([{
+    id: 'packaged-chart-smoke', nameZh: '打包星盘烟测', nameEn: 'Packaged Chart Smoke', gender: 'other',
+    birthData: { year: 2000, month: 1, day: 1, hour: 12, minute: 0,
+      location: { label: 'Greenwich', latitude: 51.4779, longitude: 0 } },
+    notes: '', tags: ['packaged-smoke'],
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  }], null, 2));
 
   const env = { ...process.env, CHILLAST_SMOKE_REPORT: reportPath };
   delete env.CHILLAST_RENDERER_URL;
@@ -43,7 +52,7 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
       const timer = setTimeout(() => {
         timedOut = true;
         child.kill();
-      }, 20000);
+      }, 45000);
       child.once('exit', () => clearTimeout(timer));
     });
 
@@ -53,10 +62,11 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
       const stages = fs.existsSync(stagePath) ? fs.readFileSync(stagePath, 'utf8') : '(missing)';
       throw new Error(`${renderer} packaged executable timed out\nreport: ${pendingReport}\nstages: ${stages}\nstdout: ${stdout}\nstderr: ${stderr}`);
     }
+    const reportText = fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : '(missing)';
     assert.equal(result.signal, null, `${renderer} exited by signal ${result.signal}`);
-    assert.equal(result.code, 0, `${renderer} exit ${result.code}\n${stderr}`);
-    assert.ok(fs.existsSync(reportPath), `${renderer} smoke report missing\n${stdout}\n${stderr}`);
-    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    assert.equal(result.code, 0, `${renderer} exit ${result.code}\nreport: ${reportText}\nstdout: ${stdout}\nstderr: ${stderr}`);
+    assert.notEqual(reportText, '(missing)', `${renderer} smoke report missing\n${stdout}\n${stderr}`);
+    const report = JSON.parse(reportText);
     assert.equal(report.targetKind, expectedKind);
     assert.equal(report.hasApi, true);
     assert.equal(report.marker, expectedMarker);
@@ -64,6 +74,16 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
     assert.equal(report.title, 'CHILLAST');
     assert.deepEqual(report.errors, []);
     if (renderer === 'react') {
+      assert.equal(report.chartType, 'natal');
+      assert.equal(report.zodiac, 'sidereal');
+      assert.equal(report.backend, 'swisseph');
+      assert.ok(Math.abs(report.lahiriSun - lahiriSun) <= fixtureTolerance,
+        `expected Lahiri Sun ${lahiriSun} +/- ${fixtureTolerance}, received ${report.lahiriSun}`);
+      assert.ok(report.svgBytes > 1000);
+      assert.ok(report.explorerRows > 0);
+      assert.ok(report.csvBytes > 0);
+      assert.equal(report.finiteSvg, true);
+      assert.equal(report.nodeAccess, false);
       assert.equal(report.closeHandshake, true);
       assert.equal(report.closeStage, 'closed');
       assert.deepEqual(report.closeStages, ['request', 'request-sent', 'decision-proceed', 'close-scheduled', 'close', 'closed', 'app-exit']);

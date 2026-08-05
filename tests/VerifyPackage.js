@@ -24,6 +24,13 @@ function assertMatchesSource(archiveName, sourceName = archiveName) {
   assert.equal(hash(archiveBuffer(archiveName)), hash(source), `${archiveName} differs from ${sourceName}`);
 }
 
+function sourceFiles(directory) {
+  return fs.readdirSync(path.join(root, directory), { withFileTypes: true }).flatMap((entry) => {
+    const name = `${directory}/${entry.name}`;
+    return entry.isDirectory() ? sourceFiles(name) : [name];
+  });
+}
+
 assert.ok(fs.existsSync(archive), `package archive missing: ${archive}`);
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const resourceVerification = verifyExtraResources({
@@ -34,6 +41,7 @@ const resourceVerification = verifyExtraResources({
 const files = asar.listPackage(archive, { isPack: false })
   .map((name) => name.replace(/^[/\\]/, '').replace(/\\/g, '/'));
 const fileSet = new Set(files);
+const westernSourceFiles = sourceFiles('src/core/astrology').filter((name) => name.endsWith('.js'));
 
 for (const required of [
   'src/renderer/Index.html',
@@ -78,8 +86,28 @@ for (const archiveName of [
   ...reactWoff2,
   `dist/renderer-react/${scriptMatch[1].slice(2)}`,
   `dist/renderer-react/${styleMatch[1].slice(2)}`,
+  ...westernSourceFiles,
 ]) {
   assertMatchesSource(archiveName);
+}
+
+const factorySource = archiveBuffer('src/core/astrology/ChartStrategyFactory.js').toString('utf8');
+assert.match(factorySource, /backend === 'horoscope'/, 'factory does not explicitly select the horoscope backend');
+assert.match(factorySource, /backend === 'swisseph'/, 'factory does not explicitly select the Swiss backend');
+assert.doesNotMatch(factorySource, /SwissephAdapter && backend !== 'horoscope'/,
+  'Swiss backend can silently select HoroscopeAdapter');
+
+const nativeModule = path.join(resourcesDir, 'app.asar.unpacked', 'node_modules', 'swisseph-v2', 'build', 'Release', 'swisseph.node');
+assert.ok(fs.statSync(nativeModule).size > 0, `unpacked Swiss native module is empty: ${nativeModule}`);
+const ephemerisSourceDir = path.join(root, 'assets', 'ephemeris');
+const ephemerisResourceDir = path.join(resourcesDir, 'assets', 'ephemeris');
+const ephemerisFiles = fs.readdirSync(ephemerisSourceDir).filter((name) => fs.statSync(path.join(ephemerisSourceDir, name)).isFile());
+assert.ok(ephemerisFiles.length > 0, 'source ephemeris directory is empty');
+for (const name of ephemerisFiles) {
+  const source = fs.readFileSync(path.join(ephemerisSourceDir, name));
+  const packaged = fs.readFileSync(path.join(ephemerisResourceDir, name));
+  assert.ok(packaged.length > 0, `packaged ephemeris file is empty: ${name}`);
+  assert.equal(hash(packaged), hash(source), `packaged ephemeris differs from source: ${name}`);
 }
 
 console.log(JSON.stringify({
@@ -92,7 +120,10 @@ console.log(JSON.stringify({
   reactWoff2: reactWoff2.length,
   script: scriptMatch[1],
   style: styleMatch[1],
-  sourceHashesVerified: 8 + rootTtf.length + reactWoff2.length + 2,
+  sourceHashesVerified: 8 + rootTtf.length + reactWoff2.length + 2 + westernSourceFiles.length,
+  westernSources: westernSourceFiles.length,
+  swissNativeBytes: fs.statSync(nativeModule).size,
+  ephemerisFiles: ephemerisFiles.length,
   optionalResourceSources: [...OPTIONAL_RESOURCE_SOURCES],
   verifiedExtraResources: resourceVerification.verified,
   missingOptionalResources: resourceVerification.missingOptional,
