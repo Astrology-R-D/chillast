@@ -27,7 +27,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import type { ChartIdentity } from '../contracts';
-import { useChartWorkspace } from '../../../stores/chartWorkspace';
+import { useChartWorkspace, type ActiveCellState } from '../../../stores/chartWorkspace';
 import type { ExplorerTab, TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
 import type { ExplorerRow, MachineValue } from './explorerRows';
 
@@ -95,7 +95,9 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
 }, forwardedRef) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeCellOwnsFocus = useRef(false);
+  const focusSequence = useRef(0);
   const previousTab = useRef(tab);
+  const previousFocusedIdentity = useRef(focusedIdentity);
   const restoredActive = useChartWorkspace((state) => state.activeCells[tab]);
   const setStoredActive = useChartWorkspace((state) => state.setActiveCell);
   const [sorting, setSorting] = useState<SortingState>(layout.sorting);
@@ -110,6 +112,9 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     columnId: columns[0]?.id ?? 'selected',
     anchorRowId: null,
   });
+  const activeRef = useRef<ActiveCellState>(active);
+  const selectionRef = useRef(selectedRowIds);
+  selectionRef.current = selectedRowIds;
 
   const emitLayout = (patch: Partial<TabLayoutV1>) => onLayoutChange({
     sorting, filters: columnFilters, columnOrder, columnVisibility, columnPinning: {
@@ -218,29 +223,48 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     setColumnSizing(layout.columnSizing);
   }, [layout]);
 
-  const activate = (rowIndex: number, columnIndex: number, anchorRowId: string | null = active.anchorRowId) => {
+  const commitActive = (next: ActiveCellState) => {
+    activeRef.current = next;
+    setActive(next);
+    setStoredActive(tab, next);
+  };
+
+  const scheduleCellFocus = (rowId: string, columnId: string) => {
+    const sequence = ++focusSequence.current;
+    if (!activeCellOwnsFocus.current) return;
+    requestAnimationFrame(() => {
+      if (sequence !== focusSequence.current) return;
+      scrollRef.current?.querySelector<HTMLElement>(
+        `[data-row-id="${CSS.escape(rowId)}"] [data-column-id="${CSS.escape(columnId)}"]`,
+      )?.focus();
+    });
+  };
+
+  const activate = (rowIndex: number, columnIndex: number, anchorRowId: string | null = activeRef.current.anchorRowId) => {
     if (!modelRows.length || !visibleColumns.length) return;
     const boundedRow = Math.max(0, Math.min(modelRows.length - 1, rowIndex));
     const boundedColumn = Math.max(0, Math.min(visibleColumns.length - 1, columnIndex));
     const next = { rowId: modelRows[boundedRow].id, columnId: visibleColumns[boundedColumn].id, anchorRowId };
-    setActive(next);
-    setStoredActive(tab, next);
+    commitActive(next);
     rowVirtualizer.scrollToIndex(boundedRow, { align: 'auto' });
-    if (activeCellOwnsFocus.current) requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
-      `[data-row-id="${CSS.escape(next.rowId)}"] [data-column-id="${CSS.escape(next.columnId)}"]`,
-    )?.focus());
+    scheduleCellFocus(next.rowId, next.columnId);
   };
 
   useLayoutEffect(() => {
     const tabChanged = previousTab.current !== tab;
+    const focusChanged = previousFocusedIdentity.current !== focusedIdentity;
     previousTab.current = tab;
+    previousFocusedIdentity.current = focusedIdentity;
+    const currentActive = activeRef.current;
     if (!modelRows.length || !visibleColumns.length) {
-      if (active.rowId || active.columnId) {
+      if (currentActive.rowId || currentActive.columnId) {
         const next = { rowId: '', columnId: '', anchorRowId: null };
-        setActive(next);
-        setStoredActive(tab, next);
+        commitActive(next);
       }
-      if (activeCellOwnsFocus.current) requestAnimationFrame(() => scrollRef.current?.focus());
+      const sequence = ++focusSequence.current;
+      if (activeCellOwnsFocus.current) requestAnimationFrame(() => {
+        if (sequence === focusSequence.current) scrollRef.current?.focus();
+      });
       return;
     }
 
@@ -250,42 +274,37 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     const restoredIndex = restoredActive
       ? modelRows.findIndex((row) => row.id === restoredActive.rowId)
       : -1;
-    const currentIndex = modelRows.findIndex((row) => row.id === active.rowId);
-    const rowIndex = focusedIndex >= 0
+    const currentIndex = modelRows.findIndex((row) => row.id === currentActive.rowId);
+    const preferFocused = focusedIndex >= 0 && (focusChanged || tabChanged || currentIndex < 0);
+    const rowIndex = preferFocused
       ? focusedIndex
       : tabChanged && restoredIndex >= 0
         ? restoredIndex
         : currentIndex >= 0 ? currentIndex : 0;
-    const preferredColumn = tabChanged ? restoredActive?.columnId : active.columnId;
+    const preferredColumn = tabChanged ? restoredActive?.columnId : currentActive.columnId;
     const columnIndex = Math.max(0, visibleColumns.findIndex((column) => column.id === preferredColumn));
     const next = {
       rowId: modelRows[rowIndex].id,
       columnId: visibleColumns[columnIndex].id,
-      anchorRowId: active.anchorRowId && modelRows.some((row) => row.id === active.anchorRowId)
-        ? active.anchorRowId
+      anchorRowId: currentActive.anchorRowId && modelRows.some((row) => row.id === currentActive.anchorRowId)
+        ? currentActive.anchorRowId
         : null,
     };
-    if (next.rowId !== active.rowId || next.columnId !== active.columnId || next.anchorRowId !== active.anchorRowId) {
-      setActive(next);
-      setStoredActive(tab, next);
+    if (next.rowId !== currentActive.rowId || next.columnId !== currentActive.columnId || next.anchorRowId !== currentActive.anchorRowId) {
+      commitActive(next);
     }
     rowVirtualizer.scrollToIndex(rowIndex, { align: 'auto' });
-    if (activeCellOwnsFocus.current) requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
-      `[data-row-id="${CSS.escape(next.rowId)}"] [data-column-id="${CSS.escape(next.columnId)}"]`,
-    )?.focus());
-  }, [columnSignature, focusedIdentity, modelSignature, restoredActive, rowVirtualizer, setStoredActive, tab]);
+    scheduleCellFocus(next.rowId, next.columnId);
+  // Restored state is consumed when tab changes; including it here would reconcile against our own active-cell writes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnSignature, focusedIdentity, modelSignature, rowVirtualizer, setStoredActive, tab]);
 
   const reveal = (rowId: string, focus: boolean) => {
     const rowIndex = modelRows.findIndex((row) => row.id === rowId);
     if (rowIndex < 0) return;
-    const columnIndex = Math.max(0, visibleColumns.findIndex((column) => column.id === active.columnId));
+    const columnIndex = Math.max(0, visibleColumns.findIndex((column) => column.id === activeRef.current.columnId));
+    if (focus) activeCellOwnsFocus.current = true;
     activate(rowIndex, columnIndex);
-    if (focus) {
-      activeCellOwnsFocus.current = true;
-      requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
-        `[data-row-id="${CSS.escape(rowId)}"] [data-column-id="${CSS.escape(visibleColumns[columnIndex]?.id ?? '')}"]`,
-      )?.focus());
-    }
   };
 
   useImperativeHandle(forwardedRef, () => ({
@@ -301,40 +320,48 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedIdentity, tab]);
 
-  const updateSelection = (next: Set<string>) => onSelectionChange(next);
+  const updateSelection = (next: Set<string>) => {
+    selectionRef.current = next;
+    onSelectionChange(next);
+  };
   const toggleRow = (rowId: string) => {
-    const next = new Set(selectedRowIds);
+    const next = new Set(selectionRef.current);
     if (next.has(rowId)) next.delete(rowId); else next.add(rowId);
     updateSelection(next);
   };
   const selectRange = (targetIndex: number) => {
-    const anchorId = active.anchorRowId ?? active.rowId;
+    const currentActive = activeRef.current;
+    const anchorId = currentActive.anchorRowId ?? currentActive.rowId;
     const anchorIndex = Math.max(0, modelRows.findIndex((row) => row.id === anchorId));
     const [start, end] = [anchorIndex, targetIndex].sort((left, right) => left - right);
-    const next = new Set(selectedRowIds);
+    const next = new Set(selectionRef.current);
     for (let index = start; index <= end; index += 1) next.add(modelRows[index].id);
     updateSelection(next);
     return anchorId;
   };
 
   const onCellKeyDown = (event: KeyboardEvent<HTMLDivElement>, rowIndex: number, columnIndex: number) => {
-    let nextRow = rowIndex;
-    let nextColumn = columnIndex;
+    const logicalRow = modelRows.findIndex((row) => row.id === activeRef.current.rowId);
+    const logicalColumn = visibleColumns.findIndex((column) => column.id === activeRef.current.columnId);
+    const currentRow = logicalRow >= 0 ? logicalRow : rowIndex;
+    const currentColumn = logicalColumn >= 0 ? logicalColumn : columnIndex;
+    let nextRow = currentRow;
+    let nextColumn = currentColumn;
     if (event.key === 'ArrowUp') nextRow -= 1;
     else if (event.key === 'ArrowDown') nextRow += 1;
     else if (event.key === 'ArrowLeft') nextColumn -= 1;
     else if (event.key === 'ArrowRight') nextColumn += 1;
-    else if (event.key === 'Home') { nextRow = event.ctrlKey ? 0 : rowIndex; nextColumn = 0; }
-    else if (event.key === 'End') { nextRow = event.ctrlKey ? modelRows.length - 1 : rowIndex; nextColumn = visibleColumns.length - 1; }
-    else if (event.key === ' ') { event.preventDefault(); toggleRow(modelRows[rowIndex].id); return; }
+    else if (event.key === 'Home') { nextRow = event.ctrlKey ? 0 : currentRow; nextColumn = 0; }
+    else if (event.key === 'End') { nextRow = event.ctrlKey ? modelRows.length - 1 : currentRow; nextColumn = visibleColumns.length - 1; }
+    else if (event.key === ' ') { event.preventDefault(); toggleRow(modelRows[currentRow].id); return; }
     else if (event.key === 'Enter') {
-      const identity = modelRows[rowIndex].original.chartIdentity;
+      const identity = modelRows[currentRow].original.chartIdentity;
       if (identity) onFocusIdentity(identity);
       return;
     } else return;
     event.preventDefault();
     nextRow = Math.max(0, Math.min(modelRows.length - 1, nextRow));
-    const anchor = event.shiftKey && nextRow !== rowIndex ? selectRange(nextRow) : null;
+    const anchor = event.shiftKey && nextRow !== currentRow ? selectRange(nextRow) : null;
     activate(nextRow, nextColumn, anchor);
   };
 

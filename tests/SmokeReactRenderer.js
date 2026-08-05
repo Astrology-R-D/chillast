@@ -501,14 +501,35 @@ async function runChartWorkbenchSmoke(win) {
     return { ready: Boolean(row && document.querySelector('[role="tab"][aria-selected="true"]')?.textContent === '星体') };
   });
   await win.webContents.executeJavaScript(`(() => {
-    const row = Array.from(document.querySelectorAll('.chart-data-grid [data-row-id]')).find((candidate) => candidate.getAttribute('data-row-id') !== window.__chartSmokeIdentity);
-    window.__chartSmokeTableIdentity = row.getAttribute('data-row-id');
-    const cell = row.querySelector('[tabindex="0"]') ?? row.querySelector('[role="gridcell"]');
-    cell.focus(); cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const rows = Array.from(document.querySelectorAll('.chart-data-grid [data-row-id]'));
+    const activeCell = document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]');
+    const activeRow = activeCell.closest('[data-row-id]');
+    const targetRow = rows.find((candidate) => candidate.getAttribute('data-row-id') !== activeRow.getAttribute('data-row-id'));
+    const currentIndex = Number(activeRow.getAttribute('aria-rowindex')) - 2;
+    const targetIndex = Number(targetRow.getAttribute('aria-rowindex')) - 2;
+    const key = targetIndex < currentIndex ? 'ArrowUp' : 'ArrowDown';
+    window.__chartSmokeTableIdentity = targetRow.getAttribute('data-row-id');
+    for (let index = 0; index < Math.abs(targetIndex - currentIndex); index += 1) {
+      activeCell.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    }
   })()`);
-  await poll(win, 'table to chart focus', () => ({
-    ready: document.querySelector('[data-chart-identity="' + CSS.escape(window.__chartSmokeTableIdentity) + '"]')?.getAttribute('data-focused') === 'true',
+  await poll(win, 'table row focus activation', () => ({
+    ready: document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]')?.closest('[data-row-id]')?.getAttribute('data-row-id')
+      === window.__chartSmokeTableIdentity,
   }));
+  await win.webContents.executeJavaScript(`document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
+  await poll(win, 'table to chart focus', () => {
+    const target = document.querySelector('[data-chart-identity="' + CSS.escape(window.__chartSmokeTableIdentity) + '"]');
+    return {
+      ready: target?.getAttribute('data-focused') === 'true',
+      value: {
+        intendedIdentity: window.__chartSmokeTableIdentity,
+        chartFocusedIdentity: document.querySelector('.chart-svg-host [data-focused="true"]')?.getAttribute('data-chart-identity') ?? null,
+        activeRowId: document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]')?.closest('[data-row-id]')?.getAttribute('data-row-id') ?? null,
+        domFocusedRowId: document.activeElement?.closest('[data-row-id]')?.getAttribute('data-row-id') ?? null,
+      },
+    };
+  });
 
   chartSmokeStage = 'native-tab-traversal';
   await win.webContents.executeJavaScript(`document.querySelector('.chart-svg-host svg').focus()`);

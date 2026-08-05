@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef, useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartWorkspaceProvider, createChartWorkspaceStore } from '../../../stores/chartWorkspace';
 import { defaultTabLayout, type TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
 import { columnsFor } from './explorerColumns';
@@ -25,15 +25,16 @@ const rows = Array.from({ length: 500 }, (_, index): ExplorerRow => ({
   },
 }));
 
-function GridHarness({ initial = defaultTabLayout(), selected = new Set<string>(), onFocus = vi.fn(), gridRef = createRef<ChartDataGridHandle>() }: {
-  initial?: TabLayoutV1; selected?: Set<string>; onFocus?: (identity: string) => void; gridRef?: React.RefObject<ChartDataGridHandle | null>;
+function GridHarness({ initial = defaultTabLayout(), selected = new Set<string>(), focusedIdentity = null, onFocus = vi.fn(), gridRef = createRef<ChartDataGridHandle>() }: {
+  initial?: TabLayoutV1; selected?: Set<string>; focusedIdentity?: string | null;
+  onFocus?: (identity: string) => void; gridRef?: React.RefObject<ChartDataGridHandle | null>;
 }) {
   const [layout, setLayout] = useState(initial);
   const [selection, setSelection] = useState(selected);
   const store = useState(() => createChartWorkspaceStore(storage()))[0];
   return <ChartWorkspaceProvider store={store}><ChartDataGrid ref={gridRef} tab="planets"
     rows={rows} columns={columnsFor('planets', 'merged', labels)} layout={layout}
-    selectedRowIds={selection} focusedIdentity={null} onLayoutChange={setLayout}
+    selectedRowIds={selection} focusedIdentity={focusedIdentity as never} onLayoutChange={setLayout}
     onSelectionChange={setSelection} onFocusIdentity={onFocus as never} /></ChartWorkspaceProvider>;
 }
 
@@ -47,18 +48,20 @@ function ComparisonGrid({ comparisonRows, initial }: { comparisonRows: ExplorerR
     onSelectionChange={setSelection} onFocusIdentity={vi.fn()} /></ChartWorkspaceProvider>;
 }
 
-function ControlledGrid({ data = rows, layout, focusedIdentity = null, gridRef = createRef<ChartDataGridHandle>() }: {
+function ControlledGrid({ data = rows, layout, focusedIdentity = null, onFocus = vi.fn(), gridRef = createRef<ChartDataGridHandle>() }: {
   data?: ExplorerRow[]; layout: TabLayoutV1; focusedIdentity?: string | null;
-  gridRef?: React.RefObject<ChartDataGridHandle | null>;
+  onFocus?: (identity: string) => void; gridRef?: React.RefObject<ChartDataGridHandle | null>;
 }) {
   const store = useState(() => createChartWorkspaceStore(storage()))[0];
   return <ChartWorkspaceProvider store={store}><ChartDataGrid ref={gridRef} tab="planets"
     rows={data} columns={columnsFor('planets', 'merged', labels)} layout={layout}
     selectedRowIds={new Set()} focusedIdentity={focusedIdentity as never} onLayoutChange={vi.fn()}
-    onSelectionChange={vi.fn()} onFocusIdentity={vi.fn()} /></ChartWorkspaceProvider>;
+    onSelectionChange={vi.fn()} onFocusIdentity={onFocus as never} /></ChartWorkspaceProvider>;
 }
 
 describe('virtual chart data grid', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('virtualizes 500 rows and imperatively reveals a sorted row', () => {
     const ref = createRef<ChartDataGridHandle>();
     const { container } = render(<GridHarness gridRef={ref} />);
@@ -110,6 +113,73 @@ describe('virtual chart data grid', () => {
     expect(container.querySelector('[data-row-id="natal:p499"] [tabindex="0"]')).toHaveAttribute('aria-colindex', '8');
     fireEvent.keyDown(container.querySelector('[data-row-id="natal:p499"] [tabindex="0"]')!, { key: 'Home', ctrlKey: true });
     expect(container.querySelector('[data-row-id="natal:p0"] [tabindex="0"]')).toHaveAttribute('aria-colindex', '1');
+  });
+
+  it.each([2, 10])('serializes %i rapid Shift+ArrowDown transitions before animation frames run', (count) => {
+    const frames: FrameRequestCallback[] = [];
+    const animationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const { container } = render(<GridHarness />);
+    const first = container.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]')!;
+    first.focus();
+    frames.length = 0;
+
+    for (let index = 0; index < count; index += 1) {
+      fireEvent.keyDown(first, { key: 'ArrowDown', shiftKey: true });
+    }
+
+    expect([...container.querySelectorAll('[data-selected="true"]')].map((row) => row.getAttribute('data-row-id')))
+      .toEqual(rows.slice(0, count + 1).map((row) => row.id));
+    expect(container.querySelector(`[data-row-id="natal:p${count}"] [tabindex="0"]`)).toBeInTheDocument();
+    animationFrame.mockRestore();
+  });
+
+  it('serializes rapid plain arrows and ignores stale queued focus callbacks', () => {
+    const frames: FrameRequestCallback[] = [];
+    const animationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const { container } = render(<GridHarness />);
+    const first = container.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]')!;
+    first.focus();
+    frames.length = 0;
+
+    for (let index = 0; index < 10; index += 1) fireEvent.keyDown(first, { key: 'ArrowDown' });
+    expect(container.querySelector('[data-row-id="natal:p10"] [tabindex="0"]')).toBeInTheDocument();
+
+    act(() => [...frames].reverse().forEach((callback, index) => callback(index)));
+    expect(document.activeElement).toBe(container.querySelector('[data-row-id="natal:p10"] [tabindex="0"]'));
+    animationFrame.mockRestore();
+  });
+
+  it('activates the newly focused table row before publishing Enter to chart focus', () => {
+    const onFocus = vi.fn();
+    const { container } = render(<GridHarness focusedIdentity="natal:p0" onFocus={onFocus} />);
+    const nextCell = container.querySelector<HTMLElement>('[data-row-id="natal:p1"] [role="gridcell"]')!;
+
+    act(() => nextCell.focus());
+    fireEvent.keyDown(nextCell, { key: 'Enter' });
+
+    expect(onFocus).toHaveBeenLastCalledWith('natal:p1');
+  });
+
+  it('preserves a valid logical active row through model reconciliation while chart focus is stale', () => {
+    const onFocus = vi.fn();
+    const layout = defaultTabLayout();
+    const { container, rerender } = render(<ControlledGrid layout={layout} focusedIdentity="natal:p0" onFocus={onFocus} />);
+    const nextCell = container.querySelector<HTMLElement>('[data-row-id="natal:p1"] [role="gridcell"]')!;
+    act(() => nextCell.focus());
+
+    const changedLayout = structuredClone(layout);
+    changedLayout.columnVisibility.longitude = false;
+    rerender(<ControlledGrid layout={changedLayout} focusedIdentity="natal:p0" onFocus={onFocus} />);
+    const reconciledCell = container.querySelector<HTMLElement>('[data-row-id="natal:p1"] [role="gridcell"]')!;
+    fireEvent.keyDown(reconciledCell, { key: 'Enter' });
+
+    expect(onFocus).toHaveBeenLastCalledWith('natal:p1');
   });
 
   it('prunes selected IDs outside the filtered row model but preserves selection through sorting', () => {
