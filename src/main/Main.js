@@ -325,12 +325,23 @@ class Main {
         node.dispatchEvent(new Event('change', { bubbles: true }));
       };
       set('[data-control="primaryProfile"] select', 'packaged-chart-smoke');
-      set('[data-control="zodiac"] select', 'sidereal');
+    })()`);
+    await this._waitForSmokeState('packaged chart profile', () => {
+      const primaryProfile = document.querySelector('[data-control="primaryProfile"] select');
+      return { ready: primaryProfile?.value === 'packaged-chart-smoke' };
+    });
+    await this.mainWindow.webContents.executeJavaScript(`(() => {
+      const zodiac = document.querySelector('[data-control="zodiac"] select');
+      Object.getOwnPropertyDescriptor(zodiac.constructor.prototype, 'value').set.call(zodiac, 'sidereal');
+      zodiac.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
     await this._waitForSmokeState('packaged chart controls', () => {
+      const primaryProfile = document.querySelector('[data-control="primaryProfile"] select');
+      const zodiac = document.querySelector('[data-control="zodiac"] select');
       const calculate = Array.from(document.querySelectorAll('.chart-filter-band button'))
         .find((button) => button.textContent === '计算');
-      return { ready: Boolean(calculate && !calculate.disabled) };
+      return { ready: Boolean(primaryProfile?.value === 'packaged-chart-smoke'
+        && zodiac?.value === 'sidereal' && calculate && !calculate.disabled) };
     });
     await this.mainWindow.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算').click()`);
     const chart = await this._waitForSmokeState('packaged real sidereal natal', () => {

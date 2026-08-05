@@ -52,6 +52,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
   const setFocus = useChartWorkspace((state) => state.setFocus);
   const activeTab = tableLayout.activeTab;
   const mode = tableLayout.comparisonMode;
+  const comparisonAvailable = result.rings.length >= 2 || result.subjects.length >= 2;
   const rows = useMemo(() => rowsFor(result, activeTab, mode), [activeTab, mode, result]);
   const labels = useMemo(() => new Proxy<Record<string, string>>({}, {
     get: (_target, key) => t(`chart.explorer.columns.${String(key)}`),
@@ -145,7 +146,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
       <button type="button" onClick={csv} aria-label={t('chart.explorer.csv')}><FileDown size={15} />{t('chart.explorer.csv')}</button>
       <button type="button" aria-expanded={columnMenuOpen} aria-label={t('chart.explorer.columnMenu')}
         onClick={() => setColumnMenuOpen((open) => !open)}><Columns3 size={15} />{t('chart.explorer.columnMenu')}</button>
-      {activeTab === 'comparison' && result.rings.length >= 2 && <div className="chart-data-explorer__modes" aria-label={t('chart.explorer.comparisonMode')}>
+      {activeTab === 'comparison' && comparisonAvailable && <div className="chart-data-explorer__modes" aria-label={t('chart.explorer.comparisonMode')}>
         {MODES.map((item) => <button key={item} type="button" aria-pressed={mode === item} onClick={() => chooseMode(item)}>{t(`chart.explorer.modes.${item}`)}</button>)}
       </div>}
       <output aria-live="polite">{exportStatus || (selected.length ? t('chart.explorer.selectedCount', { count: selected.length }) : '')}</output>
@@ -174,7 +175,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
       })}
     </div>}
     <div id={`chart-explorer-panel-${activeTab}`} role="tabpanel" className="chart-data-explorer__panel">
-      {activeTab === 'comparison' && result.rings.length < 2
+      {activeTab === 'comparison' && !comparisonAvailable
         ? <p role="status">{t('chart.explorer.comparisonUnavailable')}</p>
         : <ChartDataGrid ref={gridRef} tab={activeTab} rows={rows} columns={columns}
           layout={tableLayout.tabs[activeTab]} selectedRowIds={new Set(selected)} focusedIdentity={focusedIdentity}

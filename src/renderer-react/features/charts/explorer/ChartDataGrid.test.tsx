@@ -37,6 +37,16 @@ function GridHarness({ initial = defaultTabLayout(), selected = new Set<string>(
     onSelectionChange={setSelection} onFocusIdentity={onFocus as never} /></ChartWorkspaceProvider>;
 }
 
+function ComparisonGrid({ comparisonRows, initial }: { comparisonRows: ExplorerRow[]; initial: TabLayoutV1 }) {
+  const [layout, setLayout] = useState(initial);
+  const [selection, setSelection] = useState(new Set<string>());
+  const store = useState(() => createChartWorkspaceStore(storage()))[0];
+  return <ChartWorkspaceProvider store={store}><ChartDataGrid tab="comparison"
+    rows={comparisonRows} columns={columnsFor('comparison', 'sideBySide', labels)} layout={layout}
+    selectedRowIds={selection} focusedIdentity={null} onLayoutChange={setLayout}
+    onSelectionChange={setSelection} onFocusIdentity={vi.fn()} /></ChartWorkspaceProvider>;
+}
+
 describe('virtual chart data grid', () => {
   it('virtualizes 500 rows and imperatively reveals a sorted row', () => {
     const ref = createRef<ChartDataGridHandle>();
@@ -100,5 +110,20 @@ describe('virtual chart data grid', () => {
     layout.sorting = [{ id: 'longitude', desc: true }];
     rerender(<GridHarness initial={layout} selected={new Set(['natal:p1'])} />);
     expect(container.querySelector('[data-row-id="natal:p1"]')).toHaveAttribute('data-selected', 'true');
+  });
+
+  it('keeps missing comparison numbers last in descending table sorts', () => {
+    const layout = defaultTabLayout();
+    layout.sorting = [{ id: 'secondLongitude', desc: true }];
+    const comparisonRows: ExplorerRow[] = [
+      { id: 'present-low', chartIdentity: null, values: { secondLongitude: 10 } },
+      { id: 'missing', chartIdentity: null, values: { secondLongitude: null } },
+      { id: 'present-high', chartIdentity: null, values: { secondLongitude: 20 } },
+    ];
+
+    const { container } = render(<ComparisonGrid comparisonRows={comparisonRows} initial={layout} />);
+
+    expect([...container.querySelectorAll('[data-row-id]')].map((row) => row.getAttribute('data-row-id')))
+      .toEqual(['present-high', 'present-low', 'missing']);
   });
 });

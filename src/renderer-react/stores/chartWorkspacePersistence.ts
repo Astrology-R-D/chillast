@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GeoLocation } from '../api/contracts';
 import { CHART_TYPES, type ChartType, type Zodiac } from '../features/charts/contracts';
-import { allowedColumnIds } from '../features/charts/explorer/explorerColumns';
+import { allowedColumnIds, columnIds } from '../features/charts/explorer/explorerColumns';
 
 export type ExplorerTab = 'planets' | 'houses' | 'aspects' | 'distributions' | 'comparison';
 export type ComparisonMode = 'merged' | 'sideBySide' | 'difference';
@@ -91,7 +91,7 @@ export function defaultTabLayout(): TabLayoutV1 {
     filters: [],
     columnOrder: [],
     columnVisibility: {},
-    columnPinning: { left: [], right: [] },
+    columnPinning: { left: ['selected'], right: [] },
     columnSizing: {},
   };
 }
@@ -109,8 +109,8 @@ function sanitizeTabLayout(value: unknown, allowed: ReadonlySet<string>): TabLay
     columnOrder: layout.columnOrder.filter(keep),
     columnVisibility: Object.fromEntries(Object.entries(layout.columnVisibility).filter(([id]) => keep(id))),
     columnPinning: {
-      left: layout.columnPinning.left.filter(keep),
-      right: layout.columnPinning.right.filter(keep),
+      left: ['selected', ...layout.columnPinning.left.filter((id) => id !== 'selected' && keep(id))],
+      right: layout.columnPinning.right.filter((id) => id !== 'selected' && keep(id)),
     },
     columnSizing: Object.fromEntries(Object.entries(layout.columnSizing).filter(([id]) => keep(id))),
   };
@@ -124,11 +124,12 @@ function parseTableLayout(value: unknown): ChartTableLayoutV1 {
     ? source.tabs as Record<string, unknown>
     : {};
   const allowed = allowedColumnIds();
+  const comparisonAllowed = new Set(columnIds('comparison', parsed.data.comparisonMode));
   return {
     ...parsed.data,
     tabs: Object.fromEntries(EXPLORER_TABS.map((tab) => [
       tab,
-      sanitizeTabLayout(tabs[tab], allowed[tab]),
+      sanitizeTabLayout(tabs[tab], tab === 'comparison' ? comparisonAllowed : allowed[tab]),
     ])) as Record<ExplorerTab, TabLayoutV1>,
   };
 }

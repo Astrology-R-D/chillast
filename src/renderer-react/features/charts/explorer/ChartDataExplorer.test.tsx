@@ -35,6 +35,22 @@ describe('chart data explorer', () => {
     expect(store.getState().workspace.tableLayouts[oneRing.meta.type].activeTab).toBe('comparison');
   });
 
+  it('offers comparison modes for a one-ring relationship result with two subjects', async () => {
+    const user = userEvent.setup();
+    const relationship = structuredClone(twoRingResult);
+    relationship.rings = [relationship.rings[0]];
+    relationship.subjects = ['primary', 'secondary'].map((role) => ({
+      role, nameZh: role, nameEn: role, gender: 'other', birthLabel: '2000-01-01',
+      location: { label: role, latitude: 0, longitude: 0 },
+    }));
+    renderExplorer(relationship);
+
+    await user.click(screen.getByRole('tab', { name: /comparison|比较/i }));
+
+    expect(screen.queryByText(/无法比较|Comparison unavailable/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('比较模式')).toBeInTheDocument();
+  });
+
   it('switches all three two-ring comparison modes and persists exact chart layout', async () => {
     const user = userEvent.setup();
     const { store } = renderExplorer();

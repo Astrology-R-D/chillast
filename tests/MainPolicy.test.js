@@ -104,6 +104,8 @@ test('packaged React smoke drives a real sidereal chart, exports, and dirty clos
   const source = fs.readFileSync(path.join(__dirname, '../src/main/Main.js'), 'utf8');
   assert.match(source, /_collectPackagedChartSmoke/);
   assert.match(source, /data-control="zodiac"/);
+  assert.match(source, /primaryProfile\?\.value === 'packaged-chart-smoke'/);
+  assert.match(source, /zodiac\?\.value === 'sidereal'/);
   assert.match(source, /!calculate\.disabled/);
   assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
   assert.match(source, /\.chart-svg-host svg/);

@@ -33,6 +33,7 @@ describe('western chart workspace persistence', () => {
     ])));
     workspace.tableLayouts.natal.tabs.planets.columnOrder.push('changed');
     expect(workspace.tableLayouts.transit.tabs.planets.columnOrder).toEqual([]);
+    expect(workspace.tableLayouts.natal.tabs.planets.columnPinning.left).toEqual(['selected']);
   });
 
   test('moves stable recents to the front, deduplicates, and caps at eight', () => {
@@ -91,6 +92,21 @@ describe('western chart workspace persistence', () => {
     expect(parsed.tableLayouts.transit.tabs.planets.columnSizing.longitude).toBe(234);
     expect(parsed.recents.primaryProfileIds).toEqual(['p1']);
     expect(parsed.split.personal.horizontal).toEqual([62, 38]);
+  });
+
+  test('validates comparison columns against the saved exact mode and keeps selection pinned', () => {
+    const source = defaultWesternWorkspace();
+    source.tableLayouts.natal.comparisonMode = 'merged';
+    source.tableLayouts.natal.tabs.comparison.sorting = [
+      { id: 'secondLongitude', desc: true },
+      { id: 'longitude', desc: false },
+    ];
+    source.tableLayouts.natal.tabs.comparison.columnPinning = { left: [], right: [] };
+
+    const parsed = parseWesternWorkspace(source);
+
+    expect(parsed.tableLayouts.natal.tabs.comparison.sorting).toEqual([{ id: 'longitude', desc: false }]);
+    expect(parsed.tableLayouts.natal.tabs.comparison.columnPinning.left).toEqual(['selected']);
   });
 
   test('unsupported top-level versions reset only the western chart payload', () => {

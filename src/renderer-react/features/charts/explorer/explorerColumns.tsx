@@ -102,7 +102,11 @@ export function columnsFor(
     return {
       id,
       header: labels[id] ?? id,
-      accessorFn: (row) => row.values[id] ?? null,
+      accessorFn: (row) => {
+        const value = row.values[id] ?? null;
+        // TanStack keeps undefined last in both sort directions; machine rows retain explicit null.
+        return NUMERIC_IDS.has(id) && value === null ? undefined as unknown as MachineValue : value;
+      },
       filterFn: filterFor(id),
       sortingFn: NUMERIC_IDS.has(id) ? nullableNumberSort : 'alphanumeric',
       sortUndefined: 'last',
