@@ -35,7 +35,7 @@ describe('chart data explorer', () => {
     expect(store.getState().workspace.tableLayouts[oneRing.meta.type].activeTab).toBe('comparison');
   });
 
-  it('offers comparison modes for a one-ring relationship result with two subjects', async () => {
+  it('keeps one-ring relationship results unavailable even with two subjects', async () => {
     const user = userEvent.setup();
     const relationship = structuredClone(twoRingResult);
     relationship.rings = [relationship.rings[0]];
@@ -47,8 +47,8 @@ describe('chart data explorer', () => {
 
     await user.click(screen.getByRole('tab', { name: /comparison|比较/i }));
 
-    expect(screen.queryByText(/无法比较|Comparison unavailable/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText('比较模式')).toBeInTheDocument();
+    expect(screen.getByText(/无法比较|Comparison unavailable/i)).toHaveAttribute('role', 'status');
+    expect(screen.queryByLabelText('比较模式')).not.toBeInTheDocument();
   });
 
   it('switches all three two-ring comparison modes and persists exact chart layout', async () => {
@@ -76,6 +76,9 @@ describe('chart data explorer', () => {
     await user.keyboard('{Enter}');
     expect(store.getState().focusedIdentity).toBe('transit:saturn');
     await user.click(screen.getByRole('tab', { name: /houses|宫位/i }));
+    expect(store.getState().focusedIdentity).toBe('transit:saturn');
+    await user.click(screen.getByRole('tab', { name: /planets|星体/i }));
+    expect(container.querySelector('[data-row-id="transit:saturn"] [tabindex="0"]')).toBeInTheDocument();
     expect(store.getState().focusedIdentity).toBe('transit:saturn');
     act(() => ref.current?.revealSelection({ identity: 'house:2', tab: 'houses' }));
     expect(container.querySelector('[data-row-id="house:2"]')).toBeInTheDocument();

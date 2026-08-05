@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -45,6 +45,17 @@ function ComparisonGrid({ comparisonRows, initial }: { comparisonRows: ExplorerR
     rows={comparisonRows} columns={columnsFor('comparison', 'sideBySide', labels)} layout={layout}
     selectedRowIds={selection} focusedIdentity={null} onLayoutChange={setLayout}
     onSelectionChange={setSelection} onFocusIdentity={vi.fn()} /></ChartWorkspaceProvider>;
+}
+
+function ControlledGrid({ data = rows, layout, focusedIdentity = null, gridRef = createRef<ChartDataGridHandle>() }: {
+  data?: ExplorerRow[]; layout: TabLayoutV1; focusedIdentity?: string | null;
+  gridRef?: React.RefObject<ChartDataGridHandle | null>;
+}) {
+  const store = useState(() => createChartWorkspaceStore(storage()))[0];
+  return <ChartWorkspaceProvider store={store}><ChartDataGrid ref={gridRef} tab="planets"
+    rows={data} columns={columnsFor('planets', 'merged', labels)} layout={layout}
+    selectedRowIds={new Set()} focusedIdentity={focusedIdentity as never} onLayoutChange={vi.fn()}
+    onSelectionChange={vi.fn()} onFocusIdentity={vi.fn()} /></ChartWorkspaceProvider>;
 }
 
 describe('virtual chart data grid', () => {
@@ -125,5 +136,61 @@ describe('virtual chart data grid', () => {
 
     expect([...container.querySelectorAll('[data-row-id]')].map((row) => row.getAttribute('data-row-id')))
       .toEqual(['present-high', 'present-low', 'missing']);
+  });
+
+  it('repairs the roving cell after filter removal and moves focus to the empty grid', async () => {
+    const ref = createRef<ChartDataGridHandle>();
+    const layout = defaultTabLayout();
+    const { container, rerender } = render(<ControlledGrid layout={layout} gridRef={ref} />);
+    act(() => ref.current?.focusRow('natal:p42'));
+    const active = container.querySelector<HTMLElement>('[data-row-id="natal:p42"] [tabindex="0"]')!;
+    active.focus();
+
+    const filtered = structuredClone(layout);
+    filtered.filters = [{ id: 'point', value: 'p1' }];
+    rerender(<ControlledGrid layout={filtered} gridRef={ref} />);
+    await waitFor(() => expect(container.querySelector('[data-row-id="natal:p1"] [tabindex="0"]')).toBe(document.activeElement));
+    expect(container.querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(1);
+
+    const empty = structuredClone(filtered);
+    empty.filters = [{ id: 'point', value: 'absent' }];
+    rerender(<ControlledGrid layout={empty} gridRef={ref} />);
+    await waitFor(() => expect(screen.getByRole('grid')).toHaveAttribute('tabindex', '0'));
+    expect(document.activeElement).toBe(screen.getByRole('grid'));
+    expect(container.querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(0);
+  });
+
+  it('keeps the active row mounted through sorting and repairs a hidden active column', async () => {
+    const ref = createRef<ChartDataGridHandle>();
+    const layout = defaultTabLayout();
+    const { container, rerender } = render(<ControlledGrid layout={layout} gridRef={ref} />);
+    act(() => ref.current?.revealRow('natal:p499'));
+    container.querySelector<HTMLElement>('[data-row-id="natal:p499"] [data-column-id="longitude"]')!.focus();
+
+    const restored = structuredClone(layout);
+    restored.sorting = [{ id: 'longitude', desc: true }];
+    restored.columnVisibility.longitude = false;
+    rerender(<ControlledGrid layout={restored} gridRef={ref} />);
+
+    await waitFor(() => expect(container.querySelector('[data-row-id="natal:p499"] [tabindex="0"]')).toBeInTheDocument());
+    expect(container.querySelector('[data-row-id="natal:p499"] [data-column-id="longitude"]')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(1);
+  });
+
+  it('reveals shared focus after model changes without stealing outside document focus', async () => {
+    const layout = defaultTabLayout();
+    const external = document.createElement('button');
+    document.body.append(external);
+    external.focus();
+    const { container, rerender } = render(<ControlledGrid layout={layout} focusedIdentity="natal:p400" />);
+    await waitFor(() => expect(container.querySelector('[data-row-id="natal:p400"] [tabindex="0"]')).toBeInTheDocument());
+    expect(document.activeElement).toBe(external);
+
+    const sorted = structuredClone(layout);
+    sorted.sorting = [{ id: 'longitude', desc: true }];
+    rerender(<ControlledGrid layout={sorted} focusedIdentity="natal:p400" />);
+    await waitFor(() => expect(container.querySelector('[data-row-id="natal:p400"] [tabindex="0"]')).toBeInTheDocument());
+    expect(document.activeElement).toBe(external);
+    external.remove();
   });
 });

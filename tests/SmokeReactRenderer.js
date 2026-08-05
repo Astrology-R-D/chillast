@@ -583,6 +583,7 @@ async function runChartWorkbenchSmoke(win) {
   await new Promise((resolve) => setTimeout(resolve, 100));
   const lateRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.request.settings.zodiac === 'tropical';
 
+  const acceptedBeforeCancellation = chartAiContexts.filter((context) => context?.resultId).at(-1);
   chartSmokeStage = 'cancel-race';
   await win.webContents.executeJavaScript(`(() => {
     const zodiac = document.querySelector('[data-control="zodiac"] select'); const calc = Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算');
@@ -593,7 +594,9 @@ async function runChartWorkbenchSmoke(win) {
   await waitForMain('cancellable requests', () => delayedAstrology.pending.length === 6);
   delayedAstrology.resolve(4); delayedAstrology.resolve(5);
   await new Promise((resolve) => setTimeout(resolve, 100));
-  const cancellationRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.request.settings.zodiac === 'tropical';
+  const acceptedAfterCancellation = chartAiContexts.filter((context) => context?.resultId).at(-1);
+  const cancellationRejected = acceptedBeforeCancellation.resultId === acceptedAfterCancellation.resultId
+    && JSON.stringify(acceptedBeforeCancellation.successfulFilters) === JSON.stringify(acceptedAfterCancellation.successfulFilters);
 
   const retainedBeforeFailure = await win.webContents.executeJavaScript(`(() => {
     const focused = document.querySelector('.chart-svg-host [data-chart-identity][data-focused="true"]');
@@ -658,6 +661,8 @@ async function runChartWorkbenchSmoke(win) {
       clipboardBytes: exports.clipboard.length, csvBytes: exports.csv.text.length, svgBytes: exports.svg.text.length,
     }, lateRejected, cancellationRejected, failureRetained, parserRejected, intentConsumption,
     nodeAccess: false, acceptedResultId: overlapAccepted.resultId, initialAcceptedResultId: acceptedBeforeRaces.resultId,
+    cancellationBaselineResultId: acceptedBeforeCancellation.resultId,
+    cancellationAfterResultId: acceptedAfterCancellation.resultId,
   };
   if (visualMode) {
     if (chartScreenshots.length !== 24 || new Set(chartScreenshots.map(({ name }) => name)).size !== 24) {

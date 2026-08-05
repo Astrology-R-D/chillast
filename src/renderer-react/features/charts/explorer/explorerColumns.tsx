@@ -23,6 +23,16 @@ const NUMERIC_IDS = new Set([
 const BOOLEAN_IDS = new Set(['retrograde', 'firstRetrograde', 'secondRetrograde']);
 const TOKEN_IDS = new Set(['ring', 'sign', 'ringA', 'aspect', 'ringB', 'section', 'firstRing', 'firstSign', 'secondRing', 'secondSign']);
 
+export type ColumnFilterKind = 'number' | 'boolean' | 'token' | 'text' | 'none';
+
+export function filterKindForColumn(id: string): ColumnFilterKind {
+  if (id === 'selected') return 'none';
+  if (NUMERIC_IDS.has(id)) return 'number';
+  if (BOOLEAN_IDS.has(id)) return 'boolean';
+  if (TOKEN_IDS.has(id)) return 'token';
+  return 'text';
+}
+
 export function columnIds(tab: ExplorerTab, mode: ComparisonMode = 'merged'): string[] {
   if (tab !== 'comparison') return [...TAB_COLUMNS[tab]];
   if (mode === 'merged') return [...TAB_COLUMNS.planets];
@@ -75,9 +85,10 @@ const nullableNumberSort: SortingFn<ExplorerRow> = (left, right, id) => {
 };
 
 function filterFor(id: string): FilterFn<ExplorerRow> {
-  if (NUMERIC_IDS.has(id)) return numberFilter;
-  if (BOOLEAN_IDS.has(id)) return booleanFilter;
-  if (TOKEN_IDS.has(id)) return tokenFilter;
+  const kind = filterKindForColumn(id);
+  if (kind === 'number') return numberFilter;
+  if (kind === 'boolean') return booleanFilter;
+  if (kind === 'token') return tokenFilter;
   return textFilter;
 }
 

@@ -52,7 +52,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
   const setFocus = useChartWorkspace((state) => state.setFocus);
   const activeTab = tableLayout.activeTab;
   const mode = tableLayout.comparisonMode;
-  const comparisonAvailable = result.rings.length >= 2 || result.subjects.length >= 2;
+  const comparisonAvailable = result.rings.length >= 2;
   const rows = useMemo(() => rowsFor(result, activeTab, mode), [activeTab, mode, result]);
   const labels = useMemo(() => new Proxy<Record<string, string>>({}, {
     get: (_target, key) => t(`chart.explorer.columns.${String(key)}`),

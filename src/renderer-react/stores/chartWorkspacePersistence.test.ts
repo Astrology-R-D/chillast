@@ -109,6 +109,42 @@ describe('western chart workspace persistence', () => {
     expect(parsed.tableLayouts.natal.tabs.comparison.columnPinning.left).toEqual(['selected']);
   });
 
+  test.each([
+    ['negative size', -1, { id: 'point', value: 'sun' }],
+    ['excessive size', 481, { id: 'point', value: 'sun' }],
+    ['malformed numeric filter', 120, { id: 'longitude', value: 'wide' }],
+    ['malformed boolean filter', 120, { id: 'retrograde', value: 'yes' }],
+    ['malformed token filter', 120, { id: 'sign', value: [1, 2] }],
+  ])('resets only the exact tab for %s', (_label, size, filter) => {
+    const source = defaultWesternWorkspace();
+    source.tableLayouts.natal.tabs.planets.columnSizing.longitude = size;
+    source.tableLayouts.natal.tabs.planets.filters = [filter];
+    source.tableLayouts.natal.tabs.houses.columnSizing.house = 88;
+    source.tableLayouts.transit.tabs.planets.columnSizing.longitude = 144;
+
+    const parsed = parseWesternWorkspace(source);
+
+    expect(parsed.tableLayouts.natal.tabs.planets).toEqual(defaultTableLayout().tabs.planets);
+    expect(parsed.tableLayouts.natal.tabs.houses.columnSizing.house).toBe(88);
+    expect(parsed.tableLayouts.transit.tabs.planets.columnSizing.longitude).toBe(144);
+  });
+
+  test('retains valid bounded sizes and typed filter payloads', () => {
+    const source = defaultWesternWorkspace();
+    source.tableLayouts.natal.tabs.planets.columnSizing = { point: 48, longitude: 480 };
+    source.tableLayouts.natal.tabs.planets.filters = [
+      { id: 'longitude', value: [0, 30] },
+      { id: 'retrograde', value: false },
+      { id: 'sign', value: ['aries', 'taurus'] },
+      { id: 'point', value: 'sun' },
+    ];
+
+    expect(parseWesternWorkspace(source).tableLayouts.natal.tabs.planets).toMatchObject({
+      columnSizing: { point: 48, longitude: 480 },
+      filters: source.tableLayouts.natal.tabs.planets.filters,
+    });
+  });
+
   test('unsupported top-level versions reset only the western chart payload', () => {
     const profileContainer = {
       primaryProfileId: 'p1',

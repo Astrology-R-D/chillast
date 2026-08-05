@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GeoLocation } from '../api/contracts';
 import { CHART_TYPES, type ChartType, type Zodiac } from '../features/charts/contracts';
-import { allowedColumnIds, columnIds } from '../features/charts/explorer/explorerColumns';
+import { allowedColumnIds, columnIds, filterKindForColumn } from '../features/charts/explorer/explorerColumns';
 
 export type ExplorerTab = 'planets' | 'houses' | 'aspects' | 'distributions' | 'comparison';
 export type ComparisonMode = 'merged' | 'sideBySide' | 'difference';
@@ -103,6 +103,25 @@ function sanitizeTabLayout(value: unknown, allowed: ReadonlySet<string>): TabLay
   if (new Set(layout.columnOrder).size !== layout.columnOrder.length) return defaultTabLayout();
   if (layout.columnPinning.left.some((id) => layout.columnPinning.right.includes(id))) return defaultTabLayout();
   const keep = (id: string) => allowed.has(id);
+  const validFilter = ({ id, value }: { id: string; value?: unknown }) => {
+    if (!keep(id)) return true;
+    const kind = filterKindForColumn(id);
+    if (kind === 'number') {
+      return Array.isArray(value) && value.length === 2
+        && value.every((entry) => entry === null || (typeof entry === 'number' && Number.isFinite(entry)));
+    }
+    if (kind === 'boolean') return typeof value === 'boolean';
+    if (kind === 'token') {
+      return typeof value === 'string'
+        || (Array.isArray(value) && value.every((entry) => typeof entry === 'string'));
+    }
+    if (kind === 'text') return typeof value === 'string';
+    return false;
+  };
+  if (layout.filters.some((filter) => !validFilter(filter))) return defaultTabLayout();
+  if (Object.entries(layout.columnSizing).some(([id, size]) => keep(id) && (size < 48 || size > 480))) {
+    return defaultTabLayout();
+  }
   return {
     sorting: layout.sorting.filter(({ id }) => keep(id)),
     filters: layout.filters.filter(({ id }) => keep(id)).map((entry) => ({ id: entry.id, value: entry.value })),

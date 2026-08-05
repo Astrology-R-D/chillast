@@ -94,6 +94,8 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   selectLabel = 'Select',
 }, forwardedRef) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeCellOwnsFocus = useRef(false);
+  const previousTab = useRef(tab);
   const restoredActive = useChartWorkspace((state) => state.activeCells[tab]);
   const setStoredActive = useChartWorkspace((state) => state.setActiveCell);
   const [sorting, setSorting] = useState<SortingState>(layout.sorting);
@@ -148,6 +150,8 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   const modelRows = table.getRowModel().rows;
   const visibleColumns = table.getVisibleLeafColumns();
   const activeIndex = modelRows.findIndex((row) => row.id === active.rowId);
+  const modelSignature = modelRows.map((row) => row.id).join('\u0000');
+  const columnSignature = visibleColumns.map((column) => column.id).join('\u0000');
   const rowVirtualizer = useVirtualizer({
     count: modelRows.length,
     getScrollElement: () => scrollRef.current,
@@ -188,6 +192,16 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     return () => observer.disconnect();
   }, []);
   useEffect(() => rowVirtualizer.measure(), [rowHeight, rowVirtualizer]);
+  useEffect(() => {
+    const trackFocus = (event: FocusEvent) => {
+      const target = event.target;
+      if (target === document.body) return;
+      activeCellOwnsFocus.current = target instanceof HTMLElement
+        && Boolean(scrollRef.current?.contains(target)) && target.getAttribute('role') === 'gridcell';
+    };
+    document.addEventListener('focusin', trackFocus);
+    return () => document.removeEventListener('focusin', trackFocus);
+  }, []);
 
   const visibleIds = useMemo(() => new Set(modelRows.map((row) => row.id)), [modelRows]);
   useLayoutEffect(() => {
@@ -204,13 +218,6 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     setColumnSizing(layout.columnSizing);
   }, [layout]);
 
-  useLayoutEffect(() => {
-    if (!scrollRef.current?.contains(document.activeElement)) return;
-    scrollRef.current.querySelector<HTMLElement>(
-      `[data-row-id="${CSS.escape(active.rowId)}"] [data-column-id="${CSS.escape(active.columnId)}"]`,
-    )?.focus();
-  }, [active.columnId, active.rowId]);
-
   const activate = (rowIndex: number, columnIndex: number, anchorRowId: string | null = active.anchorRowId) => {
     if (!modelRows.length || !visibleColumns.length) return;
     const boundedRow = Math.max(0, Math.min(modelRows.length - 1, rowIndex));
@@ -219,16 +226,66 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     setActive(next);
     setStoredActive(tab, next);
     rowVirtualizer.scrollToIndex(boundedRow, { align: 'auto' });
+    if (activeCellOwnsFocus.current) requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
+      `[data-row-id="${CSS.escape(next.rowId)}"] [data-column-id="${CSS.escape(next.columnId)}"]`,
+    )?.focus());
   };
+
+  useLayoutEffect(() => {
+    const tabChanged = previousTab.current !== tab;
+    previousTab.current = tab;
+    if (!modelRows.length || !visibleColumns.length) {
+      if (active.rowId || active.columnId) {
+        const next = { rowId: '', columnId: '', anchorRowId: null };
+        setActive(next);
+        setStoredActive(tab, next);
+      }
+      if (activeCellOwnsFocus.current) requestAnimationFrame(() => scrollRef.current?.focus());
+      return;
+    }
+
+    const focusedIndex = focusedIdentity
+      ? modelRows.findIndex((row) => row.original.chartIdentity === focusedIdentity)
+      : -1;
+    const restoredIndex = restoredActive
+      ? modelRows.findIndex((row) => row.id === restoredActive.rowId)
+      : -1;
+    const currentIndex = modelRows.findIndex((row) => row.id === active.rowId);
+    const rowIndex = focusedIndex >= 0
+      ? focusedIndex
+      : tabChanged && restoredIndex >= 0
+        ? restoredIndex
+        : currentIndex >= 0 ? currentIndex : 0;
+    const preferredColumn = tabChanged ? restoredActive?.columnId : active.columnId;
+    const columnIndex = Math.max(0, visibleColumns.findIndex((column) => column.id === preferredColumn));
+    const next = {
+      rowId: modelRows[rowIndex].id,
+      columnId: visibleColumns[columnIndex].id,
+      anchorRowId: active.anchorRowId && modelRows.some((row) => row.id === active.anchorRowId)
+        ? active.anchorRowId
+        : null,
+    };
+    if (next.rowId !== active.rowId || next.columnId !== active.columnId || next.anchorRowId !== active.anchorRowId) {
+      setActive(next);
+      setStoredActive(tab, next);
+    }
+    rowVirtualizer.scrollToIndex(rowIndex, { align: 'auto' });
+    if (activeCellOwnsFocus.current) requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
+      `[data-row-id="${CSS.escape(next.rowId)}"] [data-column-id="${CSS.escape(next.columnId)}"]`,
+    )?.focus());
+  }, [columnSignature, focusedIdentity, modelSignature, restoredActive, rowVirtualizer, setStoredActive, tab]);
 
   const reveal = (rowId: string, focus: boolean) => {
     const rowIndex = modelRows.findIndex((row) => row.id === rowId);
     if (rowIndex < 0) return;
     const columnIndex = Math.max(0, visibleColumns.findIndex((column) => column.id === active.columnId));
     activate(rowIndex, columnIndex);
-    if (focus) requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
-      `[data-row-id="${CSS.escape(rowId)}"] [data-column-id="${CSS.escape(visibleColumns[columnIndex]?.id ?? '')}"]`,
-    )?.focus());
+    if (focus) {
+      activeCellOwnsFocus.current = true;
+      requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(
+        `[data-row-id="${CSS.escape(rowId)}"] [data-column-id="${CSS.escape(visibleColumns[columnIndex]?.id ?? '')}"]`,
+      )?.focus());
+    }
   };
 
   useImperativeHandle(forwardedRef, () => ({
@@ -240,9 +297,9 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
 
   useEffect(() => {
     if (focusedIdentity) reveal(focusedIdentity, false);
-  // Focus changes are the trigger; row/layout changes are handled by active range extraction.
+  // Tab changes must replay shared focus; model reconciliation handles sort/filter/layout updates.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusedIdentity]);
+  }, [focusedIdentity, tab]);
 
   const updateSelection = (next: Set<string>) => onSelectionChange(next);
   const toggleRow = (rowId: string) => {
@@ -301,7 +358,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
     update(raw.includes(',') ? raw.split(',').map((token) => token.trim()).filter(Boolean) : raw);
   };
 
-  return <div ref={scrollRef} className="chart-data-grid" role="grid" tabIndex={-1}
+  return <div ref={scrollRef} className="chart-data-grid" role="grid" tabIndex={modelRows.length ? -1 : 0}
     aria-rowcount={modelRows.length + 1} aria-colcount={visibleColumns.length}>
     <div className="chart-data-grid__header" role="row" style={{ width: table.getTotalSize() }}>
       {table.getHeaderGroups()[0]?.headers.map((header, columnIndex) => <div key={header.id} role="columnheader"

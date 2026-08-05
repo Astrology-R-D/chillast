@@ -166,6 +166,8 @@ test('chart smoke has a genuine trusted branch and native canvas/object tab trav
   assert.match(source, /retainedBeforeFailure\.transform === retainedAfterFailure\.transform/);
   assert.match(source, /JSON\.stringify\(retainedBeforeFailure\.selectedRows\) === JSON\.stringify\(retainedAfterFailure\.selectedRows\)/);
   assert.match(source, /acceptedContextBeforeFailure\.successfulFilters/);
+  assert.match(source, /acceptedBeforeCancellation\.resultId === acceptedAfterCancellation\.resultId/);
+  assert.match(source, /JSON\.stringify\(acceptedBeforeCancellation\.successfulFilters\) === JSON\.stringify\(acceptedAfterCancellation\.successfulFilters\)/);
 });
 
 test('chart visual smoke captures the exact responsive matrix with pixel and geometry gates', () => {
