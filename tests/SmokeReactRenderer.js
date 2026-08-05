@@ -8,10 +8,20 @@ const { imageMetrics } = require('./NativeImageMetrics');
 const CloseGuard = require('../src/main/CloseGuard');
 const IpcRouter = require('../src/main/IpcRouter');
 const AstrologyService = require('../src/core/astrology/AstrologyService');
+const ChartStrategyFactory = require('../src/core/astrology/ChartStrategyFactory');
+const SwissEphCore = require('../src/core/astrology/ephemeris/SwissEphCore');
+const LocationResolver = require('../src/core/astrology/LocationResolver');
+const ChineseAstrologyService = require('../src/core/chinese/ChineseAstrologyService');
+const ProfileRepository = require('../src/main/ProfileRepository');
+const {
+  DelayedAstrologyService, profileA, profileB,
+} = require('./ChartWorkbenchSmokeFixtures');
 
 runElectronSmokeController('chillast-react-smoke-', app);
 
 const root = path.join(__dirname, '..');
+const chartMode = process.env.CHILLAST_CHART_SMOKE === '1'
+  || process.argv.includes('--charts') || app.commandLine.hasSwitch('charts');
 const errors = [];
 const expectedProfileScreenshotNames = [
   'profile-1440x920-light-compact.png',
@@ -45,6 +55,10 @@ const userDataDir = process.env.CHILLAST_SMOKE_USER_DATA;
 let win = null;
 let closeGuard = null;
 let finished = false;
+let delayedAstrology = null;
+let chartAiContexts = [];
+let profileRepository = null;
+let chartSmokeStage = 'not-started';
 
 app.disableHardwareAcceleration();
 app.setPath('userData', userDataDir);
@@ -210,48 +224,295 @@ function registerEnvelope(channel, handler) {
   });
 }
 
+async function waitForMain(description, probe, timeout = 10000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const value = probe();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`${description} timed out`);
+}
+
+async function runChartWorkbenchSmoke(win) {
+  chartSmokeStage = 'profile-authority';
+  await poll(win, 'chart smoke profile authority', () => ({
+    ready: document.querySelectorAll('.profile-row').length === 2 && Boolean(document.querySelector('[data-profile-id="chart-smoke-a"]')),
+  }));
+  chartSmokeStage = 'personal-navigation';
+  await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[1].click()`);
+  await poll(win, 'personal chart route', () => {
+    const calculate = Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算');
+    const primary = document.querySelector('[data-control="primaryProfile"] select');
+    const zodiac = document.querySelector('[data-control="zodiac"] select');
+    return { ready: document.querySelector('h1')?.textContent === '个人星盘'
+      && Boolean(primary && zodiac && calculate && !primary.disabled && !zodiac.disabled && !calculate.disabled) };
+  });
+  chartSmokeStage = 'natal-submit';
+  const natalSubmit = await win.webContents.executeJavaScript(`(() => {
+    const set = (selector, value) => { const node = document.querySelector(selector); node.value = value; node.dispatchEvent(new Event('change', { bubbles: true })); };
+    set('[data-control="primaryProfile"] select', 'chart-smoke-a');
+    set('[data-control="zodiac"] select', 'sidereal');
+    const calculate = Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算');
+    const beforeDisabled = calculate.disabled; calculate.click();
+    return { primary: document.querySelector('[data-control="primaryProfile"] select').value,
+      zodiac: document.querySelector('[data-control="zodiac"] select').value, beforeDisabled, afterDisabled: calculate.disabled,
+      status: document.querySelector('.chart-result [role="status"]')?.textContent };
+  })()`);
+  try { await waitForMain('delayed natal request', () => delayedAstrology.pending.length === 1); }
+  catch (error) { throw new Error(`${error.message}: ${JSON.stringify(natalSubmit)}`); }
+  delayedAstrology.resolve(0);
+  const natal = await poll(win, 'real sidereal natal explorer', () => {
+    const svg = document.querySelector('.chart-svg-host svg');
+    const rows = document.querySelectorAll('.chart-data-grid [data-row-id]');
+    const markup = svg?.outerHTML ?? '';
+    return { ready: Boolean(svg && svg.getBoundingClientRect().width > 0 && rows.length && svg.querySelectorAll('[data-ring-id]').length === 1
+      && !/NaN|Infinity|undefined/.test(markup)), value: { svgBytes: markup.length, explorerRows: rows.length, rings: svg?.querySelectorAll('[data-ring-id]').length } };
+  });
+  const natalContext = await waitForMain('natal AI context', () => chartAiContexts.find((context) => context?.resultId && context.chartType === 'natal'));
+  if (natalContext.successfulFilters.request.settings.zodiac !== 'sidereal') throw new Error('natal AI context lost sidereal settings');
+
+  chartSmokeStage = 'relationship-navigation';
+  await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[2].click()`);
+  await poll(win, 'relationship chart route', () => {
+    const calculate = Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算');
+    const primary = document.querySelector('[data-control="primaryProfile"] select');
+    const secondary = document.querySelector('[data-control="secondaryProfile"] select');
+    const zodiac = document.querySelector('[data-control="zodiac"] select');
+    return { ready: document.querySelector('h1')?.textContent === '合盘分析'
+      && Boolean(primary && secondary && zodiac && calculate && !primary.disabled && !secondary.disabled && !zodiac.disabled && !calculate.disabled) };
+  });
+  chartSmokeStage = 'synastry-submit';
+  await win.webContents.executeJavaScript(`(() => {
+    const set = (selector, value) => { const node = document.querySelector(selector); node.value = value; node.dispatchEvent(new Event('change', { bubbles: true })); };
+    set('[data-control="primaryProfile"] select', 'chart-smoke-a');
+    set('[data-control="secondaryProfile"] select', 'chart-smoke-b');
+    set('[data-control="zodiac"] select', 'sidereal');
+    Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算').click();
+  })()`);
+  await waitForMain('delayed synastry request', () => delayedAstrology.pending.length === 2);
+  delayedAstrology.resolve(1);
+  const synastry = await poll(win, 'real sidereal synastry explorer', () => {
+    const svg = document.querySelector('.chart-svg-host svg');
+    const markup = svg?.outerHTML ?? '';
+    return { ready: Boolean(svg && svg.querySelectorAll('[data-ring-id]').length === 2 && document.querySelector('[role="grid"]')
+      && !/NaN|Infinity|undefined/.test(markup)), value: { svgBytes: markup.length, rings: svg?.querySelectorAll('[data-ring-id]').length } };
+  });
+
+  chartSmokeStage = 'chart-linkage';
+  const linkage = await win.webContents.executeJavaScript(`(() => {
+    const point = document.querySelector('.chart-svg-host [data-ring-id="secondary"] [data-chart-kind="point"]');
+    const identity = point.getAttribute('data-chart-identity');
+    window.__chartSmokeIdentity = identity;
+    point.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return { identity };
+  })()`);
+  await poll(win, 'chart to table row reveal', () => {
+    const row = document.querySelector('[data-row-id="' + CSS.escape(window.__chartSmokeIdentity) + '"]');
+    return { ready: Boolean(row && document.querySelector('[role="tab"][aria-selected="true"]')?.textContent === '星体') };
+  });
+  await win.webContents.executeJavaScript(`(() => {
+    const row = Array.from(document.querySelectorAll('.chart-data-grid [data-row-id]')).find((candidate) => candidate.getAttribute('data-row-id') !== window.__chartSmokeIdentity);
+    window.__chartSmokeTableIdentity = row.getAttribute('data-row-id');
+    const cell = row.querySelector('[tabindex="0"]') ?? row.querySelector('[role="gridcell"]');
+    cell.focus(); cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  })()`);
+  await poll(win, 'table to chart focus', () => ({
+    ready: document.querySelector('[data-chart-identity="' + CSS.escape(window.__chartSmokeTableIdentity) + '"]')?.getAttribute('data-focused') === 'true',
+  }));
+
+  chartSmokeStage = 'native-tab-traversal';
+  await win.webContents.executeJavaScript(`document.querySelector('.chart-svg-host svg').focus()`);
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'TAB' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'TAB' });
+  const tabForward = await poll(win, 'native tab from canvas to roving object', () => ({
+    ready: document.activeElement?.matches('[data-chart-identity][role="button"]'), value: document.activeElement?.getAttribute('data-chart-identity'),
+  }));
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'TAB', modifiers: ['shift'] });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'TAB', modifiers: ['shift'] });
+  const tabBackward = await poll(win, 'native shift tab to canvas', () => ({
+    ready: document.activeElement === document.querySelector('.chart-svg-host svg'), value: true,
+  }));
+
+  chartSmokeStage = 'comparison-controls';
+  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent === '比较').click()`);
+  await poll(win, 'comparison modes mounted', () => ({ ready: document.querySelectorAll('.chart-data-explorer__modes button').length === 3 }));
+  for (const label of ['合并', '并排', '差值']) {
+    await win.webContents.executeJavaScript(`(() => { const button = Array.from(document.querySelectorAll('.chart-data-explorer__modes button')).find((candidate) => candidate.textContent === '${label}'); if (button.getAttribute('aria-pressed') !== 'true') button.click(); })()`);
+    const activeMode = await poll(win, `${label} comparison mode`, () => {
+      const buttons = Array.from(document.querySelectorAll('.chart-data-explorer__modes button'));
+      const active = buttons.find((button) => button.getAttribute('aria-pressed') === 'true');
+      return { ready: Boolean(active), value: active?.textContent };
+    });
+    if (activeMode !== label) throw new Error(`expected ${label} mode, got ${activeMode}`);
+  }
+  await poll(win, 'difference grid controls', () => ({ ready: Boolean(document.querySelector('[aria-label^="排序 "]') && document.querySelector('[aria-label^="筛选 星体"]')) }));
+  await win.webContents.executeJavaScript(`(() => {
+    const sort = document.querySelector('[aria-label^="排序 "]'); sort.click(); sort.click();
+    const filter = document.querySelector('[aria-label^="筛选 星体"]'); filter.value = 'sun'; filter.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('[aria-label="列设置"]').click();
+  })()`);
+  await poll(win, 'comparison and column controls', () => ({ ready: Boolean(document.querySelector('.chart-data-explorer__column-menu')) }));
+  chartSmokeStage = 'column-controls';
+  await win.webContents.executeJavaScript(`(() => {
+    const hide = document.querySelector('.chart-data-explorer__column-menu button[aria-label^="隐藏 "]'); hide?.click();
+    const pin = document.querySelector('.chart-data-explorer__column-menu select'); if (pin) { pin.value = 'left'; pin.dispatchEvent(new Event('change', { bubbles: true })); }
+    const width = document.querySelector('.chart-data-explorer__column-menu input[type="number"]'); if (width) { width.value = '140'; width.dispatchEvent(new Event('change', { bubbles: true })); }
+    document.querySelector('.chart-data-explorer__column-menu button[aria-label^="显示 "]')?.click();
+    document.querySelector('.chart-data-grid input[type="checkbox"]')?.click();
+    document.querySelector('[aria-label^="筛选 星体"]')?.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+
+  chartSmokeStage = 'exports';
+  await win.webContents.executeJavaScript(`(() => {
+    window.__chartSmokeExports = { clipboard: null, csv: null, svg: null };
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__chartSmokeExports.clipboard = text; } } });
+    URL.createObjectURL = (blob) => { Promise.all([blob.text(), blob.arrayBuffer()]).then(([text, buffer]) => { const key = blob.type.startsWith('text/csv') ? 'csv' : 'svg'; const bytes = Array.from(new Uint8Array(buffer).slice(0, 3)); window.__chartSmokeExports[key] = { type: blob.type, text, bom: bytes.join(',') === '239,187,191' }; }); return 'blob:chart-smoke'; };
+    URL.revokeObjectURL = () => {};
+    HTMLAnchorElement.prototype.click = function click() {};
+    document.querySelector('[aria-label="复制数据"]').click();
+    document.querySelector('[aria-label="下载 CSV"]').click();
+    document.querySelector('[aria-label="导出 SVG"]').click();
+  })()`);
+  const exports = await poll(win, 'all chart exports', () => {
+    const value = window.__chartSmokeExports;
+    return { ready: Boolean(value?.clipboard?.includes('\t') && value?.csv?.bom && value?.csv?.text?.startsWith('point') && value?.svg?.text?.startsWith('<svg')), value };
+  });
+
+  const acceptedBeforeRaces = chartAiContexts.filter((context) => context?.resultId).at(-1);
+  chartSmokeStage = 'overlap-race';
+  await win.webContents.executeJavaScript(`(() => {
+    const zodiac = document.querySelector('[data-control="zodiac"] select'); const calc = Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算');
+    zodiac.value = 'sidereal'; zodiac.dispatchEvent(new Event('change', { bubbles: true })); calc.click();
+    zodiac.value = 'tropical'; zodiac.dispatchEvent(new Event('change', { bubbles: true })); calc.click();
+  })()`);
+  await waitForMain('overlapping requests', () => delayedAstrology.pending.length === 4);
+  delayedAstrology.resolve(3);
+  await waitForMain('newest overlap accepted', () => chartAiContexts.filter((context) => context?.resultId).at(-1)?.successfulFilters.request.settings.zodiac === 'tropical');
+  const overlapAccepted = chartAiContexts.filter((context) => context?.resultId).at(-1);
+  delayedAstrology.resolve(2);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const lateRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.request.settings.zodiac === 'tropical';
+
+  chartSmokeStage = 'cancel-race';
+  await win.webContents.executeJavaScript(`(() => {
+    const zodiac = document.querySelector('[data-control="zodiac"] select'); const calc = Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算');
+    zodiac.value = 'sidereal'; zodiac.dispatchEvent(new Event('change', { bubbles: true })); calc.click();
+    zodiac.value = 'tropical'; zodiac.dispatchEvent(new Event('change', { bubbles: true })); calc.click();
+    Array.from(document.querySelectorAll('.chart-result__actions button')).find((button) => button.textContent === '取消计算').click();
+  })()`);
+  await waitForMain('cancellable requests', () => delayedAstrology.pending.length === 6);
+  delayedAstrology.resolve(4); delayedAstrology.resolve(5);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const cancellationRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.request.settings.zodiac === 'tropical';
+
+  const retainedBeforeFailure = await win.webContents.executeJavaScript(`(() => {
+    const focused = document.querySelector('.chart-svg-host [data-chart-identity][data-focused="true"]');
+    focused?.focus();
+    return {
+      svg: document.querySelector('.chart-svg-host svg')?.outerHTML.length,
+      rows: document.querySelectorAll('.chart-data-grid [data-row-id]').length,
+      focusedIdentity: document.activeElement?.getAttribute('data-chart-identity'),
+      transform: document.querySelector('.chart-svg-host [data-chart-transform]')?.getAttribute('transform'),
+      selectedRows: Array.from(document.querySelectorAll('.chart-data-grid [data-row-id][data-selected="true"]'))
+        .map((row) => row.getAttribute('data-row-id')).sort(),
+    };
+  })()`);
+  const acceptedContextBeforeFailure = chartAiContexts.filter((context) => context?.resultId).at(-1);
+  chartSmokeStage = 'failure-retention';
+  await win.webContents.executeJavaScript(`(() => { const zodiac = document.querySelector('[data-control="zodiac"] select'); zodiac.value = 'tropical'; zodiac.dispatchEvent(new Event('change', { bubbles: true })); Array.from(document.querySelectorAll('.chart-filter-band button')).find((button) => button.textContent === '计算').click(); })()`);
+  await waitForMain('failure request', () => delayedAstrology.pending.length === 7);
+  delayedAstrology.reject(6, 'trusted chart failure');
+  await poll(win, 'failure retains accepted chart', () => ({ ready: document.querySelector('.chart-result [role="status"]')?.textContent.includes('无法完成') }));
+  const retainedAfterFailure = await win.webContents.executeJavaScript(`({
+    svg: document.querySelector('.chart-svg-host svg')?.outerHTML.length,
+    rows: document.querySelectorAll('.chart-data-grid [data-row-id]').length,
+    focusedIdentity: document.activeElement?.getAttribute('data-chart-identity'),
+    transform: document.querySelector('.chart-svg-host [data-chart-transform]')?.getAttribute('transform'),
+    selectedRows: Array.from(document.querySelectorAll('.chart-data-grid [data-row-id][data-selected="true"]'))
+      .map((row) => row.getAttribute('data-row-id')).sort(),
+  })`);
+  const acceptedContextAfterFailure = chartAiContexts.filter((context) => context?.resultId).at(-1);
+  const failureRetained = retainedBeforeFailure.svg === retainedAfterFailure.svg
+    && retainedAfterFailure.rows > 0
+    && Boolean(retainedBeforeFailure.focusedIdentity)
+    && retainedBeforeFailure.focusedIdentity === retainedAfterFailure.focusedIdentity
+    && retainedBeforeFailure.transform === retainedAfterFailure.transform
+    && JSON.stringify(retainedBeforeFailure.selectedRows) === JSON.stringify(retainedAfterFailure.selectedRows)
+    && acceptedContextBeforeFailure.resultId === acceptedContextAfterFailure.resultId
+    && JSON.stringify(acceptedContextBeforeFailure.successfulFilters) === JSON.stringify(acceptedContextAfterFailure.successfulFilters);
+
+  chartSmokeStage = 'parser-retention';
+  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-result__actions button')).find((button) => button.textContent === '重试').click()`);
+  await waitForMain('parser request', () => delayedAstrology.pending.length === 8);
+  delayedAstrology.resolveValue(7, { malformed: true });
+  await poll(win, 'parser rejection retains chart', () => ({ ready: document.querySelector('.chart-result [role="status"]')?.textContent.includes('无法解析') }));
+  const parserRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.request.settings.zodiac === 'tropical';
+
+  const security = await win.webContents.executeJavaScript(`({ require: typeof require, process: typeof process, ipcRenderer: typeof window.mystApi.ipcRenderer })`);
+  if (Object.values(security).some((value) => value !== 'undefined')) throw new Error(`renderer Node exposure: ${JSON.stringify(security)}`);
+
+  chartSmokeStage = 'profile-intent';
+  const pendingBeforeIntent = delayedAstrology.pending.length;
+  await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+  await poll(win, 'profile intent source', () => ({ ready: Boolean(document.querySelector('[data-profile-id="chart-smoke-a"]')) }));
+  await win.webContents.executeJavaScript(`(() => { document.querySelector('[data-profile-id="chart-smoke-a"]').click(); document.querySelectorAll('.profile-detail__commands button')[2].click(); })()`);
+  const intentConsumption = await poll(win, 'synastry profile intent', () => {
+    const primary = document.querySelector('[data-control="primaryProfile"] select');
+    return { ready: document.querySelector('h1')?.textContent === '合盘分析' && primary?.value === 'chart-smoke-a', value: true };
+  });
+  if (delayedAstrology.pending.length !== pendingBeforeIntent) throw new Error('profile intent auto-calculated');
+
+  const chartSmoke = {
+    trustedIpc: true, backend: 'swisseph', natal, synastry, linkage, tabForward, tabBackward,
+    comparisons: ['merged', 'sideBySide', 'difference'], exports: {
+      clipboardBytes: exports.clipboard.length, csvBytes: exports.csv.text.length, svgBytes: exports.svg.text.length,
+    }, lateRejected, cancellationRejected, failureRetained, parserRejected, intentConsumption,
+    nodeAccess: false, acceptedResultId: overlapAccepted.resultId, initialAcceptedResultId: acceptedBeforeRaces.resultId,
+  };
+  if (!lateRejected || !cancellationRejected || !failureRetained || !parserRejected) throw new Error(`chart race contract failed: ${JSON.stringify(chartSmoke)}`);
+  return chartSmoke;
+}
+
 app.whenReady().then(async () => {
-  const astrology = new AstrologyService();
   const config = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
   const locale = JSON.parse(fs.readFileSync(path.join(root, 'locale', 'zh.json'), 'utf8'));
-  registerEnvelope('config:get', () => config);
-  registerEnvelope('locale:get', () => locale);
-  registerEnvelope('ai:status', () => ({
-    configured: false,
-    provider: '',
-    model: '',
-    baseUrl: '',
-    knowledgeDocCount: 0,
-  }));
-  registerEnvelope('ai:initStatus', () => null);
-  registerEnvelope('ai:setContext', () => ({ ok: true }));
-  registerEnvelope('profiles:list', () => smokeProfiles);
-  registerEnvelope('profiles:get', (id) => smokeProfiles.find((profile) => profile.id === id) ?? null);
-  registerEnvelope('profiles:save', (input) => {
-    const now = new Date().toISOString();
-    const existing = input.id && smokeProfiles.find((profile) => profile.id === input.id);
-    const saved = {
-      ...input,
-      id: existing ? existing.id : `smoke-copy-${smokeProfiles.length}`,
-      createdAt: existing ? existing.createdAt : now,
-      updatedAt: now,
-    };
-    smokeProfiles = [...smokeProfiles.filter((profile) => profile.id !== saved.id), saved];
-    return saved;
-  });
-  registerEnvelope('profiles:remove', (id) => {
-    const found = smokeProfiles.some((profile) => profile.id === id);
-    smokeProfiles = smokeProfiles.filter((profile) => profile.id !== id);
-    return found;
-  });
-  registerEnvelope('cities:search', () => [{ key: 'shanghai', label: '上海 / Shanghai', nameZh: '上海', nameEn: 'Shanghai', region: '', country: 'CN', latitude: 31.2304, longitude: 121.4737, source: 'western' }]);
-  registerEnvelope('chinese:searchCities', () => []);
-  registerEnvelope('locations:resolve', () => ({
-    timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1990-01-01T16:00:00.000Z',
-  }));
-  registerEnvelope('reference:get', () => astrology.referenceData());
-  registerEnvelope('chartTypes:get', () => astrology.chartTypes());
-  registerEnvelope('chart:compute', (request) => astrology.computeChart(request));
+  if (chartMode) {
+    SwissEphCore.configure({ ephePath: path.join(root, 'assets', 'ephemeris') });
+    const realAstrology = new AstrologyService(new ChartStrategyFactory({ backend: 'swisseph' }));
+    delayedAstrology = new DelayedAstrologyService(realAstrology);
+    profileRepository = new ProfileRepository(path.join(userDataDir, 'data')).init();
+    profileRepository.save(profileA);
+    profileRepository.save(profileB);
+  } else {
+    const astrology = new AstrologyService();
+    registerEnvelope('config:get', () => config);
+    registerEnvelope('locale:get', () => locale);
+    registerEnvelope('ai:status', () => ({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }));
+    registerEnvelope('ai:initStatus', () => null);
+    registerEnvelope('ai:setContext', () => ({ ok: true }));
+    registerEnvelope('profiles:list', () => smokeProfiles);
+    registerEnvelope('profiles:get', (id) => smokeProfiles.find((profile) => profile.id === id) ?? null);
+    registerEnvelope('profiles:save', (input) => {
+      const now = new Date().toISOString();
+      const existing = input.id && smokeProfiles.find((profile) => profile.id === input.id);
+      const saved = { ...input, id: existing ? existing.id : `smoke-copy-${smokeProfiles.length}`,
+        createdAt: existing ? existing.createdAt : now, updatedAt: now };
+      smokeProfiles = [...smokeProfiles.filter((profile) => profile.id !== saved.id), saved];
+      return saved;
+    });
+    registerEnvelope('profiles:remove', (id) => {
+      const found = smokeProfiles.some((profile) => profile.id === id);
+      smokeProfiles = smokeProfiles.filter((profile) => profile.id !== id);
+      return found;
+    });
+    registerEnvelope('cities:search', () => [{ key: 'shanghai', label: '上海 / Shanghai', nameZh: '上海', nameEn: 'Shanghai', region: '', country: 'CN', latitude: 31.2304, longitude: 121.4737, source: 'western' }]);
+    registerEnvelope('chinese:searchCities', () => []);
+    registerEnvelope('locations:resolve', () => ({ timeZone: 'Asia/Shanghai', utcOffsetMinutes: 480, utcOffsetLabel: 'UTC+08:00', instantUtc: '1990-01-01T16:00:00.000Z' }));
+    registerEnvelope('reference:get', () => astrology.referenceData());
+    registerEnvelope('chartTypes:get', () => astrology.chartTypes());
+    registerEnvelope('chart:compute', (request) => astrology.computeChart(request));
+  }
 
   win = new BrowserWindow({
     show: false,
@@ -281,15 +542,36 @@ app.whenReady().then(async () => {
       if (stage === 'request-sent' && closeStages.filter((value) => value === stage).length === 2) resolveSecondCloseRequest();
     },
   });
-  const closeRouter = new IpcRouter({ ipcMain });
-  closeRouter.setWebContents(win.webContents);
-  closeRouter._handle('app:closeDecision', (_event, decision) => {
-    if (rejectNextCloseDecision) {
-      rejectNextCloseDecision = false;
-      throw new Error('trusted close IPC rejection');
-    }
-    return closeGuard.decide(decision);
-  });
+  if (chartMode) {
+    const aiService = {
+      status: () => ({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
+      getInitStatus: () => null,
+      setContext: (context) => { chartAiContexts.push(context); },
+    };
+    const router = new IpcRouter({
+      ipcMain,
+      profileRepository,
+      astrologyService: delayedAstrology,
+      chineseAstrologyService: new ChineseAstrologyService(),
+      config,
+      locale,
+      aiService,
+      locationResolver: new LocationResolver(),
+      closeDecision: (decision) => closeGuard.decide(decision),
+    });
+    router.setWebContents(win.webContents);
+    router.register();
+  } else {
+    const closeRouter = new IpcRouter({ ipcMain });
+    closeRouter.setWebContents(win.webContents);
+    closeRouter._handle('app:closeDecision', (_event, decision) => {
+      if (rejectNextCloseDecision) {
+        rejectNextCloseDecision = false;
+        throw new Error('trusted close IPC rejection');
+      }
+      return closeGuard.decide(decision);
+    });
+  }
   closeGuard.install();
 
   win.webContents.on('console-message', (...args) => {
@@ -323,6 +605,35 @@ app.whenReady().then(async () => {
 
   try {
     await win.loadFile(path.join(root, 'dist', 'renderer-react', 'index.html'));
+
+    if (chartMode) {
+      const chartSmoke = await runChartWorkbenchSmoke(win);
+      await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+      await poll(win, 'dirty close profile source', () => ({ ready: Boolean(document.querySelector('[data-profile-id="chart-smoke-a"]')) }));
+      await win.webContents.executeJavaScript(`(() => {
+        document.querySelector('[data-profile-id="chart-smoke-a"]').click();
+        document.querySelector('.profile-detail__actions button').click();
+      })()`);
+      await poll(win, 'dirty close editor', () => ({ ready: Boolean(document.querySelector('.profile-form [name="notes"]')) }));
+      await win.webContents.executeJavaScript(`(() => {
+        const notes = document.querySelector('.profile-form [name="notes"]');
+        Object.getOwnPropertyDescriptor(notes.constructor.prototype, 'value').set.call(notes, 'dirty chart smoke');
+        notes.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      win.close();
+      await poll(win, 'chart dirty close dialog', () => ({ ready: Boolean(document.querySelector('.dirty-navigation__dialog')) }));
+      const closed = new Promise((resolve) => win.once('closed', () => { closeStages.push('closed'); resolve(); }));
+      await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.dirty-navigation__dialog button')).find((button) => button.textContent === '放弃更改').click()`);
+      await closed;
+      chartSmoke.dirtyClose = true;
+      chartSmoke.closeStages = closeStages;
+      if (!closeStages.includes('decision-proceed') || !closeStages.includes('closed')) throw new Error(`dirty close stages incomplete: ${JSON.stringify(closeStages)}`);
+      if (errors.length) throw new Error(errors.join(' | '));
+      console.log('\nReact chart smoke report:', JSON.stringify({ chartSmoke }, null, 2));
+      console.log('\nReact chart smoke passed\n');
+      finish(0);
+      return;
+    }
 
     const desktop = await poll(win, 'desktop shell', async () => {
       const heading = document.querySelector('h1');
@@ -951,7 +1262,8 @@ app.whenReady().then(async () => {
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {
-    fail(error && error.stack ? error.stack : String(error));
+    const detail = error && error.stack ? error.stack : String(error);
+    fail(chartMode ? `${chartSmokeStage}: ${detail}` : detail);
   }
 });
 

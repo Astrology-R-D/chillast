@@ -132,6 +132,23 @@ test('chart handlers invoke astrology only for the trusted main frame', async ()
   assert.deepEqual(calls, []);
 });
 
+test('foreign and subframe chart requests cannot enqueue delayed computation', async () => {
+  const handlers = new Map();
+  const pending = [];
+  const astrology = {
+    referenceData: () => ({}), chartTypes: () => [],
+    computeChart: (request) => new Promise((resolve) => pending.push({ request, resolve })),
+  };
+  const router = new IpcRouter({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, astrologyService: astrology }).register();
+  const mainFrame = {};
+  const trusted = { mainFrame };
+  router.setWebContents(trusted);
+  for (const event of [{ sender: {}, senderFrame: {} }, { sender: trusted, senderFrame: { parent: mainFrame } }]) {
+    assert.equal((await handlers.get('chart:compute')(event, { type: 'natal' })).ok, false);
+  }
+  assert.equal(pending.length, 0);
+});
+
 test('AI configuration persists only provider-accepted candidates', async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-ipc-config-'));
   const dataDir = path.join(userData, 'data');

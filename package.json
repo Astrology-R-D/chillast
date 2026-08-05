@@ -24,6 +24,7 @@
     "typecheck": "tsc -p tsconfig.renderer.json --noEmit",
     "verify:renderer": "npm run test:security && npm run test:preload && npm run test:renderer && npm run typecheck && npm run build:renderer",
     "smoke:react": "npm run build:renderer && electron tests/SmokeReactRenderer.js",
+    "smoke:react:charts": "npm run build:renderer && npm run rebuild && cross-env CHILLAST_CHART_SMOKE=1 electron tests/SmokeReactRenderer.js --charts",
     "verify": "npm run check:unicode-casefold && npm test && npm run verify:renderer && npm run smoke && npm run smoke:react",
     "verify:package": "npm run build:renderer && electron-builder --dir && node tests/VerifyPackage.js && node tests/SmokePackagedRenderer.js",
     "rebuild": "electron-rebuild -f --only swisseph-v2",
@@ -134,5 +135,8 @@
     "vite": "^8.2.0",
     "vitest": "^4.1.10",
     "wait-on": "^9.1.0"
+  },
+  "overrides": {
+    "nan": "2.28.0"
   }
 }

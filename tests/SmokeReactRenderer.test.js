@@ -7,6 +7,7 @@ const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, 'SmokeReactRenderer.js'), 'utf8');
 const rendererEntry = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer-react', 'main.tsx'), 'utf8');
+const packageJson = require('../package.json');
 
 test('React entry cleanup cannot cancel the native close handshake', () => {
   assert.doesNotMatch(rendererEntry, /beforeunload/);
@@ -127,4 +128,42 @@ test('React smoke verifies separate canvas pan and roving object keyboard paths'
   assert.match(source, /chart keyboard object navigation/);
   assert.match(source, /keyboardObjectBefore/);
   assert.match(source, /document\.activeElement\?\.getAttribute\('data-chart-identity'\)/);
+});
+
+test('chart smoke uses deterministic delayed real Swiss IPC and profile fixtures', () => {
+  const fixtures = require('./ChartWorkbenchSmokeFixtures');
+  assert.equal(fixtures.profileA.id, 'chart-smoke-a');
+  assert.equal(fixtures.profileB.id, 'chart-smoke-b');
+  assert.equal(fixtures.natalRequest().type, 'natal');
+  assert.equal(fixtures.synastryRequest().type, 'synastry');
+  const calls = [];
+  const delayed = new fixtures.DelayedAstrologyService({
+    referenceData: () => ({}), chartTypes: () => [], computeChart: (request) => { calls.push(request); return request.type; },
+  });
+  const pending = delayed.computeChart(fixtures.natalRequest());
+  assert.equal(delayed.pending.length, 1);
+  delayed.resolve(0);
+  return pending.then((value) => {
+    assert.equal(value, 'natal');
+    assert.equal(calls.length, 1);
+  });
+});
+
+test('chart smoke has a genuine trusted branch and native canvas/object tab traversal', () => {
+  assert.equal(packageJson.overrides.nan, '2.28.0');
+  assert.equal(packageJson.scripts['smoke:react:charts'], 'npm run build:renderer && npm run rebuild && cross-env CHILLAST_CHART_SMOKE=1 electron tests/SmokeReactRenderer.js --charts');
+  assert.match(source, /process\.env\.CHILLAST_CHART_SMOKE === '1'/);
+  assert.match(source, /process\.argv\.includes\('--charts'\)/);
+  assert.match(source, /SwissEphCore\.configure\(\{ ephePath:/);
+  assert.match(source, /new ChartStrategyFactory\(\{ backend: 'swisseph' \}\)/);
+  assert.match(source, /new ProfileRepository\(/);
+  assert.match(source, /new DelayedAstrologyService\(/);
+  assert.match(source, /new IpcRouter\(/);
+  assert.match(source, /chartSmoke/);
+  assert.match(source, /sendInputEvent\(\{ type: 'keyDown', keyCode: 'TAB'/);
+  assert.match(source, /modifiers: \['shift'\]/);
+  assert.match(source, /retainedBeforeFailure\.focusedIdentity === retainedAfterFailure\.focusedIdentity/);
+  assert.match(source, /retainedBeforeFailure\.transform === retainedAfterFailure\.transform/);
+  assert.match(source, /JSON\.stringify\(retainedBeforeFailure\.selectedRows\) === JSON\.stringify\(retainedAfterFailure\.selectedRows\)/);
+  assert.match(source, /acceptedContextBeforeFailure\.successfulFilters/);
 });
