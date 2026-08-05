@@ -156,7 +156,7 @@ describe('virtual chart data grid', () => {
     empty.filters = [{ id: 'point', value: 'absent' }];
     rerender(<ControlledGrid layout={empty} gridRef={ref} />);
     await waitFor(() => expect(screen.getByRole('grid')).toHaveAttribute('tabindex', '0'));
-    expect(document.activeElement).toBe(screen.getByRole('grid'));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('grid')));
     expect(container.querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(0);
   });
 
