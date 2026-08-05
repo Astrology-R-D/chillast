@@ -346,8 +346,9 @@ git commit -m "feat(charts): add virtual keyboard data grid"
 - [ ] **Step 1: Write failing tabs/linkage tests**
 
 Assert five persistent tabs always render. One-ring Comparison displays a clear
-unavailable state without removing/disable-hiding the tab. Two rings/subjects
-support segmented `merged`, `sideBySide`, `difference` controls.
+unavailable state without removing/disable-hiding the tab, including one-ring
+composite results with two subjects. Two-ring results support segmented
+`merged`, `sideBySide`, `difference` controls.
 
 Click chart `transit:saturn`: active tab becomes Planets and grid reveals exact
 row. Click house/aspect: switch/reveal corresponding tab/row. Press Enter on a
