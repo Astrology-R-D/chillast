@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const { runElectronSmokeController } = require('./ElectronSmokeController');
-const { imageMetrics } = require('./NativeImageMetrics');
+const {
+  centralDifferenceRatio, distinctRgbInRect, imageMetrics, pixelDifferenceCount, rectsIntersect,
+} = require('./NativeImageMetrics');
 const CloseGuard = require('../src/main/CloseGuard');
 const IpcRouter = require('../src/main/IpcRouter');
 const AstrologyService = require('../src/core/astrology/AstrologyService');
@@ -20,8 +22,15 @@ const {
 runElectronSmokeController('chillast-react-smoke-', app);
 
 const root = path.join(__dirname, '..');
-const chartMode = process.env.CHILLAST_CHART_SMOKE === '1'
+const visualMode = process.env.CHILLAST_CHART_VISUAL === '1';
+const chartMode = visualMode || process.env.CHILLAST_CHART_SMOKE === '1'
   || process.argv.includes('--charts') || app.commandLine.hasSwitch('charts');
+const cases = ['personal-single', 'relationship-dual'];
+const sizes = [[1440, 920], [1280, 800], [1100, 720]];
+const appearances = [
+  ['light', 'compact'], ['light', 'comfortable'],
+  ['dark', 'compact'], ['dark', 'comfortable'],
+];
 const errors = [];
 const expectedProfileScreenshotNames = [
   'profile-1440x920-light-compact.png',
@@ -59,6 +68,7 @@ let delayedAstrology = null;
 let chartAiContexts = [];
 let profileRepository = null;
 let chartSmokeStage = 'not-started';
+const chartScreenshots = [];
 
 app.disableHardwareAcceleration();
 app.setPath('userData', userDataDir);
@@ -234,6 +244,183 @@ async function waitForMain(description, probe, timeout = 10000) {
   throw new Error(`${description} timed out`);
 }
 
+async function waitForVisualFrame(win) {
+  await win.webContents.executeJavaScript(`document.fonts.ready.then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))`);
+}
+
+async function captureBitmap(win, viewport) {
+  win.webContents.invalidate();
+  await waitForVisualFrame(win);
+  const image = await win.webContents.capturePage();
+  const metrics = imageMetrics(image, {
+    logicalWidth: viewport.width,
+    logicalHeight: viewport.height,
+    requestedScaleFactor: viewport.deviceScaleFactor,
+  });
+  return { ...metrics, bitmap: image.toBitmap({ scaleFactor: metrics.selectedScaleFactor }) };
+}
+
+async function verifyChartLayerPixels(win, viewport, svgRect) {
+  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((button) => button.getAttribute('aria-label') === '图层').click()`);
+  const layers = await poll(win, 'visual layer controls', () => {
+    const inputs = Array.from(document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]'));
+    const aspects = Array.from(document.querySelectorAll('.chart-svg-host [data-chart-kind="aspect"]'));
+    const visibleAspects = aspects.filter((node) => !node.hasAttribute('hidden')).length;
+    const ringInputs = inputs.slice(4).map((_, offset) => ({ index: offset + 4, name: `ring-${offset}`, populated: true }));
+    return { ready: inputs.length >= 5, value: [
+      { index: 0, name: 'majorAspects', populated: visibleAspects > 0 },
+      { index: 1, name: 'minorAspects', populated: aspects.length > visibleAspects },
+      ...ringInputs,
+    ].filter((layer) => layer.populated) };
+  });
+  const deltas = [];
+  for (const layer of layers) {
+    const beforeVisible = await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-svg-host [data-chart-identity]:not([hidden])').length`);
+    const before = await captureBitmap(win, viewport);
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]')[${layer.index}].click()`);
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    await waitForVisualFrame(win);
+    const afterVisible = await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-svg-host [data-chart-identity]:not([hidden])').length`);
+    const after = await captureBitmap(win, viewport);
+    const changedPixels = pixelDifferenceCount(before.bitmap, after.bitmap, before.nativeWidth, {
+      ...svgRect, actualScaleX: before.actualScaleX, actualScaleY: before.actualScaleY,
+    });
+    if (beforeVisible === afterVisible || changedPixels < 100) {
+      throw new Error(`visual layer did not change chart pixels: ${JSON.stringify({ layer: layer.name, beforeVisible, afterVisible, changedPixels })}`);
+    }
+    deltas.push({ layer: layer.name, changedPixels });
+    await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]')[${layer.index}].click()`);
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    await waitForVisualFrame(win);
+  }
+  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((button) => button.getAttribute('aria-label') === '图层').click()`);
+  return deltas;
+}
+
+async function captureChartVisualMatrix(win, chartCase) {
+  if (!cases.includes(chartCase)) throw new Error(`unknown chart visual case: ${chartCase}`);
+  const screenshotDir = path.join(__dirname, 'screenshots');
+  fs.mkdirSync(screenshotDir, { recursive: true });
+  if (chartScreenshots.length === 0) {
+    for (const file of fs.readdirSync(screenshotDir)) if (/^chart-.*\.png$/.test(file)) fs.rmSync(path.join(screenshotDir, file));
+  }
+  let layerDeltas = null;
+  for (const [width, height] of sizes) {
+    for (const [theme, density] of appearances) {
+      chartSmokeStage = `visual-${chartCase}-${width}x${height}-${theme}-${density}`;
+      const viewport = await setExactContentSize(win, width, height);
+      await win.webContents.executeJavaScript(`(() => {
+        window.__chartVisualTheme = '${theme}'; window.__chartVisualDensity = '${density}';
+        const selects = document.querySelectorAll('.workspace__appearance select');
+        const set = (node, value) => { Object.getOwnPropertyDescriptor(node.constructor.prototype, 'value').set.call(node, value); node.dispatchEvent(new Event('change', { bubbles: true })); };
+        set(selects[0], '${theme}'); set(selects[1], '${density}');
+        const point = document.querySelector('.chart-svg-host [data-chart-kind="point"]:not([hidden])');
+        if (point && !document.querySelector('.chart-data-grid__row[data-focused="true"]')) point.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      })()`);
+      await poll(win, 'visual chart appearance and focus', () => {
+        const svg = document.querySelector('.chart-svg-host svg');
+        return { ready: document.documentElement.dataset.theme === window.__chartVisualTheme
+          && document.documentElement.dataset.density === window.__chartVisualDensity
+          && svg?.getBoundingClientRect().width > 0
+          && Boolean(document.querySelector('.chart-data-grid__row[data-focused="true"]')) };
+      });
+
+      if (width === 1100) {
+        await poll(win, 'visual narrow shell', () => ({ ready: Boolean(document.querySelector('.shell--narrow .shell__main-toolbar button')) }));
+        await win.webContents.executeJavaScript(`document.querySelector('.shell--narrow .shell__main-toolbar button').click()`);
+        await poll(win, 'visual narrow AI overlay', () => ({ ready: Boolean(document.querySelector('.shell__ai-overlay:not([hidden])')) }));
+      }
+      await waitForVisualFrame(win);
+
+      const geometry = await poll(win, 'visual chart geometry', () => {
+        const select = (selector) => document.querySelector(selector);
+        const workspace = select('.workspace--chart');
+        const filters = select('.chart-filter-band');
+        const calculate = select('[data-control="calculate"] button');
+        const result = select('.chart-result');
+        const resultHeader = select('.chart-result__header');
+        const chartPane = select('.chart-result__chart-pane');
+        const dataPane = select('.chart-result__data-pane');
+        const svg = select('.chart-svg-host svg');
+        if (![workspace, filters, calculate, result, resultHeader, chartPane, dataPane, svg].every(Boolean)) return { ready: false };
+        const rect = (node) => { const value = node.getBoundingClientRect(); return {
+          left: value.left, top: value.top, right: value.right, bottom: value.bottom, width: value.width, height: value.height,
+        }; };
+        const visibleRects = (selector) => Array.from(document.querySelectorAll(selector))
+          .filter((node) => { const value = node.getBoundingClientRect(); return value.width > 0 && value.height > 0; })
+          .map((node) => ({ selector, ...rect(node) }));
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--surface-base)'; document.body.append(probe);
+        const surfaceRgb = (getComputedStyle(probe).color.match(/\d+(?:\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+        probe.remove();
+        return { ready: result.getAttribute('data-orientation') === (result.getBoundingClientRect().width >= 760 ? 'horizontal' : 'vertical'), value: {
+          workspace: rect(workspace), filters: rect(filters), calculate: rect(calculate), result: rect(result), resultHeader: rect(resultHeader),
+          chartPane: rect(chartPane), dataPane: rect(dataPane), svg: rect(svg), orientation: result.getAttribute('data-orientation'), surfaceRgb,
+          protectedRects: [
+            ...visibleRects('.chart-filter-band [data-testid="chart-filter-control"]'),
+            ...visibleRects('.chart-toolbar'),
+            ...visibleRects('.chart-data-grid__header'),
+            ...visibleRects('.chart-data-grid__row[data-focused="true"]'),
+            ...visibleRects('.shell__ai-overlay:not([hidden])'),
+          ],
+          desktopColumns: ['.shell__navigation', '.shell__main', '.shell__ai'].map((selector) => rect(select(selector))),
+          narrow: Boolean(select('.shell--narrow')), navWidth: select('.shell__navigation')?.getBoundingClientRect().width ?? 0,
+          aiOverlay: Boolean(select('.shell__ai-overlay:not([hidden])')),
+        } };
+      });
+
+      const inside = (outer, inner) => inner.left >= outer.left - 1 && inner.top >= outer.top - 1
+        && inner.right <= outer.right + 1 && inner.bottom <= outer.bottom + 1;
+      const overlapsResultHeader = (rect) => rectsIntersect(rect, geometry.resultHeader)
+        && rect.bottom > geometry.resultHeader.top + 1;
+      const overlaps = geometry.protectedRects.filter((rect) => rectsIntersect(rect, geometry.svg));
+      if (!inside(geometry.workspace, geometry.filters) || !inside(geometry.workspace, geometry.calculate)
+        || overlapsResultHeader(geometry.filters) || overlapsResultHeader(geometry.calculate)
+        || geometry.svg.width <= 0 || geometry.svg.height <= 0 || overlaps.length
+        || (geometry.orientation === 'horizontal' && (geometry.chartPane.width < 360 || geometry.dataPane.width < 360))
+        || (width === 1440 && geometry.desktopColumns.some((rect) => rect.width <= 0))
+        || (width === 1100 && (!geometry.narrow || Math.abs(geometry.navWidth - 56) > 1 || !geometry.aiOverlay))) {
+        throw new Error(`invalid chart visual geometry: ${JSON.stringify({ chartCase, width, height, theme, density, overlaps, geometry })}`);
+      }
+
+      const captured = await captureBitmap(win, viewport);
+      const svgImage = await win.webContents.capturePage({
+        x: Math.floor(geometry.svg.left), y: Math.floor(geometry.svg.top),
+        width: Math.max(1, Math.ceil(geometry.svg.right) - Math.floor(geometry.svg.left)),
+        height: Math.max(1, Math.ceil(geometry.svg.bottom) - Math.floor(geometry.svg.top)),
+      });
+      const svgLogical = {
+        width: Math.max(1, Math.ceil(geometry.svg.right) - Math.floor(geometry.svg.left)),
+        height: Math.max(1, Math.ceil(geometry.svg.bottom) - Math.floor(geometry.svg.top)),
+      };
+      const svgMetrics = imageMetrics(svgImage, {
+        logicalWidth: svgLogical.width, logicalHeight: svgLogical.height, requestedScaleFactor: viewport.deviceScaleFactor,
+      });
+      const svgBitmap = svgImage.toBitmap({ scaleFactor: svgMetrics.selectedScaleFactor });
+      const centralDifference = centralDifferenceRatio(svgBitmap, svgMetrics.nativeWidth, svgMetrics.nativeHeight, geometry.surfaceRgb);
+      const svgColors = distinctRgbInRect(svgBitmap, svgMetrics.nativeWidth, {
+        left: 0, top: 0, width: svgLogical.width, height: svgLogical.height,
+        actualScaleX: svgMetrics.actualScaleX, actualScaleY: svgMetrics.actualScaleY,
+      });
+      if (captured.bytes < 10000 || captured.luminanceRange < 20 || captured.sampledColors < 32
+        || centralDifference < 0.01 || svgColors < 16) {
+        throw new Error(`chart screenshot is blank or incomplete: ${JSON.stringify({ chartCase, width, height, theme, density, centralDifference, svgColors })}`);
+      }
+      const name = `chart-${chartCase}-${width}x${height}-${theme}-${density}.png`;
+      fs.writeFileSync(path.join(screenshotDir, name), captured.png);
+      if (!layerDeltas) layerDeltas = await verifyChartLayerPixels(win, viewport, geometry.svg);
+      chartScreenshots.push({ name, width, height, theme, density, centralDifference, svgColors,
+        nativeWidth: captured.nativeWidth, nativeHeight: captured.nativeHeight,
+        actualScaleX: captured.actualScaleX, actualScaleY: captured.actualScaleY, geometry, layerDeltas });
+
+      if (width === 1100) {
+        await win.webContents.executeJavaScript(`document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+        await poll(win, 'visual narrow AI overlay close', () => ({ ready: !document.querySelector('.shell__ai-overlay:not([hidden])') }));
+      }
+    }
+  }
+}
+
 async function runChartWorkbenchSmoke(win) {
   chartSmokeStage = 'profile-authority';
   await poll(win, 'chart smoke profile authority', () => ({
@@ -271,6 +458,7 @@ async function runChartWorkbenchSmoke(win) {
   });
   const natalContext = await waitForMain('natal AI context', () => chartAiContexts.find((context) => context?.resultId && context.chartType === 'natal'));
   if (natalContext.successfulFilters.request.settings.zodiac !== 'sidereal') throw new Error('natal AI context lost sidereal settings');
+  if (visualMode) await captureChartVisualMatrix(win, 'personal-single');
 
   chartSmokeStage = 'relationship-navigation';
   await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[2].click()`);
@@ -298,6 +486,7 @@ async function runChartWorkbenchSmoke(win) {
     return { ready: Boolean(svg && svg.querySelectorAll('[data-ring-id]').length === 2 && document.querySelector('[role="grid"]')
       && !/NaN|Infinity|undefined/.test(markup)), value: { svgBytes: markup.length, rings: svg?.querySelectorAll('[data-ring-id]').length } };
   });
+  if (visualMode) await captureChartVisualMatrix(win, 'relationship-dual');
 
   chartSmokeStage = 'chart-linkage';
   const linkage = await win.webContents.executeJavaScript(`(() => {
@@ -470,6 +659,12 @@ async function runChartWorkbenchSmoke(win) {
     }, lateRejected, cancellationRejected, failureRetained, parserRejected, intentConsumption,
     nodeAccess: false, acceptedResultId: overlapAccepted.resultId, initialAcceptedResultId: acceptedBeforeRaces.resultId,
   };
+  if (visualMode) {
+    if (chartScreenshots.length !== 24 || new Set(chartScreenshots.map(({ name }) => name)).size !== 24) {
+      throw new Error(`expected exactly 24 unique chart screenshots, got ${chartScreenshots.length}`);
+    }
+    chartSmoke.visual = { count: chartScreenshots.length, screenshots: chartScreenshots };
+  }
   if (!lateRejected || !cancellationRejected || !failureRetained || !parserRejected) throw new Error(`chart race contract failed: ${JSON.stringify(chartSmoke)}`);
   return chartSmoke;
 }
@@ -1267,4 +1462,4 @@ app.whenReady().then(async () => {
   }
 });
 
-setTimeout(() => fail('timed out after 90 seconds'), 90000);
+setTimeout(() => fail(`timed out after ${visualMode ? 240 : 90} seconds`), visualMode ? 240000 : 90000);

@@ -167,3 +167,22 @@ test('chart smoke has a genuine trusted branch and native canvas/object tab trav
   assert.match(source, /JSON\.stringify\(retainedBeforeFailure\.selectedRows\) === JSON\.stringify\(retainedAfterFailure\.selectedRows\)/);
   assert.match(source, /acceptedContextBeforeFailure\.successfulFilters/);
 });
+
+test('chart visual smoke captures the exact responsive matrix with pixel and geometry gates', () => {
+  assert.equal(packageJson.scripts['smoke:react:charts:visual'], 'npm run build:renderer && cross-env CHILLAST_CHART_VISUAL=1 electron tests/SmokeReactRenderer.js --charts');
+  assert.match(source, /process\.env\.CHILLAST_CHART_VISUAL === '1'/);
+  assert.match(source, /const chartMode = visualMode \|\| process\.env\.CHILLAST_CHART_SMOKE === '1'/);
+  assert.match(source, /const cases = \['personal-single', 'relationship-dual'\]/);
+  assert.match(source, /const sizes = \[\[1440, 920\], \[1280, 800\], \[1100, 720\]\]/);
+  assert.match(source, /\['light', 'compact'\], \['light', 'comfortable'\]/);
+  assert.match(source, /\['dark', 'compact'\], \['dark', 'comfortable'\]/);
+  assert.match(source, /chart-\$\{chartCase\}-\$\{width\}x\$\{height\}-\$\{theme\}-\$\{density\}\.png/);
+  assert.match(source, /chartScreenshots\.length !== 24/);
+  assert.match(source, /centralDifferenceRatio/);
+  assert.match(source, /distinctRgbInRect/);
+  assert.match(source, /pixelDifferenceCount/);
+  assert.match(source, /rectsIntersect/);
+  assert.match(source, /centralDifference < 0\.01/);
+  assert.match(source, /svgColors < 16/);
+  assert.match(source, /changedPixels < 100/);
+});
