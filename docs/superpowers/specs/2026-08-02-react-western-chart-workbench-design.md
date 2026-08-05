@@ -413,8 +413,10 @@ the current logical transform; it does not silently reset user pan/zoom.
 ### 8.1 Tabs and tables
 
 The explorer tabs are Planets, Houses, Aspects, Distributions, and Comparison.
-Comparison is enabled when the result has two rings or two subjects; otherwise
-it presents a clear unavailable empty state without removing the tab.
+Comparison is enabled only when the result has two rings. A two-subject result
+with one composite ring has no per-subject position sets and cannot produce the
+first/second-ring values defined below; it therefore presents the same clear
+unavailable empty state without removing the tab.
 
 TanStack Table and TanStack Virtual provide sorting, multiple simultaneous
 column filters, pinned columns, column visibility, virtual rows, keyboard
