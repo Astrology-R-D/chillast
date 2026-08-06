@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { assertAiContext } = require('../src/shared/WesternChartAiContext');
 
 function loadPreloadApi() {
   const ipcRenderer = new EventEmitter();
@@ -85,6 +86,31 @@ test('preload validates AI chart context before crossing IPC', async () => {
   await api.ai.setContext({ ...valid, selectedRows: [{ id: 'natal:sun', values: { point: 'sun', longitude: 10 } }] });
   assert.deepEqual(invocations.at(-1)[1].selectedRows, [{ id: 'natal:sun', values: { point: 'sun', longitude: 10 } }]);
   assert.throws(() => api.ai.setContext({ route: 'profiles', activeProfile: { notes: 'private' }, lastChartData: null, chartType: null }), /context|field/i);
+});
+
+test('sandboxed preload and shared main validators accept the same context corpus', async () => {
+  // A sandboxed preload can load Electron but not the app's CommonJS validator; this corpus prevents the required duplicate from drifting.
+  const valid = {
+    kind: 'western-chart', route: 'personal', resultId: 'r1', chartType: 'natal', activeProfile: { id: 'p1', displayName: 'Alice' },
+    lastChartData: { resultId: 'r1', identities: [], meta: { type: 'natal' }, subjects: [], houses: [], angles: {}, rings: [], aspects: [], distributions: {} }, successfulFilters: { type: 'natal', primary: { id: 'p1', displayName: 'Alice' }, secondary: null, settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: [], orbOverrides: {} } }, options: {} },
+    focusedIdentity: null, draftIsStale: false, draftSummary: null,
+  };
+  const corpus = [
+    null,
+    valid,
+    { ...valid, selectedRows: [{ id: 'natal:sun', values: { longitude: 10, retrograde: false } }] },
+    { route: 'charts', activeProfile: null, chartType: null, lastChartData: null },
+    { ...valid, private: true },
+    { ...valid, selectedRows: [{ id: 'row', values: { longitude: Number.POSITIVE_INFINITY } }] },
+    { ...valid, selectedRows: Array.from({ length: 101 }, (_, index) => ({ id: `row-${index}`, values: {} })) },
+    { ...valid, selectedRows: Array.from({ length: 100 }, (_, index) => ({ id: `row-${index}`, values: { payload: 'x'.repeat(6000) } })) },
+  ];
+  for (const context of corpus) {
+    const mainAccepted = (() => { try { assertAiContext(context); return true; } catch { return false; } })();
+    const { api } = loadPreloadApi();
+    const preloadAccepted = (() => { try { void api.ai.setContext(context); return true; } catch { return false; } })();
+    assert.equal(preloadAccepted, mainAccepted, `validator disagreement for ${JSON.stringify(context)?.slice(0, 160)}`);
+  }
 });
 
 test('close-request cleanup removes only its scoped listener', () => {

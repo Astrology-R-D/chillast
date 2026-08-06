@@ -15,6 +15,7 @@ const ChartStrategyFactory = require('../src/core/astrology/ChartStrategyFactory
 const SwissEphCore = require('../src/core/astrology/ephemeris/SwissEphCore');
 const LocationResolver = require('../src/core/astrology/LocationResolver');
 const ChineseAstrologyService = require('../src/core/chinese/ChineseAstrologyService');
+const ContextToolProvider = require('../src/core/ai/tools/ContextToolProvider');
 const ProfileRepository = require('../src/main/ProfileRepository');
 const {
   DelayedAstrologyService, profileA, profileB,
@@ -33,6 +34,8 @@ const appearances = [
   ['dark', 'compact'], ['dark', 'comfortable'],
 ];
 const errors = [];
+const RESIZE_OBSERVER_WARNING = 'ResizeObserver loop completed with undelivered notifications.';
+const isBenignResizeObserverWarning = (message) => message === RESIZE_OBSERVER_WARNING;
 const expectedProfileScreenshotNames = [
   'profile-1440x920-light-compact.png',
   'profile-1280x800-light-compact.png',
@@ -67,6 +70,7 @@ let closeGuard = null;
 let finished = false;
 let delayedAstrology = null;
 let chartAiContexts = [];
+let chartAiService = null;
 let profileRepository = null;
 let chartSmokeStage = 'not-started';
 const chartScreenshots = [];
@@ -87,6 +91,7 @@ process.on('uncaughtException', (error) => {
 function finish(code, reason) {
   if (finished) return;
   finished = true;
+  SwissEphCore.close();
   if (code !== 0) chartArtifactSession?.abort();
   if (reason) console.error(`\nReact smoke failed: ${reason}\n`);
   closeGuard?.dispose();
@@ -717,8 +722,8 @@ async function runChartWorkbenchSmoke(win) {
 app.whenReady().then(async () => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
   const locale = JSON.parse(fs.readFileSync(path.join(root, 'locale', 'zh.json'), 'utf8'));
+  SwissEphCore.configure({ ephePath: path.join(root, 'assets', 'ephemeris') });
   if (chartMode) {
-    SwissEphCore.configure({ ephePath: path.join(root, 'assets', 'ephemeris') });
     const realAstrology = new AstrologyService(new ChartStrategyFactory({ backend: 'swisseph' }));
     delayedAstrology = new DelayedAstrologyService(realAstrology);
     profileRepository = new ProfileRepository(path.join(userDataDir, 'data')).init();
@@ -783,9 +788,10 @@ app.whenReady().then(async () => {
     },
   });
   if (chartMode) {
-    const aiService = {
+    chartAiService = {
       status: () => ({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
       getInitStatus: () => null,
+      getContext: () => chartAiContexts.at(-1) ?? null,
       setContext: (context) => { chartAiContexts.push(context); },
     };
     const router = new IpcRouter({
@@ -795,7 +801,7 @@ app.whenReady().then(async () => {
       chineseAstrologyService: new ChineseAstrologyService(),
       config,
       locale,
-      aiService,
+      aiService: chartAiService,
       locationResolver: new LocationResolver(),
       closeDecision: (decision) => closeGuard.decide(decision),
     });
@@ -818,6 +824,7 @@ app.whenReady().then(async () => {
     const details = args.at(-1);
     const level = typeof args[1] === 'number' ? args[1] : details && details.level;
     const message = typeof args[2] === 'string' ? args[2] : details && details.message;
+    if (isBenignResizeObserverWarning(message)) return;
     if (level === 'error' || level >= 3) errors.push(`console: ${message}`);
   });
   win.webContents.on('preload-error', (_event, file, error) => {
@@ -832,7 +839,9 @@ app.whenReady().then(async () => {
   win.webContents.once('dom-ready', () => {
     void win.webContents.executeJavaScript(`
       window.__smokeErrors = [];
-      window.addEventListener('error', (event) => window.__smokeErrors.push('window: ' + event.message));
+      window.addEventListener('error', (event) => {
+        if (event.message !== '${RESIZE_OBSERVER_WARNING}') window.__smokeErrors.push('window: ' + event.message);
+      });
       window.addEventListener('unhandledrejection', (event) => {
         const reason = event.reason && (event.reason.stack || event.reason.message) || String(event.reason);
         window.__smokeErrors.push('unhandledrejection: ' + reason);
@@ -849,7 +858,16 @@ app.whenReady().then(async () => {
     if (chartMode) {
       const chartSmoke = await runChartWorkbenchSmoke(win);
       await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+      await waitForMain('chart context cleared', () => chartAiContexts.at(-1) === null && chartAiService.getContext() === null);
+      const contextTools = Object.fromEntries((await new ContextToolProvider(chartAiService).listTools()).map((tool) => [tool.name, tool]));
+      const noCurrentChart = await contextTools.get_current_chart.invoke({});
+      if (!noCurrentChart.includes('尚未计算')) throw new Error(`current chart tool was not cleared: ${noCurrentChart}`);
       await poll(win, 'dirty close profile source', () => ({ ready: Boolean(document.querySelector('[data-profile-id="chart-smoke-a"]')) }));
+      await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[2].click()`);
+      await waitForMain('chart context restored', () => Boolean(chartAiService.getContext()?.resultId));
+      await win.webContents.executeJavaScript(`document.querySelectorAll('.shell-nav__button')[0].click()`);
+      await waitForMain('chart context cleared after restore', () => chartAiService.getContext() === null);
+      await poll(win, 'dirty close profile source restored', () => ({ ready: Boolean(document.querySelector('[data-profile-id="chart-smoke-a"]')) }));
       await win.webContents.executeJavaScript(`(() => {
         document.querySelector('[data-profile-id="chart-smoke-a"]').click();
         document.querySelector('.profile-detail__actions button').click();
@@ -1182,8 +1200,11 @@ app.whenReady().then(async () => {
       return { ready: objectNavigationValid, value: { objectNavigationValid, focusedIdentity, expectedIdentity: before.expectedIdentity,
         transformUnchanged, lockRetained } };
     });
-    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '图层').click()`);
-    await poll(win, 'chart layer menu open', () => ({ ready: Boolean(document.querySelector('.chart-layer-menu__popover')) }));
+    await poll(win, 'chart layer menu open', () => {
+      const popover = document.querySelector('.chart-layer-menu__popover');
+      if (!popover) Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '图层')?.click();
+      return { ready: Boolean(popover) };
+    });
     await win.webContents.executeJavaScript(`(() => {
       const ringToggles = document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]');
       ringToggles[ringToggles.length - 1].click();
@@ -1197,8 +1218,11 @@ app.whenReady().then(async () => {
         && crossAspects.length > 0 && crossAspects.every((node) => node.hasAttribute('hidden'));
       return { ready: hiddenState, value: { hiddenState, crossAspectCount: crossAspects.length } };
     });
-    await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '图层').click()`);
-    await poll(win, 'chart layer menu close', () => ({ ready: !document.querySelector('.chart-layer-menu__popover') }));
+    await poll(win, 'chart layer menu close', () => {
+      const popover = document.querySelector('.chart-layer-menu__popover');
+      if (popover) popover.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      return { ready: !popover };
+    });
     await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((node) => node.getAttribute('aria-label') === '放大').click()`);
     const zoomed = await poll(win, 'chart zoom', () => {
       const transform = window.__readChartTransform();
@@ -1416,7 +1440,9 @@ app.whenReady().then(async () => {
           window.__smokeErrors = [];
           window.__smokeExpectedTheme = '${appearance.theme}';
           window.__smokeExpectedDensity = '${appearance.density}';
-          window.addEventListener('error', (event) => window.__smokeErrors.push('window: ' + event.message));
+          window.addEventListener('error', (event) => {
+            if (event.message !== '${RESIZE_OBSERVER_WARNING}') window.__smokeErrors.push('window: ' + event.message);
+          });
           window.addEventListener('unhandledrejection', (event) => window.__smokeErrors.push('unhandledrejection: ' + String(event.reason)));
           const selects = document.querySelectorAll('.workspace__appearance select');
           selects[0].value = '${appearance.theme}'; selects[0].dispatchEvent(new Event('change', { bubbles: true }));

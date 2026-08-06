@@ -31,6 +31,11 @@ test('React smoke requires seeded profile content and captures main-process fail
   assert.match(source, /handler failure/);
 });
 
+test('React smoke ignores only Chromium ResizeObserver delivery noise', () => {
+  assert.match(source, /ResizeObserver loop completed with undelivered notifications/);
+  assert.match(source, /isBenignResizeObserverWarning/);
+});
+
 test('React smoke verifies dirty navigation and all six profile screenshot variants', () => {
   assert.match(source, /initialSearchVerified/);
   assert.match(source, /primaryMarkerVerified/);
@@ -170,6 +175,22 @@ test('chart smoke has a genuine trusted branch and native canvas/object tab trav
   assert.match(source, /JSON\.stringify\(acceptedBeforeCancellation\.successfulFilters\) === JSON\.stringify\(acceptedAfterCancellation\.successfulFilters\)/);
 });
 
+test('all React smoke branches configure and close Swiss before default service construction', () => {
+  const configure = source.indexOf("SwissEphCore.configure({ ephePath: path.join(root, 'assets', 'ephemeris') })");
+  const branch = source.indexOf('if (chartMode)', source.indexOf('app.whenReady().then'));
+  const defaultService = source.indexOf('new AstrologyService()');
+  assert.ok(configure > 0 && configure < branch && configure < defaultService);
+  assert.equal(source.match(/SwissEphCore\.configure\(/g)?.length, 1);
+  assert.match(source, /SwissEphCore\.close\(\)/);
+});
+
+test('trusted chart smoke clears main and tool context off-chart and restores it on return', () => {
+  assert.match(source, /chartAiService\.getContext\(\) === null/);
+  assert.match(source, /get_current_chart/);
+  assert.match(source, /尚未计算/);
+  assert.match(source, /chart context restored/);
+});
+
 test('chart visual smoke captures the exact responsive matrix with pixel and geometry gates', () => {
   assert.equal(packageJson.scripts['smoke:react:charts:visual'], 'npm run build:renderer && cross-env CHILLAST_CHART_VISUAL=1 electron tests/SmokeReactRenderer.js --charts');
   assert.match(source, /process\.env\.CHILLAST_CHART_VISUAL === '1'/);
@@ -193,6 +214,7 @@ test('chart visual smoke captures the exact responsive matrix with pixel and geo
 });
 
 test('package exposes canonical source and release chart verification scripts', () => {
+  assert.equal(packageJson.scripts.verify, 'npm run rebuild:node && npm run check:unicode-casefold && npm test && npm run verify:renderer && npm run rebuild && npm run smoke && npm run smoke:react');
   assert.equal(packageJson.scripts['verify:package'], 'npm run build:renderer && npm run rebuild && electron-builder --dir && node tests/VerifyPackage.js && node tests/SmokePackagedRenderer.js');
   assert.equal(packageJson.scripts['verify:charts'], 'node --test tests/AstrologyCatalog.test.js tests/SwissephSidereal.test.js tests/ChartVisualMetrics.test.js && npm run test:security && npm run test:preload && npm run test:renderer && npm run typecheck && npm run build:renderer && npm run smoke:react:charts');
   assert.equal(packageJson.scripts['verify:charts:release'], 'npm run verify:charts && npm run smoke:react:charts:visual && npm run verify:package');

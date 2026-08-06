@@ -9,7 +9,7 @@ import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { useChartWorkspaceStoreApi } from '../../../stores/chartWorkspace';
 import { CHART_DESCRIPTORS } from '../catalog';
 import { buildWesternChartAiContext } from '../context/chartAiContext';
-import { invalidateChartAiContextOwner, publishLatestChartAiContext } from '../context/chartAiContextPublisher';
+import { deactivateChartAiContextOwner, publishLatestChartAiContext } from '../context/chartAiContextPublisher';
 import type { ChartReferenceData, ChartRoute } from '../contracts';
 import { ChartFilterBand } from './ChartFilterBand';
 import { ChartResultShell } from './ChartResultShell';
@@ -103,7 +103,9 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
     });
   }, [focusedIdentity, profiles, routeState?.accepted, routeState?.draft, routeState?.isStale, routeState?.lastSuccessfulResult, store]);
 
-  useEffect(() => () => invalidateChartAiContextOwner(contextOwner.current), []);
+  useEffect(() => () => deactivateChartAiContextOwner(contextOwner.current, apiClient.setAiChartContext, (error) => {
+    store.getState().setAiContextSource(error ? `error:${errorMessage(error)}` : null);
+  }), [store]);
 
   const calculation = useChartCalculation(route, environment);
   const validation = routeState
