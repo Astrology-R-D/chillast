@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, 'SmokeReactRenderer.js'), 'utf8');
+const nativeFocusSource = fs.readFileSync(path.join(__dirname, 'NativeFocus.js'), 'utf8');
 const rendererEntry = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer-react', 'main.tsx'), 'utf8');
 const packageJson = require('../package.json');
 
@@ -133,6 +134,16 @@ test('React smoke verifies separate canvas pan and roving object keyboard paths'
   assert.match(source, /chart keyboard object navigation/);
   assert.match(source, /keyboardObjectBefore/);
   assert.match(source, /document\.activeElement\?\.getAttribute\('data-chart-identity'\)/);
+});
+
+test('native chart keyboard probes await exact re-resolved focus across two frames', () => {
+  assert.match(source, /require\('\.\/NativeFocus'\)/);
+  assert.ok((source.match(/await waitForNativeFocus\(/g) ?? []).length >= 6);
+  assert.match(nativeFocusSource, /document\.activeElement === current/);
+  assert.match(nativeFocusSource, /current = resolveNode\(\)/);
+  assert.ok((nativeFocusSource.match(/requestAnimationFrame/g) ?? []).length >= 2);
+  assert.match(nativeFocusSource, /timed out.*last result/s);
+  assert.doesNotMatch(nativeFocusSource, /setTimeout/);
 });
 
 test('chart smoke uses deterministic delayed real Swiss IPC and profile fixtures', () => {

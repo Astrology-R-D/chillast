@@ -5,6 +5,7 @@ const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const { runElectronSmokeController } = require('./ElectronSmokeController');
 const { createChartArtifactSession } = require('./ChartVisualArtifacts');
+const { waitForNativeFocus } = require('./NativeFocus');
 const {
   centralDifferenceRatio, distinctRgbInRect, imageMetrics, pixelDifferenceCount, rectsIntersect,
 } = require('./NativeImageMetrics');
@@ -523,6 +524,8 @@ async function runChartWorkbenchSmoke(win) {
     const row = document.querySelector('[data-row-id="' + CSS.escape(window.__chartSmokeIdentity) + '"]');
     return { ready: Boolean(row && document.querySelector('[role="tab"][aria-selected="true"]')?.textContent === '星体') };
   });
+  await waitForNativeFocus(win.webContents, 'chart grid navigation focus',
+    `() => document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]')`);
   await win.webContents.executeJavaScript(`(() => {
     const rows = Array.from(document.querySelectorAll('.chart-data-grid [data-row-id]'));
     const activeCell = document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]');
@@ -540,6 +543,8 @@ async function runChartWorkbenchSmoke(win) {
     ready: document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]')?.closest('[data-row-id]')?.getAttribute('data-row-id')
       === window.__chartSmokeTableIdentity,
   }));
+  await waitForNativeFocus(win.webContents, 'chart grid activation focus',
+    `() => document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]')`);
   await win.webContents.executeJavaScript(`document.querySelector('.chart-data-grid [role="gridcell"][tabindex="0"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
   await poll(win, 'table to chart focus', () => {
     const target = document.querySelector('[data-chart-identity="' + CSS.escape(window.__chartSmokeTableIdentity) + '"]');
@@ -555,12 +560,15 @@ async function runChartWorkbenchSmoke(win) {
   });
 
   chartSmokeStage = 'native-tab-traversal';
-  await win.webContents.executeJavaScript(`document.querySelector('.chart-svg-host svg').focus()`);
+  await waitForNativeFocus(win.webContents, 'native tab canvas focus',
+    `() => document.querySelector('.chart-svg-host svg')`);
   win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'TAB' });
   win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'TAB' });
   const tabForward = await poll(win, 'native tab from canvas to roving object', () => ({
     ready: document.activeElement?.matches('[data-chart-identity][role="button"]'), value: document.activeElement?.getAttribute('data-chart-identity'),
   }));
+  await waitForNativeFocus(win.webContents, 'native shift tab object focus',
+    `() => document.querySelector('.chart-svg-host svg')?.querySelector('[data-chart-identity="' + CSS.escape(${JSON.stringify(tabForward)}) + '"]')`);
   win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'TAB', modifiers: ['shift'] });
   win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'TAB', modifiers: ['shift'] });
   const tabBackward = await poll(win, 'native shift tab to canvas', () => ({
@@ -1158,9 +1166,9 @@ app.whenReady().then(async () => {
       const linkedTab = document.querySelector('.chart-result__data-pane')?.getAttribute('data-active-tab');
       return { ready: locked && linkedTab === 'planets', value: { locked, linkedTab } };
     });
+    await waitForNativeFocus(win.webContents, 'chart keyboard canvas focus', `() => window.__currentChartSvg()`);
     const keyboardCanvasBefore = await win.webContents.executeJavaScript(`(() => {
       const svg = window.__currentChartSvg();
-      svg.focus();
       const transform = window.__readChartTransform();
       window.__smokeKeyboardCanvasBefore = transform;
       return { focusedCanvas: document.activeElement === svg, transform };
@@ -1173,6 +1181,8 @@ app.whenReady().then(async () => {
       const keyboardPanValid = transform.x - before.x === 16 && transform.y === before.y;
       return { ready: keyboardPanValid, value: { keyboardPanValid, before, after: transform } };
     });
+    await waitForNativeFocus(win.webContents, 'chart keyboard object focus',
+      `() => window.__currentChartSvg().querySelector('[data-chart-identity="' + CSS.escape(window.__plan3OuterIdentity) + '"]')`);
     const keyboardObjectBefore = await win.webContents.executeJavaScript(`(() => {
       const svg = window.__currentChartSvg();
       const objects = Array.from(svg.querySelectorAll('[role="button"][data-chart-identity]:not([hidden])'))
@@ -1181,7 +1191,6 @@ app.whenReady().then(async () => {
       const index = objects.indexOf(current);
       const forward = index < objects.length - 1;
       const expectedIdentity = objects[index + (forward ? 1 : -1)].getAttribute('data-chart-identity');
-      current.focus();
       const transform = window.__readChartTransform();
       window.__smokeKeyboardObjectBefore = { expectedIdentity, transform };
       return { focusedIdentity: document.activeElement?.getAttribute('data-chart-identity'), expectedIdentity,
