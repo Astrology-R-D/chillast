@@ -4,10 +4,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const MAX_AI_CONTEXT_BYTES = 512 * 1024;
 const WESTERN_CONTEXT_KEYS = ['activeProfile', 'chartType', 'draftIsStale', 'draftSummary', 'focusedIdentity', 'kind', 'lastChartData', 'resultId', 'route', 'successfulFilters'];
+const WESTERN_CONTEXT_OPTIONAL_KEYS = ['selectedRows'];
 const LEGACY_CONTEXT_KEYS = ['activeProfile', 'chartType', 'lastChartData', 'route'];
 const CHART_RESULT_KEYS = ['angles', 'aspects', 'distributions', 'houses', 'identities', 'meta', 'resultId', 'rings', 'subjects'];
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const hasExactKeys = (value, keys) => isObject(value) && Object.keys(value).every((key) => keys.includes(key)) && keys.every((key) => Object.hasOwn(value, key));
+const hasExactKeysWithOptional = (value, required, optional) => isObject(value)
+  && Object.keys(value).every((key) => required.includes(key) || optional.includes(key))
+  && required.every((key) => Object.hasOwn(value, key));
 const isShortString = (value, maximum = 256) => typeof value === 'string' && value.length > 0 && value.length <= maximum;
 const isProfile = (value) => value === null || (hasExactKeys(value, ['displayName', 'id']) && isShortString(value.id, 128) && isShortString(value.displayName));
 const isFilterProfile = (value) => hasExactKeys(value, ['displayName', 'id']) && isShortString(value.id, 128) && isShortString(value.displayName);
@@ -33,11 +37,19 @@ const isDraftSummary = (value) => {
     && (!Object.hasOwn(value, 'returnYear') || (typeof value.returnYear === 'number' && Number.isFinite(value.returnYear)))
     && ['relocationLabel', 'targetLocal'].every((key) => !Object.hasOwn(value, key) || isShortString(value[key]));
 };
-const isWesternContext = (value) => hasExactKeys(value, WESTERN_CONTEXT_KEYS) && value.kind === 'western-chart'
+const isSelectedRows = (value) => Array.isArray(value) && value.length <= 100 && value.every((row) => hasExactKeys(row, ['id', 'values'])
+  && isShortString(row.id, 256) && isObject(row.values) && Object.keys(row.values).length <= 32
+  && Object.entries(row.values).every(([key, entry]) => isShortString(key, 256) && (
+    entry === null || typeof entry === 'boolean'
+    || (typeof entry === 'number' && Number.isFinite(entry))
+    || (typeof entry === 'string' && entry.length <= 1024)
+  )));
+const isWesternContext = (value) => hasExactKeysWithOptional(value, WESTERN_CONTEXT_KEYS, WESTERN_CONTEXT_OPTIONAL_KEYS) && value.kind === 'western-chart'
   && isShortString(value.route, 32) && isShortString(value.resultId, 256) && isShortString(value.chartType, 64) && isProfile(value.activeProfile)
   && isChartResult(value.lastChartData) && value.lastChartData.resultId === value.resultId && isSuccessfulFilters(value.successfulFilters)
   && value.successfulFilters.type === value.chartType && (!value.activeProfile || value.activeProfile.id === value.successfulFilters.primary.id)
-  && (value.focusedIdentity === null || isShortString(value.focusedIdentity, 256)) && typeof value.draftIsStale === 'boolean' && isDraftSummary(value.draftSummary);
+  && (value.focusedIdentity === null || isShortString(value.focusedIdentity, 256)) && typeof value.draftIsStale === 'boolean' && isDraftSummary(value.draftSummary)
+  && (!Object.hasOwn(value, 'selectedRows') || isSelectedRows(value.selectedRows));
 const isLegacyLocation = (value) => hasExactKeys(value, ['label', 'latitude', 'longitude']) && typeof value.label === 'string'
   && typeof value.latitude === 'number' && Number.isFinite(value.latitude) && typeof value.longitude === 'number' && Number.isFinite(value.longitude);
 const isLegacyBirthData = (value) => hasExactKeys(value, ['day', 'hour', 'location', 'minute', 'month', 'year'])

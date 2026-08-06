@@ -96,7 +96,8 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
     const context = buildWesternChartAiContext({
       routeState,
       focusedIdentity,
-    }, { profiles });
+      bulkSelection: store.getState().bulkSelection,
+    }, { profiles, includeSelectedRows: false });
     publishLatestChartAiContext(contextOwner.current, context, apiClient.setAiChartContext, (error) => {
       store.getState().setAiContextSource(error ? `error:${errorMessage(error)}` : context ? 'western-chart' : null);
     });

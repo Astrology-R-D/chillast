@@ -40,6 +40,21 @@ function _serializeChart(chart) {
   }
 }
 
+function _serializeCurrentChartContext(ctx) {
+  const chart = _serializeChart(ctx.lastChartData);
+  if (ctx.kind !== 'western-chart') return chart;
+  const workspace = {
+    route: ctx.route,
+    activeProfile: ctx.activeProfile,
+    successfulFilters: ctx.successfulFilters,
+    focusedIdentity: ctx.focusedIdentity,
+    draftIsStale: ctx.draftIsStale,
+    draftSummary: ctx.draftSummary,
+    ...(ctx.selectedRows ? { selectedRows: ctx.selectedRows } : {}),
+  };
+  return `${chart}\n\n【当前工作区上下文】\n${JSON.stringify(workspace)}`;
+}
+
 /**
  * Build the astrology/命理 computation tools (no app context needed).
  * Each tool takes flat numeric/string inputs and returns a string result,
@@ -280,7 +295,7 @@ async function buildContextTools(aiService) {
     func: async () => {
       const ctx = (aiService && aiService.getContext()) || {};
       if (!ctx.lastChartData) return '用户尚未计算任何星盘。';
-      return _serializeChart(ctx.lastChartData);
+      return _serializeCurrentChartContext(ctx);
     },
   });
 

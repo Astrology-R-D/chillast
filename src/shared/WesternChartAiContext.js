@@ -2,11 +2,16 @@
 
 const MAX_CONTEXT_BYTES = 512 * 1024;
 const WESTERN_KEYS = ['activeProfile', 'chartType', 'draftIsStale', 'draftSummary', 'focusedIdentity', 'kind', 'lastChartData', 'resultId', 'route', 'successfulFilters'];
+const WESTERN_OPTIONAL_KEYS = ['selectedRows'];
 const LEGACY_KEYS = ['activeProfile', 'chartType', 'lastChartData', 'route'];
 const RESULT_KEYS = ['angles', 'aspects', 'distributions', 'houses', 'identities', 'meta', 'resultId', 'rings', 'subjects'];
 
 function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 function exactKeys(value, allowed) { return object(value) && Object.keys(value).every((key) => allowed.includes(key)) && allowed.every((key) => Object.hasOwn(value, key)); }
+function exactKeysWithOptional(value, required, optional) {
+  return object(value) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key))
+    && required.every((key) => Object.hasOwn(value, key));
+}
 function shortString(value, maximum = 256) { return typeof value === 'string' && value.length > 0 && value.length <= maximum; }
 function profile(value) { return value === null || (exactKeys(value, ['displayName', 'id']) && shortString(value.id, 128) && shortString(value.displayName)); }
 function profileFilter(value) { return exactKeys(value, ['displayName', 'id']) && shortString(value.id, 128) && shortString(value.displayName); }
@@ -41,14 +46,25 @@ function successfulFilters(value) {
   return exactKeys(value, ['options', 'primary', 'secondary', 'settings', 'type']) && shortString(value.type, 64)
     && profileFilter(value.primary) && (value.secondary === null || profileFilter(value.secondary)) && settings(value.settings) && options(value.options);
 }
+function selectedRows(value) {
+  if (!Array.isArray(value) || value.length > 100) return false;
+  return value.every((row) => exactKeys(row, ['id', 'values']) && shortString(row.id, 256) && object(row.values)
+    && Object.keys(row.values).length <= 32
+    && Object.entries(row.values).every(([key, entry]) => shortString(key, 256) && (
+      entry === null || typeof entry === 'boolean'
+      || (typeof entry === 'number' && Number.isFinite(entry))
+      || (typeof entry === 'string' && entry.length <= 1024)
+    )));
+}
 function western(value) {
-  return exactKeys(value, WESTERN_KEYS) && value.kind === 'western-chart' && shortString(value.route, 32)
+  return exactKeysWithOptional(value, WESTERN_KEYS, WESTERN_OPTIONAL_KEYS) && value.kind === 'western-chart' && shortString(value.route, 32)
     && shortString(value.resultId, 256) && shortString(value.chartType, 64) && profile(value.activeProfile)
     && chartResult(value.lastChartData) && value.lastChartData.resultId === value.resultId
     && successfulFilters(value.successfulFilters) && (value.focusedIdentity === null || shortString(value.focusedIdentity, 256))
     && value.successfulFilters.type === value.chartType
     && (!value.activeProfile || value.activeProfile.id === value.successfulFilters.primary.id)
-    && typeof value.draftIsStale === 'boolean' && draftSummary(value.draftSummary);
+    && typeof value.draftIsStale === 'boolean' && draftSummary(value.draftSummary)
+    && (!Object.hasOwn(value, 'selectedRows') || selectedRows(value.selectedRows));
 }
 function legacyLocation(value) {
   return exactKeys(value, ['label', 'latitude', 'longitude']) && typeof value.label === 'string'

@@ -76,6 +76,14 @@ test('preload validates AI chart context before crossing IPC', async () => {
   assert.throws(() => api.ai.setContext({ ...valid, tags: ['private'] }), /context|field/i);
   assert.throws(() => api.ai.setContext({ ...valid, draftSummary: { private: 'notes' } }), /context|field/i);
   assert.throws(() => api.ai.setContext({ ...valid, lastChartData: { payload: 'x'.repeat(600000) } }), /size|large/i);
+  assert.throws(() => api.ai.setContext({ ...valid, selectedRows: Array.from({ length: 101 }, (_, index) => ({ id: `row-${index}`, values: {} })) }), /context|field/i);
+  assert.throws(() => api.ai.setContext({ ...valid, selectedRows: [{ id: 'row', values: { text: 'x'.repeat(1025) } }] }), /context|field/i);
+  assert.throws(() => api.ai.setContext({ ...valid, selectedRows: Array.from({ length: 100 }, (_, index) => ({
+    id: `row-${index}`,
+    values: Object.fromEntries(Array.from({ length: 6 }, (__, valueIndex) => [`value-${valueIndex}`, 'x'.repeat(1024)])),
+  })) }), /size|large/i);
+  await api.ai.setContext({ ...valid, selectedRows: [{ id: 'natal:sun', values: { point: 'sun', longitude: 10 } }] });
+  assert.deepEqual(invocations.at(-1)[1].selectedRows, [{ id: 'natal:sun', values: { point: 'sun', longitude: 10 } }]);
   assert.throws(() => api.ai.setContext({ route: 'profiles', activeProfile: { notes: 'private' }, lastChartData: null, chartType: null }), /context|field/i);
 });
 

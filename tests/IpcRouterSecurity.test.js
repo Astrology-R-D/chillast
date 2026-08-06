@@ -166,11 +166,23 @@ test('AI chart context boundary rejects extra, malformed, and oversized payloads
     { ...valid, resultId: 3 },
     { ...valid, draftSummary: { private: 'notes' } },
     { ...valid, lastChartData: { resultId: 'r1', meta: { type: 'natal' }, private: 'notes' } },
+    { ...valid, selectedRows: Array.from({ length: 101 }, (_, index) => ({ id: `row-${index}`, values: {} })) },
+    { ...valid, selectedRows: [{ id: 'row', values: { text: 'x'.repeat(1025) } }] },
+    { ...valid, selectedRows: [{ id: 'row', values: { longitude: Number.POSITIVE_INFINITY } }] },
+    { ...valid, selectedRows: [{ id: 'x'.repeat(257), values: {} }] },
+    { ...valid, selectedRows: [{ id: 'row', values: Object.fromEntries(Array.from({ length: 33 }, (_, index) => [`key-${index}`, index])) }] },
+    { ...valid, selectedRows: [{ id: 'row', values: {}, metadata: {} }] },
+    { ...valid, selectedRows: Array.from({ length: 100 }, (_, index) => ({
+      id: `row-${index}`,
+      values: Object.fromEntries(Array.from({ length: 6 }, (__, valueIndex) => [`value-${valueIndex}`, 'x'.repeat(1024)])),
+    })) },
     { ...valid, lastChartData: { payload: 'x'.repeat(600000) } },
   ]) {
     assert.equal((await handlers.get('ai:setContext')(event, invalid)).ok, false);
   }
-  assert.deepEqual(accepted, [valid]);
+  const selected = { ...valid, selectedRows: [{ id: 'natal:sun', values: { point: 'sun', longitude: 10, retrograde: false, house: null } }] };
+  assert.equal((await handlers.get('ai:setContext')(event, selected)).ok, true);
+  assert.deepEqual(accepted, [valid, selected]);
 });
 
 test('AI configuration persists only provider-accepted candidates', async () => {

@@ -41,6 +41,7 @@ describe('last-successful western chart AI context', () => {
     const context = buildWesternChartAiContext({
       routeState: store.getState().routes.personal!,
       focusedIdentity: store.getState().focusedIdentity,
+      bulkSelection: store.getState().bulkSelection,
     }, { profiles: [{ id: 'p1', nameZh: 'Primary', nameEn: '' }] as never });
     expect(context).toMatchObject({
       kind: 'western-chart', chartType: 'natal', resultId: 'result-a',
@@ -57,7 +58,7 @@ describe('last-successful western chart AI context', () => {
   it('returns null before success, clears stale summary on revert, and changes focus independently', () => {
     const store = createChartWorkspaceStore(storage());
     store.getState().initializeRoute('personal', draft);
-    const state = () => ({ routeState: store.getState().routes.personal!, focusedIdentity: store.getState().focusedIdentity });
+    const state = () => ({ routeState: store.getState().routes.personal!, focusedIdentity: store.getState().focusedIdentity, bulkSelection: store.getState().bulkSelection });
     expect(buildWesternChartAiContext(state(), { profiles: [{ id: 'p1', nameZh: 'Primary' }] as never })).toBeNull();
     const sequence = store.getState().submit(snapshot)!;
     store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
@@ -68,13 +69,45 @@ describe('last-successful western chart AI context', () => {
     expect(buildWesternChartAiContext(state())).toMatchObject({ resultId: 'result-a', focusedIdentity: 'natal:sun' });
   });
 
-  it('never includes selected row metadata in the minimized context', () => {
+  it('omits selected rows by default and includes only requested visible selected machine rows', () => {
     const store = createChartWorkspaceStore(storage());
     store.getState().initializeRoute('personal', draft);
     const sequence = store.getState().submit(snapshot)!;
     store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
-    store.getState().setBulkSelection(['natal:sun']);
-    const state = { routeState: store.getState().routes.personal!, focusedIdentity: null };
+    store.getState().setBulkSelection(['natal:sun', 'hidden', 'unselected']);
+    const state = { routeState: store.getState().routes.personal!, focusedIdentity: null, bulkSelection: store.getState().bulkSelection };
     expect(buildWesternChartAiContext(state)).not.toHaveProperty('selectedRows');
+    expect(buildWesternChartAiContext(state, { includeSelectedRows: false, visibleRows: [] })).not.toHaveProperty('selectedRows');
+    const context = buildWesternChartAiContext(state, { includeSelectedRows: true, visibleRows: [
+      { id: 'natal:sun', chartIdentity: 'natal:sun', values: { point: 'sun', longitude: 10, retrograde: false }, metadata: { private: true } },
+      { id: 'visible-unselected', chartIdentity: null, values: { point: 'moon' } },
+    ] });
+    expect(context?.selectedRows).toEqual([{ id: 'natal:sun', values: { point: 'sun', longitude: 10, retrograde: false } }]);
+    expect(JSON.stringify(context?.selectedRows)).not.toMatch(/metadata|private|chartIdentity/);
+  });
+
+  it('bounds selected rows and machine values', () => {
+    const store = createChartWorkspaceStore(storage());
+    store.getState().initializeRoute('personal', draft);
+    const sequence = store.getState().submit(snapshot)!;
+    store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
+    const visibleRows = Array.from({ length: 105 }, (_, index) => ({
+      id: `row-${index}`, chartIdentity: null, values: {
+        finite: index, text: 'value', invalidNumber: Number.POSITIVE_INFINITY,
+        oversized: 'x'.repeat(1025), function: (() => null) as never,
+      }, metadata: { private: true },
+    }));
+    const bulkSelection = visibleRows.map(({ id }) => id);
+    const context = buildWesternChartAiContext({ routeState: store.getState().routes.personal!, focusedIdentity: null, bulkSelection }, {
+      includeSelectedRows: true, visibleRows,
+    });
+    expect(context?.selectedRows).toHaveLength(100);
+    expect(context?.selectedRows?.[0]).toEqual({ id: 'row-0', values: { finite: 0, text: 'value' } });
+    const largeRows = Array.from({ length: 100 }, (_, index) => ({ id: `large-${index}`, chartIdentity: null, values: { payload: 'y'.repeat(1024) } }));
+    const bounded = buildWesternChartAiContext({
+      routeState: store.getState().routes.personal!, focusedIdentity: null, bulkSelection: largeRows.map(({ id }) => id),
+    }, { includeSelectedRows: true, visibleRows: largeRows });
+    expect(new TextEncoder().encode(JSON.stringify(bounded?.selectedRows)).byteLength).toBeLessThanOrEqual(64 * 1024);
+    expect(bounded?.selectedRows?.length).toBeLessThan(100);
   });
 });

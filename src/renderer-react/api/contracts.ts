@@ -192,4 +192,8 @@ export interface WesternChartAiContext {
     returnYear?: number;
     relocationLabel?: string;
   };
+  selectedRows?: Array<{
+    id: string;
+    values: Record<string, string | number | boolean | null>;
+  }>;
 }
