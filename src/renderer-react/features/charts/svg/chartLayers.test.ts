@@ -33,6 +33,8 @@ describe('chart layers', () => {
     expect(svg.querySelector('[data-chart-part="angle"]')?.hasAttribute('hidden')).toBe(true);
     expect(svg.querySelector('[data-chart-part="label"]')?.hasAttribute('hidden')).toBe(true);
     expect(svg.querySelector('[data-chart-part="leader"]')?.hasAttribute('hidden')).toBe(true);
+    expect(svg.querySelector('[data-chart-kind="house"]')?.getAttribute('display')).toBe('none');
+    expect(svg.querySelector('[data-chart-part="label"]')?.getAttribute('display')).toBe('none');
     expect(svg.querySelector('[data-chart-part="glyph"]')?.hasAttribute('hidden')).toBe(false);
     expect(svg.querySelector('[data-chart-part="dot"]')?.hasAttribute('hidden')).toBe(false);
   });

@@ -62,5 +62,9 @@ export function downloadSvg(svg: SVGSVGElement, filename: string, options: SvgEx
   anchor.download = filename;
   anchor.hidden = true;
   document.body.append(anchor);
-  try { anchor.click(); } finally { anchor.remove(); URL.revokeObjectURL(url); }
+  try {
+    anchor.click();
+  } finally {
+    setTimeout(() => { anchor.remove(); URL.revokeObjectURL(url); }, 0);
+  }
 }

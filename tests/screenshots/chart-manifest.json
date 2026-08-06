@@ -1,0 +1,536 @@
+{
+  "version": 1,
+  "count": 24,
+  "hashes": {
+    "chart-personal-single-1100x720-dark-comfortable.png": "384dec919e1b63eaae54509f24c376dd68f9a59f68d5859c64f202851b5cc246",
+    "chart-personal-single-1100x720-dark-compact.png": "480f544479adab5b97c45c137cb49bbd7a04f2471ef2b2a770ef565732c9da91",
+    "chart-personal-single-1100x720-light-comfortable.png": "4518f856ed82ce5669bd52d2a1d20fdfd1e51dbe6a26afcc41cd61d0d29f84c2",
+    "chart-personal-single-1100x720-light-compact.png": "1bc527a1793f8860d5321b891e2b16b9e654802f30868be3caf411bc9d4fa532",
+    "chart-personal-single-1280x800-dark-comfortable.png": "2a476a3cc9a70f1044d7146f69d5cbf5c864f3eea57fa813dcaea515ed42397b",
+    "chart-personal-single-1280x800-dark-compact.png": "e82512d4994e748b87617853bc53e51bb6e28ee08104045da1c882fa7bfc6a89",
+    "chart-personal-single-1280x800-light-comfortable.png": "0cbb840029abc7451471f71931f523ac99d3dfdb6f98b4869d1b53c2ac9862a9",
+    "chart-personal-single-1280x800-light-compact.png": "2a266924ccd29dbe6fce690b41ec41898d7746e44e548378fa894c42ef8ae2a1",
+    "chart-personal-single-1440x920-dark-comfortable.png": "ee869624f3ff95e30e0167df0192ece496e6eb817885688cb8ba15a4486df1b9",
+    "chart-personal-single-1440x920-dark-compact.png": "a753de5415fbd20722fd2587ad2805d4db5802707b64c03b794f60ac61c89b1f",
+    "chart-personal-single-1440x920-light-comfortable.png": "21172aa553db63f12711f9e22c766539456f371647b84416234a5c815817c180",
+    "chart-personal-single-1440x920-light-compact.png": "573ecdea6e105e725dcf11f639698a196102c45da24f3bb56df16735656cce9b",
+    "chart-relationship-dual-1100x720-dark-comfortable.png": "bbacc987e20a78ab5baa50c1d27353f8a4774da3a22330b0e4d7bdf744b28c4e",
+    "chart-relationship-dual-1100x720-dark-compact.png": "df8ee9040a414804c357d63d15fe5aa0a64be0f744a6997af5bbb5285936d3f0",
+    "chart-relationship-dual-1100x720-light-comfortable.png": "d4d65107040cf55873c7375535dc0fdc7334f27132ee8e86bcdc6af3d740ea8c",
+    "chart-relationship-dual-1100x720-light-compact.png": "989f6facc30f5d1f08fb7816717a6dca3d26b723a383f5b319a1bbe8375f6789",
+    "chart-relationship-dual-1280x800-dark-comfortable.png": "7b2d0064a7fb9cb507a5990cb4197f367acc8f5d7d90a6b72a031ad086adb194",
+    "chart-relationship-dual-1280x800-dark-compact.png": "7ed3b9e3de0ae7db07bffdf693ad3b6866bacdf3d687d00d86cb5e890959b42c",
+    "chart-relationship-dual-1280x800-light-comfortable.png": "a9e565e8032aa30be1c3c1e99fa2d7ae64e469cb2cd293c957d9bd03c5d8ea18",
+    "chart-relationship-dual-1280x800-light-compact.png": "958089335388495a946cbde92e8312d3c57e5169b4d7c4828c8a24c86d5766a4",
+    "chart-relationship-dual-1440x920-dark-comfortable.png": "824f145892d7726a65463e0084387ec5a2da35d93a2858cee877c8de67d99e63",
+    "chart-relationship-dual-1440x920-dark-compact.png": "8fa79627e0eb1c40a90067ec56692203698dd1be50fe89bed1fd43e317ba7ec2",
+    "chart-relationship-dual-1440x920-light-comfortable.png": "294c34f2b7b22a598ab7991485b50f1aff572681297a2473e3ee38bd0e6d5aba",
+    "chart-relationship-dual-1440x920-light-compact.png": "b9230aba80269ae1ee59f84d8066854b55c77d614c00ddf6faf9a6a0545951ee"
+  },
+  "report": [
+    {
+      "centralDifference": 0.999448,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1100x720-dark-comfortable.png",
+      "svgColors": 7750
+    },
+    {
+      "centralDifference": 0.99943,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1100x720-dark-compact.png",
+      "svgColors": 7827
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1100x720-light-comfortable.png",
+      "svgColors": 7286
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1100x720-light-compact.png",
+      "svgColors": 7288
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1280x800-dark-comfortable.png",
+      "svgColors": 6400
+    },
+    {
+      "centralDifference": 0.999984,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1280x800-dark-compact.png",
+      "svgColors": 7570
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1280x800-light-comfortable.png",
+      "svgColors": 5600
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1280x800-light-compact.png",
+      "svgColors": 6621
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1440x920-dark-comfortable.png",
+      "svgColors": 9615
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1440x920-dark-compact.png",
+      "svgColors": 9597
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1440x920-light-comfortable.png",
+      "svgColors": 8839
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        }
+      ],
+      "name": "chart-personal-single-1440x920-light-compact.png",
+      "svgColors": 8909
+    },
+    {
+      "centralDifference": 0.999513,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1100x720-dark-comfortable.png",
+      "svgColors": 11099
+    },
+    {
+      "centralDifference": 0.999493,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1100x720-dark-compact.png",
+      "svgColors": 11288
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1100x720-light-comfortable.png",
+      "svgColors": 10300
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1100x720-light-compact.png",
+      "svgColors": 10412
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1280x800-dark-comfortable.png",
+      "svgColors": 9696
+    },
+    {
+      "centralDifference": 0.999984,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1280x800-dark-compact.png",
+      "svgColors": 11546
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1280x800-light-comfortable.png",
+      "svgColors": 8431
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1280x800-light-compact.png",
+      "svgColors": 9851
+    },
+    {
+      "centralDifference": 0.999992,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1440x920-dark-comfortable.png",
+      "svgColors": 14231
+    },
+    {
+      "centralDifference": 0.999992,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1440x920-dark-compact.png",
+      "svgColors": 14224
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1440x920-light-comfortable.png",
+      "svgColors": 12862
+    },
+    {
+      "centralDifference": 1,
+      "layerDeltas": [
+        {
+          "changedPixels": true,
+          "layer": "majorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "minorAspects"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-0"
+        },
+        {
+          "changedPixels": true,
+          "layer": "ring-1"
+        }
+      ],
+      "name": "chart-relationship-dual-1440x920-light-compact.png",
+      "svgColors": 12864
+    }
+  ]
+}

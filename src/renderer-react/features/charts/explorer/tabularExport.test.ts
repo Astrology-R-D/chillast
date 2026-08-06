@@ -47,6 +47,30 @@ describe('tabular explorer exports', () => {
     expect(toCsv(columns, rows).match(/\uFEFF/g)).toHaveLength(1);
   });
 
+  it('escapes spreadsheet formulas in strings for CSV and clipboard while preserving numeric negatives', () => {
+    const formulaRows: ExplorerRow[] = [{ id: 'r', chartIdentity: null, values: {
+      point: '=SUM(1,2)', longitude: -20, retrograde: false, label: '\t @危险,"quoted"',
+    } }];
+    expect(toClipboardText(columns, formulaRows)).toBe(
+      'point\tlongitude\tretrograde\tlabel\r\n\'=SUM(1,2)\t-20\tfalse\t"\'\t @危险,""quoted"""\r\n',
+    );
+    expect(toCsv(columns, formulaRows)).toBe(
+      '\uFEFFpoint,longitude,retrograde,label\r\n"\'=SUM(1,2)",-20,false,"\'\t @危险,""quoted"""\r\n',
+    );
+  });
+
+  it('escapes every formula prefix after ASCII or Unicode whitespace and controls with exact bytes', () => {
+    const oneColumn = [{ id: 'label', visible: true }];
+    const values = [' =plain', '\t+cmd', '\u00A0-hidden', '\u200B@name'];
+    const formulaRows = values.map((label, index) => ({ id: String(index), chartIdentity: null, values: { label } })) as ExplorerRow[];
+    expect(toClipboardText(oneColumn, formulaRows)).toBe(
+      'label\r\n\' =plain\r\n"\'\t+cmd"\r\n\'\u00A0-hidden\r\n\'\u200B@name\r\n',
+    );
+    expect(toCsv(oneColumn, formulaRows)).toBe(
+      '\uFEFFlabel\r\n\' =plain\r\n\'\t+cmd\r\n\'\u00A0-hidden\r\n\'\u200B@name\r\n',
+    );
+  });
+
   it('uses the trusted clipboard API unchanged', async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
@@ -54,7 +78,8 @@ describe('tabular explorer exports', () => {
     expect(writeText).toHaveBeenCalledWith(toClipboardText(columns, [rows[0]]));
   });
 
-  it('downloads UTF-8 CSV with the exact MIME and revokes its object URL', () => {
+  it('revokes the CSV object URL only after the click handoff task', () => {
+    vi.useFakeTimers();
     const createObjectURL = vi.fn((_blob: Blob) => 'blob:chart');
     const revokeObjectURL = vi.fn();
     vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
@@ -63,6 +88,21 @@ describe('tabular explorer exports', () => {
     const blob = createObjectURL.mock.calls[0][0] as Blob;
     expect(blob.type).toBe('text/csv;charset=utf-8');
     expect(click).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:chart');
+    vi.useRealTimers();
+  });
+
+  it('schedules CSV cleanup even when the browser rejects the click handoff', () => {
+    vi.useFakeTimers();
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:failed', revokeObjectURL });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { throw new Error('blocked'); });
+    expect(() => downloadCsv(columns, rows, 'blocked.csv')).toThrow('blocked');
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:failed');
+    vi.useRealTimers();
   });
 });

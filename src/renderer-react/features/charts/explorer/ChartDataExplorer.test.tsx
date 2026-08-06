@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -62,6 +62,34 @@ describe('chart data explorer', () => {
       expect(within(modeGroup).getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
     }
     expect(store.getState().workspace.tableLayouts.transit).toMatchObject({ activeTab: 'comparison', comparisonMode: 'difference' });
+  });
+
+  it('implements automatic WAI tab roving focus and complete tab-panel relationships', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1, -1, -1]);
+    tabs[0].focus();
+    await user.keyboard('{ArrowRight}');
+    expect(tabs[1]).toHaveFocus(); expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{End}');
+    expect(tabs[4]).toHaveFocus(); expect(tabs[4]).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{Home}');
+    expect(tabs[0]).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(tabs[4]).toHaveFocus();
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAttribute('aria-labelledby', tabs[4].id);
+    expect(tabs[4]).toHaveAttribute('aria-controls', panel.id);
+  });
+
+  it('clamps column widths before persistence with accessible bounds', async () => {
+    const user = userEvent.setup(); const { store } = renderExplorer();
+    await user.click(screen.getByRole('button', { name: '列设置' }));
+    const input = screen.getByRole('spinbutton', { name: /列宽.*longitude/i });
+    fireEvent.change(input, { target: { value: '999' } });
+    expect(store.getState().workspace.tableLayouts.transit.tabs.planets.columnSizing.longitude).toBe(480);
+    expect(input).toHaveAttribute('aria-valuemin', '48'); expect(input).toHaveAttribute('aria-valuemax', '480');
   });
 
   it('reveals chart selections in the matching tab and grid row without clearing focus', async () => {

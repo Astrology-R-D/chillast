@@ -189,7 +189,23 @@ export class App {
 
   _pushContext() {
     if (this.aiSidebar) this.aiSidebar.setContext(this.currentContext);
-    window.mystApi.ai.setContext(this.currentContext);
+    const profile = this.currentContext.activeProfile;
+    const activeProfile = profile ? {
+      id: profile.id,
+      displayName: profile.nameZh || profile.nameEn || profile.id,
+      nameZh: profile.nameZh,
+      nameEn: profile.nameEn,
+      gender: profile.gender,
+      birthData: profile.birthData ? {
+        year: profile.birthData.year, month: profile.birthData.month, day: profile.birthData.day,
+        hour: profile.birthData.hour, minute: profile.birthData.minute,
+        location: profile.birthData.location ? {
+          label: profile.birthData.location.label, latitude: profile.birthData.location.latitude,
+          longitude: profile.birthData.location.longitude,
+        } : null,
+      } : null,
+    } : null;
+    window.mystApi.ai.setContext({ ...this.currentContext, activeProfile });
   }
 
   setLastChart(chartData, chartType) {

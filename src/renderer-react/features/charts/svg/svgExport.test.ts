@@ -36,7 +36,8 @@ describe('standalone SVG export', () => {
     expect(svg.outerHTML).toBe(before);
   });
 
-  test('downloads UTF-8 SVG and always revokes its object URL', () => {
+  test('downloads UTF-8 SVG and revokes its object URL after the click handoff task', () => {
+    vi.useFakeTimers();
     const svg = liveSvg();
     const createObjectURL = vi.fn<(blob: Blob) => string>(() => 'blob:chart');
     const revokeObjectURL = vi.fn<(url: string) => void>();
@@ -46,6 +47,21 @@ describe('standalone SVG export', () => {
     expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob);
     expect((createObjectURL.mock.calls[0][0] as Blob).type).toBe('image/svg+xml;charset=utf-8');
     expect(click).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:chart');
+    vi.useRealTimers();
+  });
+
+  test('schedules SVG cleanup when the browser rejects the click handoff', () => {
+    vi.useFakeTimers();
+    const revokeObjectURL = vi.fn<(url: string) => void>();
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:failed', revokeObjectURL });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { throw new Error('blocked'); });
+    expect(() => downloadSvg(liveSvg(), 'chart.svg', { title: 'Chart', description: 'Description' })).toThrow('blocked');
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:failed');
+    vi.useRealTimers();
   });
 });

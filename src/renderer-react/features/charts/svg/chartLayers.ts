@@ -32,9 +32,11 @@ function setVisible(node: Element, visible: boolean): void {
   if (visible) {
     node.removeAttribute('hidden');
     node.removeAttribute('aria-hidden');
+    node.removeAttribute('display');
   } else {
     node.setAttribute('hidden', '');
     node.setAttribute('aria-hidden', 'true');
+    node.setAttribute('display', 'none');
   }
 }
 

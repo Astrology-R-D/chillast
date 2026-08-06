@@ -41,22 +41,24 @@ describe('last-successful western chart AI context', () => {
     const context = buildWesternChartAiContext({
       routeState: store.getState().routes.personal!,
       focusedIdentity: store.getState().focusedIdentity,
-      bulkSelection: store.getState().bulkSelection,
-    });
+    }, { profiles: [{ id: 'p1', nameZh: 'Primary', nameEn: '' }] as never });
     expect(context).toMatchObject({
       kind: 'western-chart', chartType: 'natal', resultId: 'result-a',
       draftIsStale: true,
       draftSummary: { label: 'uncalculated', type: 'natal', houseSystem: 'placidus', zodiac: 'sidereal' },
-      successfulFilters: { request: { settings: { zodiac: 'tropical' } } },
+      route: 'personal', activeProfile: { id: 'p1', displayName: 'Primary' },
+      successfulFilters: { type: 'natal', primary: { id: 'p1', displayName: 'Primary' }, settings: { zodiac: 'tropical' } },
     });
-    expect(context?.result).toBe(resultA);
+    expect(context?.lastChartData).toBe(resultA);
+    expect(context).not.toHaveProperty('result');
+    expect(JSON.stringify(context)).not.toMatch(/notes|tags|createdAt|updatedAt|birthData/);
   });
 
   it('returns null before success, clears stale summary on revert, and changes focus independently', () => {
     const store = createChartWorkspaceStore(storage());
     store.getState().initializeRoute('personal', draft);
-    const state = () => ({ routeState: store.getState().routes.personal!, focusedIdentity: store.getState().focusedIdentity, bulkSelection: store.getState().bulkSelection });
-    expect(buildWesternChartAiContext(state())).toBeNull();
+    const state = () => ({ routeState: store.getState().routes.personal!, focusedIdentity: store.getState().focusedIdentity });
+    expect(buildWesternChartAiContext(state(), { profiles: [{ id: 'p1', nameZh: 'Primary' }] as never })).toBeNull();
     const sequence = store.getState().submit(snapshot)!;
     store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
     store.getState().editDraft('personal', { zodiac: 'sidereal' });
@@ -66,19 +68,13 @@ describe('last-successful western chart AI context', () => {
     expect(buildWesternChartAiContext(state())).toMatchObject({ resultId: 'result-a', focusedIdentity: 'natal:sun' });
   });
 
-  it('includes only requested selected machine rows without replacing result identity', () => {
+  it('never includes selected row metadata in the minimized context', () => {
     const store = createChartWorkspaceStore(storage());
     store.getState().initializeRoute('personal', draft);
     const sequence = store.getState().submit(snapshot)!;
     store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
     store.getState().setBulkSelection(['natal:sun']);
-    const state = { routeState: store.getState().routes.personal!, focusedIdentity: null, bulkSelection: ['natal:sun'] };
+    const state = { routeState: store.getState().routes.personal!, focusedIdentity: null };
     expect(buildWesternChartAiContext(state)).not.toHaveProperty('selectedRows');
-    expect(buildWesternChartAiContext(state, { includeSelectedRows: true, visibleRows: [
-      { id: 'natal:sun', chartIdentity: 'natal:sun', values: { point: 'sun', longitude: 10 }, metadata: { component: () => null } },
-    ] })).toMatchObject({
-      resultId: 'result-a',
-      selectedRows: [{ id: 'natal:sun', values: { point: 'sun', longitude: 10 } }],
-    });
   });
 });

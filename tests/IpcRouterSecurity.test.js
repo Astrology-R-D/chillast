@@ -149,6 +149,30 @@ test('foreign and subframe chart requests cannot enqueue delayed computation', a
   assert.equal(pending.length, 0);
 });
 
+test('AI chart context boundary rejects extra, malformed, and oversized payloads', async () => {
+  const handlers = new Map(); const accepted = [];
+  const ai = { status: () => ({}), getInitStatus: () => null, setContext: (value) => accepted.push(value) };
+  const router = new IpcRouter({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, aiService: ai }).register();
+  const mainFrame = {}; const trusted = { mainFrame }; router.setWebContents(trusted);
+  const event = { sender: trusted, senderFrame: mainFrame };
+  const valid = {
+    kind: 'western-chart', route: 'personal', resultId: 'r1', chartType: 'natal', activeProfile: { id: 'p1', displayName: 'Alice' },
+    lastChartData: { resultId: 'r1', identities: [], meta: { type: 'natal' }, subjects: [], houses: [], angles: {}, rings: [], aspects: [], distributions: {} }, successfulFilters: { type: 'natal', primary: { id: 'p1', displayName: 'Alice' }, secondary: null, settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: [], orbOverrides: {} } }, options: {} },
+    focusedIdentity: null, draftIsStale: false, draftSummary: null,
+  };
+  assert.equal((await handlers.get('ai:setContext')(event, valid)).ok, true);
+  for (const invalid of [
+    { ...valid, notes: 'private' },
+    { ...valid, resultId: 3 },
+    { ...valid, draftSummary: { private: 'notes' } },
+    { ...valid, lastChartData: { resultId: 'r1', meta: { type: 'natal' }, private: 'notes' } },
+    { ...valid, lastChartData: { payload: 'x'.repeat(600000) } },
+  ]) {
+    assert.equal((await handlers.get('ai:setContext')(event, invalid)).ok, false);
+  }
+  assert.deepEqual(accepted, [valid]);
+});
+
 test('AI configuration persists only provider-accepted candidates', async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-ipc-config-'));
   const dataDir = path.join(userData, 'data');

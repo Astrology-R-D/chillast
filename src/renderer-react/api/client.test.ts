@@ -388,8 +388,8 @@ describe('AI chart context boundary', () => {
   test('forwards constructed context through the existing bridge and requires a successful data envelope', async () => {
     const api = installApi();
     const context = {
-      kind: 'western-chart', resultId: 'result-a', chartType: 'natal', subjects: [],
-      successfulFilters: {} as never, result: {} as never, focusedIdentity: null,
+      kind: 'western-chart', route: 'personal', resultId: 'result-a', chartType: 'natal', activeProfile: null,
+      successfulFilters: {} as never, lastChartData: {} as never, focusedIdentity: null,
       draftIsStale: false, draftSummary: null,
     } as unknown as import('./contracts').WesternChartAiContext;
     const setContext = vi.fn(() => ok({ accepted: true }));

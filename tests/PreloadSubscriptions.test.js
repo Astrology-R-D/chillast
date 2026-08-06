@@ -22,9 +22,10 @@ function loadPreloadApi() {
 
   vm.runInNewContext(source, {
     require(id) {
-      assert.equal(id, 'electron');
-      return { contextBridge, ipcRenderer };
+      if (id === 'electron') return { contextBridge, ipcRenderer };
+      throw new Error(`unexpected preload dependency: ${id}`);
     },
+    Buffer,
   });
 
   return { api: exposedApi, ipcRenderer, invocations };
@@ -61,6 +62,21 @@ test('preload forwards only narrow chart methods', async () => {
   ]);
   assert.equal(api.invoke, undefined);
   assert.equal(api.ipcRenderer, undefined);
+});
+
+test('preload validates AI chart context before crossing IPC', async () => {
+  const { api, invocations } = loadPreloadApi();
+  const valid = {
+    kind: 'western-chart', route: 'personal', resultId: 'r1', chartType: 'natal', activeProfile: { id: 'p1', displayName: 'Alice' },
+    lastChartData: { resultId: 'r1', identities: [], meta: { type: 'natal' }, subjects: [], houses: [], angles: {}, rings: [], aspects: [], distributions: {} }, successfulFilters: { type: 'natal', primary: { id: 'p1', displayName: 'Alice' }, secondary: null, settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: [], orbOverrides: {} } }, options: {} },
+    focusedIdentity: null, draftIsStale: false, draftSummary: null,
+  };
+  await api.ai.setContext(valid);
+  assert.deepEqual(invocations.at(-1), ['ai:setContext', valid]);
+  assert.throws(() => api.ai.setContext({ ...valid, tags: ['private'] }), /context|field/i);
+  assert.throws(() => api.ai.setContext({ ...valid, draftSummary: { private: 'notes' } }), /context|field/i);
+  assert.throws(() => api.ai.setContext({ ...valid, lastChartData: { payload: 'x'.repeat(600000) } }), /size|large/i);
+  assert.throws(() => api.ai.setContext({ route: 'profiles', activeProfile: { notes: 'private' }, lastChartData: null, chartType: null }), /context|field/i);
 });
 
 test('close-request cleanup removes only its scoped listener', () => {

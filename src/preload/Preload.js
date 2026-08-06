@@ -2,6 +2,71 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+const MAX_AI_CONTEXT_BYTES = 512 * 1024;
+const WESTERN_CONTEXT_KEYS = ['activeProfile', 'chartType', 'draftIsStale', 'draftSummary', 'focusedIdentity', 'kind', 'lastChartData', 'resultId', 'route', 'successfulFilters'];
+const LEGACY_CONTEXT_KEYS = ['activeProfile', 'chartType', 'lastChartData', 'route'];
+const CHART_RESULT_KEYS = ['angles', 'aspects', 'distributions', 'houses', 'identities', 'meta', 'resultId', 'rings', 'subjects'];
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const hasExactKeys = (value, keys) => isObject(value) && Object.keys(value).every((key) => keys.includes(key)) && keys.every((key) => Object.hasOwn(value, key));
+const isShortString = (value, maximum = 256) => typeof value === 'string' && value.length > 0 && value.length <= maximum;
+const isProfile = (value) => value === null || (hasExactKeys(value, ['displayName', 'id']) && isShortString(value.id, 128) && isShortString(value.displayName));
+const isFilterProfile = (value) => hasExactKeys(value, ['displayName', 'id']) && isShortString(value.id, 128) && isShortString(value.displayName);
+const isSettings = (value) => hasExactKeys(value, ['aspects', 'houseSystem', 'zodiac']) && isShortString(value.houseSystem, 64)
+  && ['tropical', 'sidereal'].includes(value.zodiac) && hasExactKeys(value.aspects, ['enabled', 'orbOverrides'])
+  && Array.isArray(value.aspects.enabled) && value.aspects.enabled.length <= 32 && value.aspects.enabled.every((entry) => isShortString(entry, 64))
+  && isObject(value.aspects.orbOverrides) && Object.keys(value.aspects.orbOverrides).length <= 32
+  && Object.entries(value.aspects.orbOverrides).every(([key, entry]) => isShortString(key, 64) && typeof entry === 'number' && Number.isFinite(entry));
+const isOptions = (value) => isObject(value) && Object.keys(value).every((key) => ['latitude', 'locationLabel', 'longitude', 'targetDate', 'year'].includes(key))
+  && Object.values(value).every((entry) => (typeof entry === 'string' && entry.length <= 256) || (typeof entry === 'number' && Number.isFinite(entry)));
+const isChartResult = (value) => hasExactKeys(value, CHART_RESULT_KEYS) && isShortString(value.resultId, 256) && isObject(value.meta)
+  && isObject(value.angles) && isObject(value.distributions)
+  && ['aspects', 'houses', 'identities', 'rings', 'subjects'].every((key) => Array.isArray(value[key]));
+const isSuccessfulFilters = (value) => hasExactKeys(value, ['options', 'primary', 'secondary', 'settings', 'type']) && isShortString(value.type, 64)
+  && isFilterProfile(value.primary) && (value.secondary === null || isFilterProfile(value.secondary)) && isSettings(value.settings) && isOptions(value.options);
+const isDraftSummary = (value) => {
+  if (value === null) return true;
+  const required = ['houseSystem', 'label', 'type', 'zodiac'];
+  const allowed = [...required, 'relocationLabel', 'returnYear', 'targetLocal'];
+  return isObject(value) && required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => allowed.includes(key))
+    && value.label === 'uncalculated' && isShortString(value.type, 64) && isShortString(value.houseSystem, 64)
+    && ['tropical', 'sidereal'].includes(value.zodiac)
+    && (!Object.hasOwn(value, 'returnYear') || (typeof value.returnYear === 'number' && Number.isFinite(value.returnYear)))
+    && ['relocationLabel', 'targetLocal'].every((key) => !Object.hasOwn(value, key) || isShortString(value[key]));
+};
+const isWesternContext = (value) => hasExactKeys(value, WESTERN_CONTEXT_KEYS) && value.kind === 'western-chart'
+  && isShortString(value.route, 32) && isShortString(value.resultId, 256) && isShortString(value.chartType, 64) && isProfile(value.activeProfile)
+  && isChartResult(value.lastChartData) && value.lastChartData.resultId === value.resultId && isSuccessfulFilters(value.successfulFilters)
+  && value.successfulFilters.type === value.chartType && (!value.activeProfile || value.activeProfile.id === value.successfulFilters.primary.id)
+  && (value.focusedIdentity === null || isShortString(value.focusedIdentity, 256)) && typeof value.draftIsStale === 'boolean' && isDraftSummary(value.draftSummary);
+const isLegacyLocation = (value) => hasExactKeys(value, ['label', 'latitude', 'longitude']) && typeof value.label === 'string'
+  && typeof value.latitude === 'number' && Number.isFinite(value.latitude) && typeof value.longitude === 'number' && Number.isFinite(value.longitude);
+const isLegacyBirthData = (value) => hasExactKeys(value, ['day', 'hour', 'location', 'minute', 'month', 'year'])
+  && ['day', 'hour', 'minute', 'month', 'year'].every((key) => typeof value[key] === 'number' && Number.isFinite(value[key]))
+  && isLegacyLocation(value.location);
+const isLegacyProfile = (value) => value === null || (isObject(value)
+  && Object.keys(value).every((key) => ['birthData', 'displayName', 'gender', 'id', 'nameEn', 'nameZh'].includes(key))
+  && (!value.id || isShortString(value.id, 128)) && (!value.displayName || isShortString(value.displayName))
+  && (!value.birthData || isLegacyBirthData(value.birthData)));
+const isLegacyContext = (value) => hasExactKeys(value, LEGACY_CONTEXT_KEYS) && isShortString(value.route, 64)
+  && isLegacyProfile(value.activeProfile) && (value.lastChartData === null || isObject(value.lastChartData))
+  && (value.chartType === null || isShortString(value.chartType, 64));
+const utf8Bytes = (value) => {
+  let bytes = 0;
+  for (const character of value) {
+    const point = character.codePointAt(0);
+    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+};
+const assertAiContext = (value) => {
+  if (value === null) return null;
+  let serialized;
+  try { serialized = JSON.stringify(value); } catch { throw new TypeError('AI context must be serializable'); }
+  if (utf8Bytes(serialized) > MAX_AI_CONTEXT_BYTES) throw new RangeError('AI context exceeds size limit');
+  if (!isWesternContext(value) && !isLegacyContext(value)) throw new TypeError('AI context has malformed or extra fields');
+  return value;
+};
+
 /**
  * Preload — the single, audited bridge between the sandboxed renderer and the
  * main process. It exposes a small, typed-by-convention API on `window.mystApi`
@@ -67,7 +132,7 @@ contextBridge.exposeInMainWorld('mystApi', {
     testConnection: () => invoke('ai:testConnection'),
     testWithSettings: (settings) => invoke('ai:testWithSettings', settings),
     providers: () => invoke('ai:providers'),
-    setContext: (context) => invoke('ai:setContext', context),
+    setContext: (context) => invoke('ai:setContext', assertAiContext(context)),
     onToken: (callback) => ipcRenderer.on('ai:token', (_e, data) => callback(data)),
     onDone: (callback) => ipcRenderer.on('ai:done', (_e, data) => callback(data)),
     onError: (callback) => ipcRenderer.on('ai:error', (_e, data) => callback(data)),

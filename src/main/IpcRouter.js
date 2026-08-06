@@ -1,6 +1,7 @@
 'use strict';
 
 const { CITIES } = require('../core/data/Cities');
+const { assertAiContext } = require('../shared/WesternChartAiContext');
 
 /**
  * IpcRouter — Mediator between the renderer (via IPC) and the application
@@ -237,7 +238,7 @@ class IpcRouter {
         return updated ? { ok: true, data: updated } : { ok: false };
       });
       this._handle('ai:setContext', (_e, context) => {
-        this.ai.setContext(context);
+        this.ai.setContext(assertAiContext(context));
         return { ok: true };
       });
       this._handle('ai:knowledge:import', async (_e, filePaths) => {

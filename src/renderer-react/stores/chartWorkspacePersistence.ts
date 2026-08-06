@@ -135,6 +135,10 @@ function sanitizeTabLayout(value: unknown, allowed: ReadonlySet<string>): TabLay
   };
 }
 
+export function sanitizeComparisonLayoutForMode(layout: TabLayoutV1, mode: ComparisonMode): TabLayoutV1 {
+  return sanitizeTabLayout(layout, new Set(columnIds('comparison', mode)));
+}
+
 function parseTableLayout(value: unknown): ChartTableLayoutV1 {
   const parsed = tableLayoutSchema.pick({ version: true, activeTab: true, comparisonMode: true }).safeParse(value);
   if (!parsed.success || !value || typeof value !== 'object' || Array.isArray(value)) return defaultTableLayout();

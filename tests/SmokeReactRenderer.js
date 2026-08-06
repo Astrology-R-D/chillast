@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const { runElectronSmokeController } = require('./ElectronSmokeController');
+const { createChartArtifactSession } = require('./ChartVisualArtifacts');
 const {
   centralDifferenceRatio, distinctRgbInRect, imageMetrics, pixelDifferenceCount, rectsIntersect,
 } = require('./NativeImageMetrics');
@@ -69,6 +70,10 @@ let chartAiContexts = [];
 let profileRepository = null;
 let chartSmokeStage = 'not-started';
 const chartScreenshots = [];
+const chartScreenshotDir = path.join(__dirname, 'screenshots');
+const expectedChartScreenshotNames = cases.flatMap((chartCase) => sizes.flatMap(([width, height]) => appearances.map(([theme, density]) =>
+  `chart-${chartCase}-${width}x${height}-${theme}-${density}.png`)));
+const chartArtifactSession = visualMode ? createChartArtifactSession(chartScreenshotDir, expectedChartScreenshotNames) : null;
 
 app.disableHardwareAcceleration();
 app.setPath('userData', userDataDir);
@@ -82,6 +87,7 @@ process.on('uncaughtException', (error) => {
 function finish(code, reason) {
   if (finished) return;
   finished = true;
+  if (code !== 0) chartArtifactSession?.abort();
   if (reason) console.error(`\nReact smoke failed: ${reason}\n`);
   closeGuard?.dispose();
   if (win && !win.isDestroyed()) win.destroy();
@@ -260,6 +266,21 @@ async function captureBitmap(win, viewport) {
   return { ...metrics, bitmap: image.toBitmap({ scaleFactor: metrics.selectedScaleFactor }) };
 }
 
+async function captureSvgBitmap(win, viewport, svgRect) {
+  return { ...(await captureBitmap(win, viewport)), geometry: svgRect };
+}
+
+async function toggleVisualLayer(win, index) {
+  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((button) => button.getAttribute('aria-label') === '图层').click()`);
+  await waitForVisualFrame(win);
+  const ready = await win.webContents.executeJavaScript(`Boolean(document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]')[${index}])`);
+  if (!ready) throw new Error(`visual layer control ${index} did not open`);
+  await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]')[${index}].click()`);
+  await waitForVisualFrame(win);
+  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((button) => button.getAttribute('aria-label') === '图层').click()`);
+  await poll(win, 'visual layer control closed', () => ({ ready: !document.querySelector('.chart-layer-menu__popover') }));
+}
+
 async function verifyChartLayerPixels(win, viewport, svgRect) {
   await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((button) => button.getAttribute('aria-label') === '图层').click()`);
   const layers = await poll(win, 'visual layer controls', () => {
@@ -273,37 +294,34 @@ async function verifyChartLayerPixels(win, viewport, svgRect) {
       ...ringInputs,
     ].filter((layer) => layer.populated) };
   });
+  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((button) => button.getAttribute('aria-label') === '图层').click()`);
+  await poll(win, 'visual layer controls closed', () => ({ ready: !document.querySelector('.chart-layer-menu__popover') }));
   const deltas = [];
   for (const layer of layers) {
     const beforeVisible = await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-svg-host [data-chart-identity]:not([hidden])').length`);
-    const before = await captureBitmap(win, viewport);
-    await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]')[${layer.index}].click()`);
+    const before = await captureSvgBitmap(win, viewport, svgRect);
+    await toggleVisualLayer(win, layer.index);
     await new Promise((resolve) => setTimeout(resolve, 160));
     await waitForVisualFrame(win);
     const afterVisible = await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-svg-host [data-chart-identity]:not([hidden])').length`);
-    const after = await captureBitmap(win, viewport);
+    const after = await captureSvgBitmap(win, viewport, svgRect);
     const changedPixels = pixelDifferenceCount(before.bitmap, after.bitmap, before.nativeWidth, {
-      ...svgRect, actualScaleX: before.actualScaleX, actualScaleY: before.actualScaleY,
+      ...before.geometry, actualScaleX: before.actualScaleX, actualScaleY: before.actualScaleY,
     });
     if (beforeVisible === afterVisible || changedPixels < 100) {
       throw new Error(`visual layer did not change chart pixels: ${JSON.stringify({ layer: layer.name, beforeVisible, afterVisible, changedPixels })}`);
     }
     deltas.push({ layer: layer.name, changedPixels });
-    await win.webContents.executeJavaScript(`document.querySelectorAll('.chart-layer-menu__popover input[type="checkbox"]')[${layer.index}].click()`);
+    await toggleVisualLayer(win, layer.index);
     await new Promise((resolve) => setTimeout(resolve, 160));
     await waitForVisualFrame(win);
   }
-  await win.webContents.executeJavaScript(`Array.from(document.querySelectorAll('.chart-toolbar button')).find((button) => button.getAttribute('aria-label') === '图层').click()`);
   return deltas;
 }
 
 async function captureChartVisualMatrix(win, chartCase) {
   if (!cases.includes(chartCase)) throw new Error(`unknown chart visual case: ${chartCase}`);
-  const screenshotDir = path.join(__dirname, 'screenshots');
-  fs.mkdirSync(screenshotDir, { recursive: true });
-  if (chartScreenshots.length === 0) {
-    for (const file of fs.readdirSync(screenshotDir)) if (/^chart-.*\.png$/.test(file)) fs.rmSync(path.join(screenshotDir, file));
-  }
+  const screenshotDir = chartArtifactSession.directory;
   let layerDeltas = null;
   for (const [width, height] of sizes) {
     for (const [theme, density] of appearances) {
@@ -457,7 +475,7 @@ async function runChartWorkbenchSmoke(win) {
       && !/NaN|Infinity|undefined/.test(markup)), value: { svgBytes: markup.length, explorerRows: rows.length, rings: svg?.querySelectorAll('[data-ring-id]').length } };
   });
   const natalContext = await waitForMain('natal AI context', () => chartAiContexts.find((context) => context?.resultId && context.chartType === 'natal'));
-  if (natalContext.successfulFilters.request.settings.zodiac !== 'sidereal') throw new Error('natal AI context lost sidereal settings');
+  if (natalContext.successfulFilters.settings.zodiac !== 'sidereal') throw new Error('natal AI context lost sidereal settings');
   if (visualMode) await captureChartVisualMatrix(win, 'personal-single');
 
   chartSmokeStage = 'relationship-navigation';
@@ -598,11 +616,11 @@ async function runChartWorkbenchSmoke(win) {
   })()`);
   await waitForMain('overlapping requests', () => delayedAstrology.pending.length === 4);
   delayedAstrology.resolve(3);
-  await waitForMain('newest overlap accepted', () => chartAiContexts.filter((context) => context?.resultId).at(-1)?.successfulFilters.request.settings.zodiac === 'tropical');
+  await waitForMain('newest overlap accepted', () => chartAiContexts.filter((context) => context?.resultId).at(-1)?.successfulFilters.settings.zodiac === 'tropical');
   const overlapAccepted = chartAiContexts.filter((context) => context?.resultId).at(-1);
   delayedAstrology.resolve(2);
   await new Promise((resolve) => setTimeout(resolve, 100));
-  const lateRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.request.settings.zodiac === 'tropical';
+  const lateRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.settings.zodiac === 'tropical';
 
   const acceptedBeforeCancellation = chartAiContexts.filter((context) => context?.resultId).at(-1);
   chartSmokeStage = 'cancel-race';
@@ -660,7 +678,7 @@ async function runChartWorkbenchSmoke(win) {
   await waitForMain('parser request', () => delayedAstrology.pending.length === 8);
   delayedAstrology.resolveValue(7, { malformed: true });
   await poll(win, 'parser rejection retains chart', () => ({ ready: document.querySelector('.chart-result [role="status"]')?.textContent.includes('无法解析') }));
-  const parserRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.request.settings.zodiac === 'tropical';
+  const parserRejected = chartAiContexts.filter((context) => context?.resultId).at(-1).successfulFilters.settings.zodiac === 'tropical';
 
   const security = await win.webContents.executeJavaScript(`({ require: typeof require, process: typeof process, ipcRenderer: typeof window.mystApi.ipcRenderer })`);
   if (Object.values(security).some((value) => value !== 'undefined')) throw new Error(`renderer Node exposure: ${JSON.stringify(security)}`);
@@ -689,7 +707,8 @@ async function runChartWorkbenchSmoke(win) {
     if (chartScreenshots.length !== 24 || new Set(chartScreenshots.map(({ name }) => name)).size !== 24) {
       throw new Error(`expected exactly 24 unique chart screenshots, got ${chartScreenshots.length}`);
     }
-    chartSmoke.visual = { count: chartScreenshots.length, screenshots: chartScreenshots };
+    const artifacts = chartArtifactSession.finalize(chartScreenshots.map(({ name, centralDifference, svgColors, layerDeltas }) => ({ name, centralDifference, svgColors, layerDeltas })));
+    chartSmoke.visual = { count: chartScreenshots.length, artifacts, screenshots: chartScreenshots };
   }
   if (!lateRejected || !cancellationRejected || !failureRetained || !parserRejected) throw new Error(`chart race contract failed: ${JSON.stringify(chartSmoke)}`);
   return chartSmoke;
@@ -1483,6 +1502,7 @@ app.whenReady().then(async () => {
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {
+    chartArtifactSession?.abort();
     const detail = error && error.stack ? error.stack : String(error);
     fail(chartMode ? `${chartSmokeStage}: ${detail}` : detail);
   }

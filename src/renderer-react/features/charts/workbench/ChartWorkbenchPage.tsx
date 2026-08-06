@@ -9,6 +9,7 @@ import { profileWorkspaceStore } from '../../../stores/profileWorkspace';
 import { useChartWorkspaceStoreApi } from '../../../stores/chartWorkspace';
 import { CHART_DESCRIPTORS } from '../catalog';
 import { buildWesternChartAiContext } from '../context/chartAiContext';
+import { invalidateChartAiContextOwner, publishLatestChartAiContext } from '../context/chartAiContextPublisher';
 import type { ChartReferenceData, ChartRoute } from '../contracts';
 import { ChartFilterBand } from './ChartFilterBand';
 import { ChartResultShell } from './ChartResultShell';
@@ -30,7 +31,7 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
   const store = useChartWorkspaceStoreApi();
   const routeState = useStore(store, (state) => state.routes[route]);
   const focusedIdentity = useStore(store, (state) => state.focusedIdentity);
-  const contextQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const contextOwner = useRef(Symbol(`chart-context:${route}`));
   const persistedPrimaryId = useStore(profileWorkspaceStore, (state) => state.primaryProfileId);
   const profileRecents = useStore(profileWorkspaceStore, (state) => state.recentUses);
   const profilesQuery = useProfiles();
@@ -95,16 +96,13 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
     const context = buildWesternChartAiContext({
       routeState,
       focusedIdentity,
-      bulkSelection: store.getState().bulkSelection,
-    }, { includeSelectedRows: false });
-    contextQueue.current = contextQueue.current
-      .catch(() => undefined)
-      .then(() => apiClient.setAiChartContext(context))
-      .then(
-        () => store.getState().setAiContextSource(context ? 'western-chart' : null),
-        (error: unknown) => store.getState().setAiContextSource(`error:${errorMessage(error)}`),
-      );
-  }, [focusedIdentity, routeState?.accepted, routeState?.draft, routeState?.isStale, routeState?.lastSuccessfulResult, store]);
+    }, { profiles });
+    publishLatestChartAiContext(contextOwner.current, context, apiClient.setAiChartContext, (error) => {
+      store.getState().setAiContextSource(error ? `error:${errorMessage(error)}` : context ? 'western-chart' : null);
+    });
+  }, [focusedIdentity, profiles, routeState?.accepted, routeState?.draft, routeState?.isStale, routeState?.lastSuccessfulResult, store]);
+
+  useEffect(() => () => invalidateChartAiContextOwner(contextOwner.current), []);
 
   const calculation = useChartCalculation(route, environment);
   const validation = routeState

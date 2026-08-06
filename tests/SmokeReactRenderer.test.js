@@ -187,6 +187,9 @@ test('chart visual smoke captures the exact responsive matrix with pixel and geo
   assert.match(source, /centralDifference < 0\.01/);
   assert.match(source, /svgColors < 16/);
   assert.match(source, /changedPixels < 100/);
+  assert.match(source, /createChartArtifactSession/);
+  assert.match(source, /captureSvgBitmap/);
+  assert.match(source, /chart-manifest\.json|artifacts/);
 });
 
 test('package exposes canonical source and release chart verification scripts', () => {

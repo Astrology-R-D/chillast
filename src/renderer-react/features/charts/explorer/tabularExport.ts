@@ -14,7 +14,10 @@ export function selectExportRows(
 }
 
 function machineText(value: MachineValue | undefined): string {
-  return value === null || value === undefined ? '' : String(value);
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'string') return String(value);
+  // A leading apostrophe is the interoperable spreadsheet literal marker; retain the original text after it.
+  return /^[\p{White_Space}\p{Cc}\p{Cf}]*[=+\-@]/u.test(value) ? `'${value}` : value;
 }
 
 function visibleColumns(columns: readonly ExportColumn[]): ExportColumn[] {
@@ -26,8 +29,9 @@ export function toClipboardText(
   rows: readonly ExplorerRow[],
 ): string {
   const included = visibleColumns(columns);
-  return `${included.map(({ id }) => id).join('\t')}\r\n${rows.map((row) =>
-    `${included.map(({ id }) => machineText(row.values[id])).join('\t')}\r\n`).join('')}`;
+  const field = (value: string) => /["\t\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+  return `${included.map(({ id }) => field(id)).join('\t')}\r\n${rows.map((row) =>
+    `${included.map(({ id }) => field(machineText(row.values[id]))).join('\t')}\r\n`).join('')}`;
 }
 
 function csvField(value: string): string {
@@ -54,12 +58,14 @@ export function downloadCsv(
   filename: string,
 ): void {
   const url = URL.createObjectURL(new Blob([toCsv(columns, rows)], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.hidden = true;
+  document.body.append(anchor);
   try {
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
     anchor.click();
   } finally {
-    URL.revokeObjectURL(url);
+    setTimeout(() => { anchor.remove(); URL.revokeObjectURL(url); }, 0);
   }
 }

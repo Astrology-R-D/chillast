@@ -1,17 +1,20 @@
 import type { WesternChartAiContext } from '../../../api/contracts';
 import type { ChartIdentity } from '../contracts';
 import type { ChartRouteState } from '../../../stores/chartWorkspace';
-import type { ExplorerRow } from '../explorer/explorerRows';
+import type { Profile } from '../../../api/contracts';
 
 export interface WesternChartContextState {
   routeState: ChartRouteState;
   focusedIdentity: ChartIdentity | null;
-  bulkSelection: readonly string[];
 }
 
 export interface WesternChartContextOptions {
-  includeSelectedRows?: boolean;
-  visibleRows?: readonly ExplorerRow[];
+  profiles?: readonly Pick<Profile, 'id' | 'nameZh' | 'nameEn'>[];
+}
+
+function profileSummary(id: string, profiles: WesternChartContextOptions['profiles']) {
+  const profile = profiles?.find((candidate) => candidate.id === id);
+  return { id, displayName: profile?.nameZh || profile?.nameEn || id };
 }
 
 export function buildWesternChartAiContext(
@@ -32,22 +35,24 @@ export function buildWesternChartAiContext(
     ...(Number.isFinite(draft.returnYear) ? { returnYear: draft.returnYear } : {}),
     ...(draft.relocationPlace?.label ? { relocationLabel: draft.relocationPlace.label } : {}),
   } : null;
-  const selected = new Set(state.bulkSelection);
-  const selectedRows = options.includeSelectedRows
-    ? (options.visibleRows ?? [])
-      .filter((row) => selected.has(row.id))
-      .map((row) => ({ id: row.id, values: { ...row.values } }))
-    : undefined;
+  const primary = profileSummary(accepted.primaryProfileId, options.profiles);
+  const secondary = accepted.secondaryProfileId ? profileSummary(accepted.secondaryProfileId, options.profiles) : null;
   return {
     kind: 'western-chart',
+    route: accepted.route,
     resultId: result.resultId,
     chartType: accepted.type,
-    subjects: result.subjects,
-    successfulFilters: accepted,
-    result,
+    activeProfile: primary,
+    successfulFilters: {
+      type: accepted.type,
+      primary,
+      secondary,
+      settings: structuredClone(accepted.request.settings),
+      options: structuredClone(accepted.request.options),
+    },
+    lastChartData: result,
     focusedIdentity: state.focusedIdentity,
     draftIsStale: routeState.isStale,
     draftSummary,
-    ...(options.includeSelectedRows ? { selectedRows } : {}),
   };
 }

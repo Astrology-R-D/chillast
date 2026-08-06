@@ -266,7 +266,7 @@ async function buildContextTools(aiService) {
       const profile = ctx.activeProfile;
       const chartType = ctx.chartType || '无';
       const lines = [`当前页面: ${route}`];
-      if (profile) lines.push(`选中档案: ${profile.nameZh || profile.nameEn || '未命名'}`);
+      if (profile) lines.push(`选中档案: ${profile.displayName || profile.nameZh || profile.nameEn || '未命名'}`);
       lines.push(`最后计算: ${chartType}`);
       return lines.join('\n');
     },
@@ -293,6 +293,7 @@ async function buildContextTools(aiService) {
       const ctx = (aiService && aiService.getContext()) || {};
       const p = ctx.activeProfile;
       if (!p) return '当前没有选中的档案。';
+      if (ctx.kind === 'western-chart') return p.displayName || p.nameZh || p.nameEn || p.id;
       const b = p.birthData || {};
       const loc = b.location || {};
       const genderZh = { male: '男', female: '女', other: '其他' }[p.gender] || '未知';

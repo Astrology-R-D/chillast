@@ -1,8 +1,8 @@
 import { ChevronLeft, ChevronRight, ClipboardCopy, Columns3, Eye, EyeOff, FileDown } from 'lucide-react';
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useI18n } from '../../../i18n/I18nProvider';
 import { useChartWorkspace } from '../../../stores/chartWorkspace';
-import type { ComparisonMode, ExplorerTab, TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
+import { sanitizeComparisonLayoutForMode, type ComparisonMode, type ExplorerTab, type TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
 import type { ChartType, NormalizedChartResult } from '../contracts';
 import type { ChartSelectionTarget } from '../svg/chartSelection';
 import { ChartDataGrid, type ChartDataGridHandle } from './ChartDataGrid';
@@ -20,6 +20,12 @@ import { copyExplorerData, downloadCsv, selectExportRows, type ExportColumn } fr
 
 const TABS: ExplorerTab[] = ['planets', 'houses', 'aspects', 'distributions', 'comparison'];
 const MODES: ComparisonMode[] = ['merged', 'sideBySide', 'difference'];
+const MIN_COLUMN_WIDTH = 48;
+const MAX_COLUMN_WIDTH = 480;
+
+export function clampColumnWidth(value: number): number {
+  return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, Number.isFinite(value) ? value : 96));
+}
 
 export interface ChartDataExplorerHandle {
   revealSelection(target: ChartSelectionTarget): void;
@@ -67,8 +73,26 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
     updateTable({ activeTab: tab });
   };
   const chooseMode = (next: ComparisonMode) => {
+    const comparison = sanitizeComparisonLayoutForMode(tableLayout.tabs.comparison, next);
     setComparisonMode(next);
-    updateTable({ comparisonMode: next });
+    setTableLayout(chartType, {
+      ...tableLayout,
+      comparisonMode: next,
+      tabs: { ...tableLayout.tabs, comparison },
+    });
+  };
+  const chooseTabByKeyboard = (event: KeyboardEvent<HTMLButtonElement>, tab: ExplorerTab) => {
+    const current = TABS.indexOf(tab);
+    let next = current;
+    if (event.key === 'ArrowRight') next = (current + 1) % TABS.length;
+    else if (event.key === 'ArrowLeft') next = (current - 1 + TABS.length) % TABS.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = TABS.length - 1;
+    else if (event.key === 'Enter' || event.key === ' ') next = current;
+    else return;
+    event.preventDefault();
+    chooseTab(TABS[next]);
+    requestAnimationFrame(() => document.getElementById(`chart-explorer-tab-${TABS[next]}`)?.focus());
   };
   const updateTabLayout = (layout: TabLayoutV1) => {
     setTableLayout(chartType, { ...tableLayout, tabs: { ...tableLayout.tabs, [activeTab]: layout } });
@@ -138,8 +162,10 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
 
   return <section className="chart-data-explorer" aria-label={t('chart.explorer.label')}>
     <div className="chart-data-explorer__tabs" role="tablist" aria-label={t('chart.explorer.views')}>
-      {TABS.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab}
-        aria-controls={`chart-explorer-panel-${tab}`} onClick={() => chooseTab(tab)}>{t(`chart.explorer.tabs.${tab}`)}</button>)}
+      {TABS.map((tab) => <button key={tab} id={`chart-explorer-tab-${tab}`} type="button" role="tab"
+        tabIndex={activeTab === tab ? 0 : -1} aria-selected={activeTab === tab}
+        aria-controls={`chart-explorer-panel-${tab}`} onKeyDown={(event) => chooseTabByKeyboard(event, tab)}
+        onClick={() => chooseTab(tab)}>{t(`chart.explorer.tabs.${tab}`)}</button>)}
     </div>
     <div className="chart-data-explorer__toolbar">
       <button type="button" onClick={() => void copy()} aria-label={t('chart.explorer.copy')}><ClipboardCopy size={15} />{t('chart.explorer.copy')}</button>
@@ -167,14 +193,17 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
           </select>
           <button type="button" disabled={index === 0} aria-label={`${t('chart.explorer.moveLeft')} ${id}`} onClick={() => moveColumn(id, -1)}><ChevronLeft size={14} /></button>
           <button type="button" disabled={index === orderedColumns.length - 2} aria-label={`${t('chart.explorer.moveRight')} ${id}`} onClick={() => moveColumn(id, 1)}><ChevronRight size={14} /></button>
-          <input type="number" min="48" max="480" aria-label={`${t('chart.explorer.size')} ${id}`}
+          <input type="number" min={MIN_COLUMN_WIDTH} max={MAX_COLUMN_WIDTH}
+            aria-valuemin={MIN_COLUMN_WIDTH} aria-valuemax={MAX_COLUMN_WIDTH}
+            aria-label={`${t('chart.explorer.size')} ${id}`}
             value={tableLayout.tabs[activeTab].columnSizing[id] ?? ''} onChange={(event) => patchActiveLayout({ columnSizing: {
-              ...tableLayout.tabs[activeTab].columnSizing, [id]: Number(event.target.value) || 96,
+              ...tableLayout.tabs[activeTab].columnSizing, [id]: clampColumnWidth(Number(event.target.value)),
             } })} />
         </div>;
       })}
     </div>}
-    <div id={`chart-explorer-panel-${activeTab}`} role="tabpanel" className="chart-data-explorer__panel">
+    <div id={`chart-explorer-panel-${activeTab}`} role="tabpanel" aria-labelledby={`chart-explorer-tab-${activeTab}`}
+      className="chart-data-explorer__panel">
       {activeTab === 'comparison' && !comparisonAvailable
         ? <p role="status">{t('chart.explorer.comparisonUnavailable')}</p>
         : <ChartDataGrid ref={gridRef} tab={activeTab} rows={rows} columns={columns}

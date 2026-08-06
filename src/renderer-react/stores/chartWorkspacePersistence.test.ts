@@ -8,6 +8,7 @@ import {
   pushRecent,
   readWesternWorkspace,
   reconcileWorkspace,
+  sanitizeComparisonLayoutForMode,
   relocationRecentId,
   writeWesternWorkspace,
 } from './chartWorkspacePersistence';
@@ -107,6 +108,23 @@ describe('western chart workspace persistence', () => {
 
     expect(parsed.tableLayouts.natal.tabs.comparison.sorting).toEqual([{ id: 'longitude', desc: false }]);
     expect(parsed.tableLayouts.natal.tabs.comparison.columnPinning.left).toEqual(['selected']);
+  });
+
+  test('sanitizes comparison layout through merged, difference, side-by-side, and persistence reload', () => {
+    const merged = defaultTableLayout().tabs.comparison;
+    merged.sorting = [{ id: 'longitude', desc: true }];
+    merged.filters = [{ id: 'sign', value: ['aries'] }];
+    merged.columnOrder = ['selected', 'point', 'longitude', 'sign'];
+    merged.columnPinning = { left: ['selected', 'longitude'], right: ['sign'] };
+    merged.columnSizing = { longitude: 120, point: 90 };
+    const difference = sanitizeComparisonLayoutForMode(merged, 'difference');
+    expect(difference).toMatchObject({ sorting: [], filters: [], columnOrder: ['selected', 'point'], columnSizing: { point: 90 } });
+    const side = sanitizeComparisonLayoutForMode({ ...difference, sorting: [{ id: 'longitudeDelta', desc: true }], columnSizing: { ...difference.columnSizing, longitudeDelta: 140 } }, 'sideBySide');
+    expect(side.sorting).toEqual([]);
+    expect(side.columnSizing).not.toHaveProperty('longitudeDelta');
+    const source = defaultWesternWorkspace();
+    source.tableLayouts.natal.comparisonMode = 'sideBySide'; source.tableLayouts.natal.tabs.comparison = side;
+    expect(parseWesternWorkspace(source).tableLayouts.natal.tabs.comparison).toEqual(side);
   });
 
   test.each([
