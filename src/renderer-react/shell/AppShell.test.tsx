@@ -11,6 +11,11 @@ import type { Profile } from '../api/contracts';
 import { apiClient } from '../api/client';
 import type { ChartReferenceData } from '../features/charts/contracts';
 import { DEFAULT_ASPECTS } from '../features/charts/workbench/chartDraft';
+import { chartWorkspaceStore } from '../stores/chartWorkspace';
+import { twoRingResult } from '../features/charts/svg/chartTestFixtures';
+import { chartReference } from '../features/charts/svg/chartTestFixtures';
+
+vi.mock('../features/charts/svg/InteractiveChart', () => ({ InteractiveChart: () => null }));
 
 const dictionary = {
   ...locale,
@@ -120,6 +125,52 @@ test('navigates localized placeholders and keeps route state across shell breakp
   act(() => media.setMatches(false));
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('个人星盘');
   expect(screen.getByRole('button', { name: '个人星盘' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('keeps a rejected off-chart AI clear visible in the persistent shell and retries it', async () => {
+  const user = userEvent.setup();
+  const catalog = [{ type: 'natal', nameZh: '本命', nameEn: 'Natal', category: 'personal', requiresSecondary: false, options: [] }];
+  const result = { ...twoRingResult, resultId: 'shell-result', meta: { ...twoRingResult.meta, type: 'natal' } } as unknown as import('../features/charts/contracts').NormalizedChartResult;
+  const request = {
+    type: 'natal', primary: profile,
+    settings: { houseSystem: 'placidus', zodiac: 'tropical', aspects: { enabled: [], orbOverrides: {} } }, options: {},
+  } as never;
+  const snapshot = { route: 'personal', type: 'natal', primaryProfileId: profile.id, secondaryProfileId: null, request } as never;
+  chartWorkspaceStore.getState().initializeRoute('personal', {
+    route: 'personal', type: 'natal', primaryProfileId: profile.id, secondaryProfileId: null,
+    targetLocal: '2026-08-06T12:00', returnYear: 2026, relocationPlace: null,
+    houseSystem: 'placidus', zodiac: 'tropical', enabledAspects: [], orbOverrides: {},
+  }, true);
+  const sequence = chartWorkspaceStore.getState().submit(snapshot);
+  chartWorkspaceStore.getState().acceptSuccess('personal', sequence!, result, snapshot);
+  vi.mocked(window.mystApi.profiles.list).mockResolvedValue({ ok: true, data: [profile] });
+  vi.mocked(apiClient.getChartCatalog).mockResolvedValue(catalog as never);
+  vi.mocked(apiClient.getChartReference).mockResolvedValue({ ...chartReference,
+    elements: Object.fromEntries(['fire', 'earth', 'air', 'water'].map((key) => [key, { nameEn: key, nameZh: key, token: key }])),
+    modalities: Object.fromEntries(['cardinal', 'fixed', 'mutable'].map((key) => [key, { nameEn: key, nameZh: key }])),
+    houseSystems: [{ value: 'placidus', nameEn: 'Placidus', nameZh: 'Placidus' }], chartTypes: catalog,
+  } as unknown as ChartReferenceData);
+  vi.spyOn(apiClient, 'computeChart').mockResolvedValue(result);
+  const setContext = vi.spyOn(apiClient, 'setAiChartContext').mockResolvedValue(null);
+  renderShell();
+
+  await user.click(screen.getByRole('button', { name: '个人星盘' }));
+  await screen.findByRole('group', { name: '星盘筛选' });
+  await waitFor(() => expect(setContext).toHaveBeenCalledWith(expect.objectContaining({ resultId: 'shell-result' })));
+
+  setContext.mockRejectedValue(new Error('clear offline'));
+  await user.click(screen.getByRole('button', { name: '档案管理' }));
+  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('档案管理');
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('AI 上下文同步失败，当前上下文可能已过期：clear offline');
+  setContext.mockResolvedValue(null);
+  await user.click(within(alert).getByRole('button', { name: '重试 AI 同步' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(setContext.mock.calls.filter(([value]) => value === null).length).toBeGreaterThanOrEqual(2);
+
+  await user.click(screen.getByRole('button', { name: '个人星盘' }));
+  await screen.findByRole('group', { name: '星盘筛选' });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
 test('recovers a rejected chart chunk through route-local retry', async () => {

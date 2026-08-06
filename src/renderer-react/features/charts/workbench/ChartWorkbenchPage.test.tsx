@@ -66,23 +66,6 @@ beforeEach(() => {
   profileWorkspaceStore.setState({ primaryProfileId: null, recentUses: {}, chartIntent: null });
 });
 
-test('shows a stale AI sync warning and republishes the latest context on retry', async () => {
-  const user = userEvent.setup();
-  const view = setup('personal');
-  view.setAiContext.mockImplementation(async (context) => {
-    if (context && view.setAiContext.mock.calls.filter(([value]) => value).length === 1) throw new Error('offline');
-    return null;
-  });
-  await screen.findByRole('combobox', { name: '星盘类型' });
-  await user.click(screen.getByRole('button', { name: '计算' }));
-  const warning = await screen.findByRole('alert');
-  expect(warning).toHaveTextContent('AI 上下文同步失败，当前上下文可能已过期：offline');
-  await user.click(screen.getByRole('button', { name: '重试 AI 同步' }));
-  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-  expect(view.setAiContext.mock.calls.filter(([value]) => value)).toHaveLength(2);
-  expect(view.setAiContext.mock.calls.at(-1)?.[0]).toMatchObject({ resultId: 'result' });
-});
-
 test.each([['personal', 'natal'], ['relationship', 'synastry']] as const)('initializes %s with %s and computes only on command', async (route, type) => {
   const user = userEvent.setup();
   const { compute } = setup(route);

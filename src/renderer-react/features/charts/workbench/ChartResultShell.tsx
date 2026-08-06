@@ -8,7 +8,6 @@ import type { ChartSelectionTarget } from '../svg/chartSelection';
 import { InteractiveChart } from '../svg/InteractiveChart';
 import { ChartDataExplorer, type ChartDataExplorerHandle } from '../explorer/ChartDataExplorer';
 import { ChartResultSummary } from './ChartResultSummary';
-import { retryLatestChartAiContext } from '../context/chartAiContextPublisher';
 
 const DIVIDER_SIZE = 6;
 const PANE_MINIMUM = 360;
@@ -57,9 +56,6 @@ export function ChartResultShell({ route, state, reference, profilesAvailable, v
   const stored = useChartWorkspace((workspace) => workspace.workspace.split[route]);
   const setSplit = useChartWorkspace((workspace) => workspace.setSplit);
   const activeTab = useChartWorkspace((workspace) => workspace.activeTab);
-  const aiContextSyncStatus = useChartWorkspace((workspace) => workspace.aiContextSyncStatus);
-  const aiContextSyncMessage = useChartWorkspace((workspace) => workspace.aiContextSyncMessage);
-  const setAiContextSync = useChartWorkspace((workspace) => workspace.setAiContextSync);
   useEffect(() => {
     const element = ref.current;
     if (!element) return undefined;
@@ -94,14 +90,6 @@ export function ChartResultShell({ route, state, reference, profilesAvailable, v
       <div className="chart-result__actions">{state.requestStatus === 'loading' && <button type="button" onClick={onCancel}><X size={15} />{t('chart.workbench.cancel')}</button>}
         {(Boolean(startupError) || (state.requestStatus === 'error' && validDraft)) && <button type="button" onClick={onRetry}><RefreshCw size={15} />{t('chart.workbench.retry')}</button>}</div>
     </header>
-    {aiContextSyncMessage && aiContextSyncStatus !== 'synced' && <div role="alert" className="chart-result__ai-sync">
-      <AlertTriangle size={16} />
-      <span>{t('chart.workbench.aiSyncFailed', { message: aiContextSyncMessage ?? '' })}</span>
-      <button type="button" disabled={aiContextSyncStatus === 'syncing'} onClick={() => {
-        setAiContextSync('syncing');
-        if (!retryLatestChartAiContext()) setAiContextSync('error', aiContextSyncMessage);
-      }}><RefreshCw size={15} />{t('chart.workbench.retryAiSync')}</button>
-    </div>}
     {result && accepted && <PanelGroup key={orientation} direction={orientation} className="chart-result__split"
       style={orientation === 'vertical' ? { minHeight: `${REQUIRED_SPLIT_EXTENT}px` } : undefined}
       onLayout={(layout) => { if (layout.length === 2) setSplit(route, orientation, [layout[0], layout[1]]); }}>

@@ -28,6 +28,8 @@
     "aiConfigured": "AI 已配置",
     "aiNotConfigured": "AI 未配置",
     "retry": "重试",
+    "retryAiSync": "重试 AI 同步",
+    "aiContextSyncFailed": "AI 上下文同步失败，当前上下文可能已过期：{{message}}",
     "knowledgeCount": "知识库：{{count}} 篇文档",
     "openAi": "打开 AI 助手",
     "closeAi": "关闭 AI 助手",

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { AiStatus } from '../api/contracts';
 import { apiClient, parseAiStatus } from '../api/client';
 import { useI18n } from '../i18n/I18nProvider';
+import { useChartWorkspace } from '../stores/chartWorkspace';
+import { retryLatestChartAiContext } from '../features/charts/context/chartAiContextPublisher';
 
 export function AiStatusPanel() {
   const { t } = useI18n();
@@ -10,6 +12,9 @@ export function AiStatusPanel() {
   const [error, setError] = useState('');
   const [requestVersion, setRequestVersion] = useState(0);
   const statusEventVersion = useRef(0);
+  const aiContextSyncStatus = useChartWorkspace((state) => state.aiContextSyncStatus);
+  const aiContextSyncMessage = useChartWorkspace((state) => state.aiContextSyncMessage);
+  const setAiContextSync = useChartWorkspace((state) => state.setAiContextSync);
 
   useEffect(() => {
     let active = true;
@@ -53,6 +58,13 @@ export function AiStatusPanel() {
   return (
     <section className="ai-status" aria-live="polite">
       <h2 className="ai-status__title">{t('ai.title')}</h2>
+      {aiContextSyncMessage && aiContextSyncStatus !== 'synced' && <div role="alert" className="ai-status__context-error">
+        <p>{t('shell.aiContextSyncFailed', { message: aiContextSyncMessage })}</p>
+        <button type="button" disabled={aiContextSyncStatus === 'syncing'} onClick={() => {
+          setAiContextSync('syncing');
+          if (!retryLatestChartAiContext()) setAiContextSync('error', aiContextSyncMessage);
+        }}>{t('shell.retryAiSync')}</button>
+      </div>}
       {loading && <p className="ai-status__message">{t('shell.loading')}</p>}
       {!loading && error && (
         <div className="ai-status__error">
