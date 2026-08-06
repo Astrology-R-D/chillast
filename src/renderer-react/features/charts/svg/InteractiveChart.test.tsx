@@ -83,15 +83,15 @@ describe('interactive chart', () => {
     expect(document.activeElement).toBe(objects.at(-1));
     await user.keyboard('{ArrowRight}');
     expect(document.activeElement).toBe(objects.at(-1));
-    expect(store.getState().focusedIdentity).toBeNull();
+    expect(store.getState().interactions.personal.focusedIdentity).toBeNull();
     expect(objects.filter((node) => node.tabIndex === 0)).toEqual([objects.at(-1)]);
     await user.keyboard('{Enter}');
-    expect(store.getState().focusedIdentity).toBe(objects.at(-1)?.dataset.chartIdentity);
+    expect(store.getState().interactions.personal.focusedIdentity).toBe(objects.at(-1)?.dataset.chartIdentity);
     expect(onRevealSelection).toHaveBeenCalledOnce();
     await user.keyboard('{Home}');
     expect(document.activeElement).toBe(objects[0]);
     await user.keyboard(' ');
-    expect(store.getState().focusedIdentity).toBe(objects[0].dataset.chartIdentity);
+    expect(store.getState().interactions.personal.focusedIdentity).toBe(objects[0].dataset.chartIdentity);
   });
 
   test('keeps canvas pan and object activation as deterministic independent tab stops', async () => {
@@ -99,17 +99,17 @@ describe('interactive chart', () => {
     const { container, store, onRevealSelection } = renderChart(vi.fn(), denseResult());
     const svg = container.querySelector<SVGSVGElement>('.interactive-chart__svg svg')!;
     const activeObject = semanticObjects(container).find((node) => node.tabIndex === 0)!;
-    store.getState().setFocus('natal:sun');
+    store.getState().setFocus('personal', 'natal:sun');
 
     svg.focus();
     expect(svg).toHaveFocus();
-    expect(store.getState().focusedIdentity).toBe('natal:sun');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('natal:sun');
     await user.keyboard('{ArrowRight}');
-    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 16, y: 0 }, focusedIdentity: 'natal:sun' });
+    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 16, y: 0 }, interactions: { personal: { focusedIdentity: 'natal:sun' } } });
     await user.keyboard('{Shift>}{ArrowDown}{/Shift}');
-    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 16, y: 48 }, focusedIdentity: 'natal:sun' });
+    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 16, y: 48 }, interactions: { personal: { focusedIdentity: 'natal:sun' } } });
     await user.keyboard('{Enter} ');
-    expect(store.getState().focusedIdentity).toBe('natal:sun');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('natal:sun');
     expect(onRevealSelection).not.toHaveBeenCalled();
 
     await user.tab();
@@ -117,7 +117,7 @@ describe('interactive chart', () => {
     await user.tab({ shift: true });
     expect(svg).toHaveFocus();
     await user.keyboard('{Escape}');
-    expect(store.getState().focusedIdentity).toBeNull();
+    expect(store.getState().interactions.personal.focusedIdentity).toBeNull();
   });
 
   test('click makes an object current while keeping roving identity separate from locked selection', async () => {
@@ -125,10 +125,10 @@ describe('interactive chart', () => {
     const { container, store } = renderChart();
     const moon = container.querySelector<SVGGElement>('[data-chart-identity="natal:moon"]')!;
     await user.click(moon);
-    expect(store.getState().focusedIdentity).toBe('natal:moon');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('natal:moon');
     expect(semanticObjects(container).filter((node) => node.tabIndex === 0)).toEqual([moon]);
     await user.click(moon);
-    expect(store.getState().focusedIdentity).toBeNull();
+    expect(store.getState().interactions.personal.focusedIdentity).toBeNull();
     expect(semanticObjects(container).filter((node) => node.tabIndex === 0)).toEqual([moon]);
   });
 
@@ -161,36 +161,36 @@ describe('interactive chart', () => {
     const sun = container.querySelector('[data-chart-identity="natal:sun"]')!;
     const moon = container.querySelector<SVGGElement>('[data-chart-identity="natal:moon"]')!;
     fireEvent.pointerOver(sun);
-    expect(store.getState()).toMatchObject({ hoverIdentity: 'natal:sun', focusedIdentity: null });
+    expect(store.getState().interactions.personal).toMatchObject({ hoverIdentity: 'natal:sun', focusedIdentity: null });
     expect(screen.getByRole('tooltip')).toHaveTextContent(/sun/i);
     expect(screen.getByRole('status')).not.toHaveTextContent(/sun/i);
     fireEvent.pointerOut(sun);
-    expect(store.getState().hoverIdentity).toBeNull();
+    expect(store.getState().interactions.personal.hoverIdentity).toBeNull();
     await user.click(sun);
-    expect(store.getState().focusedIdentity).toBe('natal:sun');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('natal:sun');
     expect(sun).toHaveAttribute('data-focused', 'true');
     expect(onRevealSelection).toHaveBeenLastCalledWith({ identity: 'natal:sun', tab: 'planets' });
     moon.focus();
     await user.keyboard('{Enter}');
-    expect(store.getState().focusedIdentity).toBe('natal:moon');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('natal:moon');
     expect(sun).not.toHaveAttribute('data-focused');
     expect(moon).toHaveAttribute('data-focused', 'true');
     await user.keyboard('{Escape}');
-    expect(store.getState().focusedIdentity).toBeNull();
+    expect(store.getState().interactions.personal.focusedIdentity).toBeNull();
     await user.click(moon);
     await user.click(moon);
-    expect(store.getState().focusedIdentity).toBeNull();
+    expect(store.getState().interactions.personal.focusedIdentity).toBeNull();
   });
 
   test('retains focus through unrelated state and reports the live svg', () => {
     const ready = vi.fn();
     const { container, store, rerender } = renderChart();
-    store.getState().setFocus('natal:sun');
+    store.getState().setFocus('personal', 'natal:sun');
     store.getState().setActiveTab('houses');
     rerender(<I18nProvider dictionary={dictionary}><ChartWorkspaceProvider store={store}>
       <InteractiveChart result={twoRingResult} reference={chartReference} onSvgReady={ready} />
     </ChartWorkspaceProvider></I18nProvider>);
-    expect(store.getState()).toMatchObject({ focusedIdentity: 'natal:sun', activeTab: 'houses' });
+    expect(store.getState()).toMatchObject({ interactions: { personal: { focusedIdentity: 'natal:sun' } }, activeTab: 'houses' });
     const svg = container.querySelector('.interactive-chart__svg svg');
     expect(svg).toBeInstanceOf(SVGSVGElement);
     expect(ready).toHaveBeenLastCalledWith(svg);
@@ -199,20 +199,20 @@ describe('interactive chart', () => {
   test('hides a ring and coupled aspects without clearing locked focus, then resets only layers', async () => {
     const user = userEvent.setup();
     const { container, store } = renderChart();
-    store.getState().setFocus('transit:saturn');
+    store.getState().setFocus('personal', 'transit:saturn');
     store.getState().setTransform({ scale: 2, x: 3, y: 4 });
     await user.click(screen.getByRole('button', { name: /图层|layers/i }));
     await user.click(screen.getByRole('checkbox', { name: /行运/ }));
     expect(container.querySelector('[data-ring-id="transit"]')).toHaveAttribute('hidden');
-    expect(store.getState()).toMatchObject({ focusedIdentity: 'transit:saturn', transform: { scale: 2, x: 3, y: 4 } });
+    expect(store.getState()).toMatchObject({ interactions: { personal: { focusedIdentity: 'transit:saturn' } }, transform: { scale: 2, x: 3, y: 4 } });
     await user.click(screen.getByRole('button', { name: /重置图层/ }));
     expect(container.querySelector('[data-ring-id="transit"]')).not.toHaveAttribute('hidden');
-    expect(store.getState()).toMatchObject({ focusedIdentity: 'transit:saturn', transform: { scale: 2, x: 3, y: 4 } });
+    expect(store.getState()).toMatchObject({ interactions: { personal: { focusedIdentity: 'transit:saturn' } }, transform: { scale: 2, x: 3, y: 4 } });
   });
 
   test('falls back from a hidden current object to the locked visible object and keeps one tab stop', () => {
     const { container, store } = renderChart();
-    store.getState().setFocus('natal:sun');
+    store.getState().setFocus('personal', 'natal:sun');
     const transit = container.querySelector<SVGGElement>('[data-chart-identity="transit:saturn"]')!;
     fireEvent.focusIn(transit);
     transit.focus();
@@ -222,7 +222,7 @@ describe('interactive chart', () => {
     expect(sun).toHaveAttribute('tabindex', '0');
     expect(document.activeElement).toBe(sun);
     expect(semanticObjects(container).filter((node) => node.tabIndex === 0)).toEqual([sun]);
-    expect(store.getState().focusedIdentity).toBe('natal:sun');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('natal:sun');
   });
 
   test('uses a disclosure panel that closes on Escape and outside click with trigger focus restored', async () => {
@@ -246,7 +246,7 @@ describe('interactive chart', () => {
     const ringToggle = screen.getByRole('checkbox', { name: /行运/ });
     ringToggle.focus();
     await user.keyboard('{Escape}');
-    expect(store.getState().focusedIdentity).toBeNull();
+    expect(store.getState().interactions.personal.focusedIdentity).toBeNull();
     expect(screen.queryByRole('group', { name: /图层|layers/i })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
 
@@ -260,7 +260,7 @@ describe('interactive chart', () => {
   test('applies toolbar, wheel, and keyboard transforms without changing layers or focus', async () => {
     const user = userEvent.setup();
     const { container, store } = renderChart();
-    store.getState().setFocus('natal:sun');
+    store.getState().setFocus('personal', 'natal:sun');
     const layers = store.getState().layers;
     await user.click(screen.getByRole('button', { name: /放大|zoom in/i }));
     expect(store.getState().transform.scale).toBeGreaterThan(1);
@@ -270,7 +270,7 @@ describe('interactive chart', () => {
     fireEvent.wheel(svg, { deltaY: -100, clientX: 370, clientY: 370 });
     expect(store.getState().transform.scale).toBeGreaterThan(1);
     await user.click(screen.getByRole('button', { name: /重置视图|reset view/i }));
-    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 0, y: 0 }, focusedIdentity: 'natal:sun', layers });
+    expect(store.getState()).toMatchObject({ transform: { scale: 1, x: 0, y: 0 }, interactions: { personal: { focusedIdentity: 'natal:sun' } }, layers });
     expect(container.querySelector('[data-chart-transform]')).toHaveAttribute('transform', 'translate(0 0) scale(1)');
   });
 

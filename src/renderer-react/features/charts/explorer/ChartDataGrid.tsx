@@ -26,7 +26,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from 'react';
-import type { ChartIdentity } from '../contracts';
+import type { ChartIdentity, ChartRoute } from '../contracts';
 import { useChartWorkspace, type ActiveCellState } from '../../../stores/chartWorkspace';
 import type { ExplorerTab, TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
 import type { ExplorerRow, MachineValue } from './explorerRows';
@@ -44,6 +44,7 @@ export interface ChartDataGridProps {
   layout: TabLayoutV1;
   selectedRowIds: ReadonlySet<string>;
   focusedIdentity: ChartIdentity | null;
+  route: ChartRoute;
   onLayoutChange(layout: TabLayoutV1): void;
   onSelectionChange(ids: Set<string>): void;
   onFocusIdentity(identity: ChartIdentity): void;
@@ -88,6 +89,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   onLayoutChange,
   onSelectionChange,
   onFocusIdentity,
+  route,
   tab = 'planets',
   sortLabel = 'Sort',
   filterLabel = 'Filter',
@@ -98,7 +100,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   const focusSequence = useRef(0);
   const previousTab = useRef(tab);
   const previousFocusedIdentity = useRef(focusedIdentity);
-  const restoredActive = useChartWorkspace((state) => state.activeCells[tab]);
+  const restoredActive = useChartWorkspace((state) => state.interactions[route].activeCells[tab]);
   const setStoredActive = useChartWorkspace((state) => state.setActiveCell);
   const [sorting, setSorting] = useState<SortingState>(layout.sorting);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(layout.filters);
@@ -226,7 +228,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   const commitActive = (next: ActiveCellState) => {
     activeRef.current = next;
     setActive(next);
-    setStoredActive(tab, next);
+    setStoredActive(route, tab, next);
   };
 
   const scheduleCellFocus = (rowId: string, columnId: string) => {

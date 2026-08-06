@@ -8,6 +8,8 @@ const ChartStrategyFactory = require('../src/core/astrology/ChartStrategyFactory
 const HoroscopeAdapter = require('../src/core/astrology/HoroscopeAdapter');
 const SwissephAdapter = require('../src/core/astrology/ephemeris/SwissephAdapter');
 const SwissEphCore = require('../src/core/astrology/ephemeris/SwissEphCore');
+const expectedRings = require('../src/shared/WesternChartResultRings.json');
+const { validateChartResultForRequestCore } = require('../src/shared/ChartResultForRequest');
 
 SwissEphCore.configure({ ephePath: path.join(__dirname, '..', 'assets', 'ephemeris') });
 
@@ -105,6 +107,7 @@ for (const [type, options] of Object.entries(requests)) {
     };
     if (definition.requiresSecondary) request.secondary = secondary;
     const result = service.computeChart(request);
+    assert.equal(validateChartResultForRequestCore(result, request, expectedRings, definition.category === 'personal' ? 1 : 2), result);
     assert.equal(result.meta.type, type);
     assert.equal(result.rings.length, twoRingTypes.has(type) ? 2 : 1);
     assertFiniteChart(result);

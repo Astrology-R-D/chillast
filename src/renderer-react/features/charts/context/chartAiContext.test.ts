@@ -22,6 +22,10 @@ const snapshot = {
 } as unknown as SubmittedChartSnapshot;
 const resultA = { ...twoRingResult, resultId: 'result-a', meta: { ...twoRingResult.meta, type: 'natal' } } as NormalizedChartResult;
 
+function contextState(store: ReturnType<typeof createChartWorkspaceStore>) {
+  return { route: 'personal' as const, routeState: store.getState().routes.personal!, interactions: store.getState().interactions };
+}
+
 describe('last-successful western chart AI context', () => {
   it('publishes only accepted success through draft, failure, cancel, late, and parser lifecycles', () => {
     const store = createChartWorkspaceStore(storage());
@@ -38,11 +42,7 @@ describe('last-successful western chart AI context', () => {
     const e = store.getState().submit(sidereal)!;
     store.getState().acceptFailure('personal', e, 'parser', 'malformed E');
 
-    const context = buildWesternChartAiContext({
-      routeState: store.getState().routes.personal!,
-      focusedIdentity: store.getState().focusedIdentity,
-      bulkSelection: store.getState().bulkSelection,
-    }, { profiles: [{ id: 'p1', nameZh: 'Primary', nameEn: '' }] as never });
+    const context = buildWesternChartAiContext(contextState(store), { profiles: [{ id: 'p1', nameZh: 'Primary', nameEn: '' }] as never });
     expect(context).toMatchObject({
       kind: 'western-chart', chartType: 'natal', resultId: 'result-a',
       draftIsStale: true,
@@ -58,14 +58,14 @@ describe('last-successful western chart AI context', () => {
   it('returns null before success, clears stale summary on revert, and changes focus independently', () => {
     const store = createChartWorkspaceStore(storage());
     store.getState().initializeRoute('personal', draft);
-    const state = () => ({ routeState: store.getState().routes.personal!, focusedIdentity: store.getState().focusedIdentity, bulkSelection: store.getState().bulkSelection });
+    const state = () => contextState(store);
     expect(buildWesternChartAiContext(state(), { profiles: [{ id: 'p1', nameZh: 'Primary' }] as never })).toBeNull();
     const sequence = store.getState().submit(snapshot)!;
     store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
     store.getState().editDraft('personal', { zodiac: 'sidereal' });
     store.getState().editDraft('personal', draft);
     expect(buildWesternChartAiContext(state())).toMatchObject({ draftIsStale: false, draftSummary: null, focusedIdentity: null });
-    store.getState().setFocus('natal:sun');
+    store.getState().setFocus('personal', 'natal:sun');
     expect(buildWesternChartAiContext(state())).toMatchObject({ resultId: 'result-a', focusedIdentity: 'natal:sun' });
   });
 
@@ -74,8 +74,8 @@ describe('last-successful western chart AI context', () => {
     store.getState().initializeRoute('personal', draft);
     const sequence = store.getState().submit(snapshot)!;
     store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
-    store.getState().setBulkSelection(['natal:sun', 'hidden', 'unselected']);
-    const state = { routeState: store.getState().routes.personal!, focusedIdentity: null, bulkSelection: store.getState().bulkSelection };
+    store.getState().setBulkSelection('personal', ['natal:sun', 'hidden', 'unselected']);
+    const state = contextState(store);
     expect(buildWesternChartAiContext(state)).not.toHaveProperty('selectedRows');
     expect(buildWesternChartAiContext(state, { includeSelectedRows: false, visibleRows: [] })).not.toHaveProperty('selectedRows');
     const context = buildWesternChartAiContext(state, { includeSelectedRows: true, visibleRows: [
@@ -98,16 +98,38 @@ describe('last-successful western chart AI context', () => {
       }, metadata: { private: true },
     }));
     const bulkSelection = visibleRows.map(({ id }) => id);
-    const context = buildWesternChartAiContext({ routeState: store.getState().routes.personal!, focusedIdentity: null, bulkSelection }, {
+    store.getState().setBulkSelection('personal', bulkSelection);
+    const context = buildWesternChartAiContext(contextState(store), {
       includeSelectedRows: true, visibleRows,
     });
     expect(context?.selectedRows).toHaveLength(100);
     expect(context?.selectedRows?.[0]).toEqual({ id: 'row-0', values: { finite: 0, text: 'value' } });
     const largeRows = Array.from({ length: 100 }, (_, index) => ({ id: `large-${index}`, chartIdentity: null, values: { payload: 'y'.repeat(1024) } }));
-    const bounded = buildWesternChartAiContext({
-      routeState: store.getState().routes.personal!, focusedIdentity: null, bulkSelection: largeRows.map(({ id }) => id),
-    }, { includeSelectedRows: true, visibleRows: largeRows });
+    store.getState().setBulkSelection('personal', largeRows.map(({ id }) => id));
+    const bounded = buildWesternChartAiContext(contextState(store), { includeSelectedRows: true, visibleRows: largeRows });
     expect(new TextEncoder().encode(JSON.stringify(bounded?.selectedRows)).byteLength).toBeLessThanOrEqual(64 * 1024);
     expect(bounded?.selectedRows?.length).toBeLessThan(100);
+  });
+
+  it('never includes coincident focus or selected rows owned by the other route', () => {
+    const store = createChartWorkspaceStore(storage());
+    store.getState().initializeRoute('personal', draft);
+    const sequence = store.getState().submit(snapshot)!;
+    store.getState().acceptSuccess('personal', sequence, resultA, snapshot);
+    store.getState().setFocus('relationship', 'natal:sun');
+    store.getState().setBulkSelection('relationship', ['natal:sun']);
+
+    const context = buildWesternChartAiContext(contextState(store), {
+      includeSelectedRows: true,
+      visibleRows: [{ id: 'natal:sun', chartIdentity: 'natal:sun', values: { point: 'sun' } }],
+    });
+    expect(context).toMatchObject({ focusedIdentity: null, selectedRows: [] });
+
+    store.getState().setFocus('personal', 'natal:sun');
+    store.getState().setBulkSelection('personal', ['natal:sun']);
+    expect(buildWesternChartAiContext(contextState(store), {
+      includeSelectedRows: true,
+      visibleRows: [{ id: 'natal:sun', chartIdentity: 'natal:sun', values: { point: 'sun' } }],
+    })).toMatchObject({ focusedIdentity: 'natal:sun', selectedRows: [{ id: 'natal:sun' }] });
   });
 });

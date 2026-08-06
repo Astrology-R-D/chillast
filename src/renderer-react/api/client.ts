@@ -22,6 +22,7 @@ import type {
   NormalizedChartResult,
 } from '../features/charts/contracts';
 import { normalizeChartResult } from '../features/charts/normalizeChartResult';
+import { validateChartResultForRequest } from '../features/charts/validateChartResultForRequest';
 import {
   chartReferenceDataSchema,
   chartCatalogDefinitionSchema,
@@ -311,7 +312,7 @@ export const apiClient = {
   ),
   computeChart: (request: ChartRequest): Promise<NormalizedChartResult> => chartBoundary(
     (api) => api.computeChart(request),
-    normalizeChartResult,
+    (value) => validateChartResultForRequest(normalizeChartResult(value), request),
   ),
   getAiStatus: async (): Promise<AiStatus> =>
     parseAiStatus(await invoke<unknown>((api) => api.ai.status())),

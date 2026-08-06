@@ -70,12 +70,14 @@ describe('chart data explorer', () => {
     const tabs = screen.getAllByRole('tab');
     expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1, -1, -1]);
     tabs[0].focus();
-    await user.keyboard('{ArrowRight}');
-    expect(tabs[1]).toHaveFocus(); expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
-    await user.keyboard('{End}');
-    expect(tabs[4]).toHaveFocus(); expect(tabs[4]).toHaveAttribute('aria-selected', 'true');
-    await user.keyboard('{Home}');
-    expect(tabs[0]).toHaveFocus();
+    for (let repetition = 0; repetition < 20; repetition += 1) {
+      await user.keyboard('{ArrowRight}');
+      expect(tabs[1]).toHaveFocus(); expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
+      await user.keyboard('{End}');
+      expect(tabs[4]).toHaveFocus(); expect(tabs[4]).toHaveAttribute('aria-selected', 'true');
+      await user.keyboard('{Home}');
+      expect(tabs[0]).toHaveFocus();
+    }
     await user.keyboard('{ArrowLeft}');
     expect(tabs[4]).toHaveFocus();
     const panel = screen.getByRole('tabpanel');
@@ -102,12 +104,12 @@ describe('chart data explorer', () => {
     const active = container.querySelector<HTMLElement>('[data-row-id="transit:saturn"] [tabindex="0"]')!;
     active.focus();
     await user.keyboard('{Enter}');
-    expect(store.getState().focusedIdentity).toBe('transit:saturn');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('transit:saturn');
     await user.click(screen.getByRole('tab', { name: /houses|宫位/i }));
-    expect(store.getState().focusedIdentity).toBe('transit:saturn');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('transit:saturn');
     await user.click(screen.getByRole('tab', { name: /planets|星体/i }));
     expect(container.querySelector('[data-row-id="transit:saturn"] [tabindex="0"]')).toBeInTheDocument();
-    expect(store.getState().focusedIdentity).toBe('transit:saturn');
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('transit:saturn');
     act(() => ref.current?.revealSelection({ identity: 'house:2', tab: 'houses' }));
     expect(container.querySelector('[data-row-id="house:2"]')).toBeInTheDocument();
   });

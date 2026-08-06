@@ -1,0 +1,22 @@
+{
+  "natal": [{ "id": "natal", "role": "primary" }],
+  "transit": [{ "id": "natal", "role": "primary" }, { "id": "transit", "role": "transit" }],
+  "tertiaryProgressed": [{ "id": "natal", "role": "primary" }, { "id": "tertiary", "role": "progressed" }],
+  "progressed": [{ "id": "natal", "role": "primary" }, { "id": "progressed", "role": "progressed" }],
+  "lunarReturn": [{ "id": "lunarReturn", "role": "primary" }],
+  "solarReturn": [{ "id": "solarReturn", "role": "primary" }],
+  "solarArc": [{ "id": "natal", "role": "primary" }, { "id": "solarArc", "role": "progressed" }],
+  "firdaria": [{ "id": "natal", "role": "primary" }],
+  "profection": [{ "id": "profection", "role": "primary" }],
+  "relocation": [{ "id": "relocation", "role": "primary" }],
+  "synastry": [{ "id": "primary", "role": "primary" }, { "id": "secondary", "role": "secondary" }],
+  "composite": [{ "id": "composite", "role": "composite" }],
+  "marx": [{ "id": "marx", "role": "composite" }],
+  "davison": [{ "id": "davison", "role": "composite" }],
+  "compositeSecondary": [{ "id": "compositeSecondary", "role": "composite" }],
+  "compositeTertiary": [{ "id": "compositeTertiary", "role": "composite" }],
+  "marxSecondary": [{ "id": "marxSecondary", "role": "composite" }],
+  "marxTertiary": [{ "id": "marxTertiary", "role": "composite" }],
+  "davisonSecondary": [{ "id": "davison", "role": "primary" }, { "id": "davisonSecondary", "role": "progressed" }],
+  "davisonTertiary": [{ "id": "davison", "role": "primary" }, { "id": "davisonTertiary", "role": "progressed" }]
+}

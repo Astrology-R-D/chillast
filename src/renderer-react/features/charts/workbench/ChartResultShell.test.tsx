@@ -128,7 +128,7 @@ describe('chart result shell', () => {
     );
     store.getState().setActiveTab('houses');
     await user.click(container.querySelector('[data-chart-identity="transit:saturn"]')!);
-    expect(store.getState()).toMatchObject({ focusedIdentity: 'transit:saturn', activeTab: 'planets' });
+    expect(store.getState()).toMatchObject({ interactions: { personal: { focusedIdentity: 'transit:saturn' } }, activeTab: 'planets' });
     expect(onRevealSelection).toHaveBeenCalledWith({ identity: 'transit:saturn', tab: 'planets' });
     expect(container.querySelector('.chart-result__data-pane')).toHaveAttribute('data-active-tab', 'planets');
   });

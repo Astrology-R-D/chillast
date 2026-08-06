@@ -30,7 +30,7 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
   const { t } = useI18n();
   const store = useChartWorkspaceStoreApi();
   const routeState = useStore(store, (state) => state.routes[route]);
-  const focusedIdentity = useStore(store, (state) => state.focusedIdentity);
+  const interaction = useStore(store, (state) => state.interactions[route]);
   const contextOwner = useRef(Symbol(`chart-context:${route}`));
   const persistedPrimaryId = useStore(profileWorkspaceStore, (state) => state.primaryProfileId);
   const profileRecents = useStore(profileWorkspaceStore, (state) => state.recentUses);
@@ -94,18 +94,24 @@ export function ChartWorkbenchPage({ route }: { route: ChartRoute }) {
   useEffect(() => {
     if (!routeState) return;
     const context = buildWesternChartAiContext({
+      route,
       routeState,
-      focusedIdentity,
-      bulkSelection: store.getState().bulkSelection,
+      interactions: store.getState().interactions,
     }, { profiles, includeSelectedRows: false });
+    store.getState().setAiContextSync('syncing');
     publishLatestChartAiContext(contextOwner.current, context, apiClient.setAiChartContext, (error) => {
       store.getState().setAiContextSource(error ? `error:${errorMessage(error)}` : context ? 'western-chart' : null);
+      store.getState().setAiContextSync(error ? 'error' : 'synced', error ? errorMessage(error) : null);
     });
-  }, [focusedIdentity, profiles, routeState?.accepted, routeState?.draft, routeState?.isStale, routeState?.lastSuccessfulResult, store]);
+  }, [interaction, profiles, route, routeState?.accepted, routeState?.draft, routeState?.isStale, routeState?.lastSuccessfulResult, store]);
 
-  useEffect(() => () => deactivateChartAiContextOwner(contextOwner.current, apiClient.setAiChartContext, (error) => {
-    store.getState().setAiContextSource(error ? `error:${errorMessage(error)}` : null);
-  }), [store]);
+  useEffect(() => () => {
+    const deactivated = deactivateChartAiContextOwner(contextOwner.current, apiClient.setAiChartContext, (error) => {
+      store.getState().setAiContextSource(error ? `error:${errorMessage(error)}` : null);
+      store.getState().setAiContextSync(error ? 'error' : 'synced', error ? errorMessage(error) : null);
+    });
+    if (deactivated) store.getState().setAiContextSync('syncing');
+  }, [store]);
 
   const calculation = useChartCalculation(route, environment);
   const validation = routeState

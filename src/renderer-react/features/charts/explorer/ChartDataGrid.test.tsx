@@ -32,7 +32,7 @@ function GridHarness({ initial = defaultTabLayout(), selected = new Set<string>(
   const [layout, setLayout] = useState(initial);
   const [selection, setSelection] = useState(selected);
   const store = useState(() => createChartWorkspaceStore(storage()))[0];
-  return <ChartWorkspaceProvider store={store}><ChartDataGrid ref={gridRef} tab="planets"
+  return <ChartWorkspaceProvider store={store}><ChartDataGrid ref={gridRef} route="personal" tab="planets"
     rows={rows} columns={columnsFor('planets', 'merged', labels)} layout={layout}
     selectedRowIds={selection} focusedIdentity={focusedIdentity as never} onLayoutChange={setLayout}
     onSelectionChange={setSelection} onFocusIdentity={onFocus as never} /></ChartWorkspaceProvider>;
@@ -42,7 +42,7 @@ function ComparisonGrid({ comparisonRows, initial }: { comparisonRows: ExplorerR
   const [layout, setLayout] = useState(initial);
   const [selection, setSelection] = useState(new Set<string>());
   const store = useState(() => createChartWorkspaceStore(storage()))[0];
-  return <ChartWorkspaceProvider store={store}><ChartDataGrid tab="comparison"
+  return <ChartWorkspaceProvider store={store}><ChartDataGrid route="personal" tab="comparison"
     rows={comparisonRows} columns={columnsFor('comparison', 'sideBySide', labels)} layout={layout}
     selectedRowIds={selection} focusedIdentity={null} onLayoutChange={setLayout}
     onSelectionChange={setSelection} onFocusIdentity={vi.fn()} /></ChartWorkspaceProvider>;
@@ -53,7 +53,7 @@ function ControlledGrid({ data = rows, layout, focusedIdentity = null, onFocus =
   onFocus?: (identity: string) => void; gridRef?: React.RefObject<ChartDataGridHandle | null>;
 }) {
   const store = useState(() => createChartWorkspaceStore(storage()))[0];
-  return <ChartWorkspaceProvider store={store}><ChartDataGrid ref={gridRef} tab="planets"
+  return <ChartWorkspaceProvider store={store}><ChartDataGrid ref={gridRef} route="personal" tab="planets"
     rows={data} columns={columnsFor('planets', 'merged', labels)} layout={layout}
     selectedRowIds={new Set()} focusedIdentity={focusedIdentity as never} onLayoutChange={vi.fn()}
     onSelectionChange={vi.fn()} onFocusIdentity={onFocus as never} /></ChartWorkspaceProvider>;

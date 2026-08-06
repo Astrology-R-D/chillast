@@ -1,6 +1,6 @@
 import type { WesternChartAiContext } from '../../../api/contracts';
-import type { ChartIdentity } from '../contracts';
-import type { ChartRouteState } from '../../../stores/chartWorkspace';
+import type { ChartRoute } from '../contracts';
+import type { ChartInteractionState, ChartRouteState } from '../../../stores/chartWorkspace';
 import type { Profile } from '../../../api/contracts';
 import type { ExplorerRow, MachineValue } from '../explorer/explorerRows';
 
@@ -9,9 +9,9 @@ const MAX_SELECTED_VALUES = 32;
 const MAX_SELECTED_ROWS_BYTES = 64 * 1024;
 
 export interface WesternChartContextState {
+  route: ChartRoute;
   routeState: ChartRouteState;
-  focusedIdentity: ChartIdentity | null;
-  bulkSelection: readonly string[];
+  interactions: Record<ChartRoute, ChartInteractionState>;
 }
 
 export interface WesternChartContextOptions {
@@ -26,7 +26,7 @@ function profileSummary(id: string, profiles: WesternChartContextOptions['profil
 }
 
 function selectedRows(state: WesternChartContextState, options: WesternChartContextOptions) {
-  const selected = new Set(state.bulkSelection);
+  const selected = new Set(state.interactions[state.route].bulkSelection);
   const rows: Array<{ id: string; values: Record<string, MachineValue> }> = [];
   for (const row of options.visibleRows ?? []) {
     if (rows.length >= MAX_SELECTED_ROWS) break;
@@ -52,7 +52,8 @@ export function buildWesternChartAiContext(
   const { routeState } = state;
   const result = routeState.lastSuccessfulResult;
   const accepted = routeState.accepted;
-  if (!result || !accepted) return null;
+  if (!result || !accepted || accepted.route !== state.route) return null;
+  const focusedIdentity = state.interactions[state.route].focusedIdentity;
   const draft = routeState.draft;
   const draftSummary = routeState.isStale ? {
     label: 'uncalculated' as const,
@@ -79,7 +80,7 @@ export function buildWesternChartAiContext(
       options: structuredClone(accepted.request.options),
     },
     lastChartData: result,
-    focusedIdentity: state.focusedIdentity,
+    focusedIdentity: focusedIdentity && result.identities.includes(focusedIdentity) ? focusedIdentity : null,
     draftIsStale: routeState.isStale,
     draftSummary,
     ...(options.includeSelectedRows ? { selectedRows: selectedRows(state, options) } : {}),

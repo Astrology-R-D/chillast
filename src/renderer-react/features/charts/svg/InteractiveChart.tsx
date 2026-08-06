@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AppChartConfig } from '../../../api/contracts';
 import { useChartWorkspace } from '../../../stores/chartWorkspace';
 import type { ChartIdentity, ChartReferenceData, NormalizedChartResult } from '../contracts';
+import { CHART_DESCRIPTORS } from '../catalog';
 import { selectionTargetForIdentity, type ChartSelectionTarget } from './chartSelection';
 import { createLegacySvg } from './legacyGeometry';
 import { applyLayers } from './chartLayers';
@@ -39,8 +40,9 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
   const [svgElement, setSvgElement] = useState<SVGSVGElement | null>(null);
   const [activeIdentity, setActiveIdentity] = useState<ChartIdentity | null>(null);
   const markup = useMemo(() => createLegacySvg(result, reference, config).markup, [result, reference, config]);
-  const focusedIdentity = useChartWorkspace((state) => state.focusedIdentity);
-  const hoverIdentity = useChartWorkspace((state) => state.hoverIdentity);
+  const route = CHART_DESCRIPTORS[result.meta.type].route;
+  const focusedIdentity = useChartWorkspace((state) => state.interactions[route].focusedIdentity);
+  const hoverIdentity = useChartWorkspace((state) => state.interactions[route].hoverIdentity);
   const setFocus = useChartWorkspace((state) => state.setFocus);
   const clearFocus = useChartWorkspace((state) => state.clearFocus);
   const setHover = useChartWorkspace((state) => state.setHover);
@@ -94,16 +96,16 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
       const identity = target?.dataset.chartIdentity as ChartIdentity | undefined;
       return identity && selectionTargetForIdentity(result, identity) ? identity : null;
     };
-    const pointerOver = (event: PointerEvent) => setHover(identityFromEvent(event));
+    const pointerOver = (event: PointerEvent) => setHover(route, identityFromEvent(event));
     const pointerOut = (event: PointerEvent) => {
       const identity = identityFromEvent(event);
       const related = event.relatedTarget instanceof Element ? event.relatedTarget.closest('[data-chart-identity]') : null;
-      if (!identity || related?.getAttribute('data-chart-identity') !== identity) setHover(null);
+      if (!identity || related?.getAttribute('data-chart-identity') !== identity) setHover(route, null);
     };
     const activate = (identity: ChartIdentity | null) => {
       if (!identity) return;
       const target = selectionTargetForIdentity(result, identity);
-      setFocus(identity);
+      setFocus(route, identity);
       if (target) onRevealSelection?.(target);
     };
     const makeCurrent = (identity: ChartIdentity | null, focus = false) => {
@@ -176,7 +178,7 @@ export function InteractiveChart({ result, reference, config, onRevealSelection,
     );
   }, [markup, transform]);
 
-  return <div className="interactive-chart" onKeyDownCapture={(event) => { if (event.key === 'Escape') clearFocus(); }}>
+  return <div className="interactive-chart" onKeyDownCapture={(event) => { if (event.key === 'Escape') clearFocus(route); }}>
     <ChartToolbar result={result} svg={svgElement} transform={transform} onChange={setTransform} />
     <div ref={hostRef} className="interactive-chart__svg chart-svg-host" />
     {hoverIdentity && <div role="tooltip" className="interactive-chart__tooltip">{t('chart.svg.hoverFact', { fact: objectLabel(result, hoverIdentity, t) })}</div>}

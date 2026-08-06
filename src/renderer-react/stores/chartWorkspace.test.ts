@@ -31,19 +31,65 @@ function readyStore() {
 }
 
 describe('chart workspace request state', () => {
+  test('retains interaction independently per route even when identities coincide', () => {
+    const store = readyStore();
+    store.getState().initializeRoute('relationship', { ...draftA, route: 'relationship', type: 'synastry', secondaryProfileId: 'p2' });
+    store.getState().setFocus('personal', 'shared:sun');
+    store.getState().setHover('personal', 'shared:moon');
+    store.getState().setBulkSelection('personal', ['shared:sun']);
+    store.getState().setActiveCell('personal', 'planets', { rowId: 'shared:sun', columnId: 'point', anchorRowId: null });
+    store.getState().setFocus('relationship', 'shared:sun');
+    store.getState().setHover('relationship', 'shared:venus');
+    store.getState().setBulkSelection('relationship', ['shared:venus']);
+
+    expect(store.getState().interactions.personal).toMatchObject({
+      focusedIdentity: 'shared:sun', hoverIdentity: 'shared:moon', bulkSelection: ['shared:sun'],
+      activeCells: { planets: { rowId: 'shared:sun' } },
+    });
+    expect(store.getState().interactions.relationship).toMatchObject({
+      focusedIdentity: 'shared:sun', hoverIdentity: 'shared:venus', bulkSelection: ['shared:venus'], activeCells: {},
+    });
+    store.getState().clearFocus('relationship');
+    expect(store.getState().interactions.relationship.focusedIdentity).toBeNull();
+    expect(store.getState().interactions.personal.focusedIdentity).toBe('shared:sun');
+  });
+
+  test('retains an AI sync diagnostic through retry until success clears it', () => {
+    const store = readyStore();
+    store.getState().setAiContextSync('error', 'clear failed');
+    store.getState().setAiContextSync('syncing');
+    expect(store.getState()).toMatchObject({ aiContextSyncStatus: 'syncing', aiContextSyncMessage: 'clear failed' });
+    store.getState().setAiContextSync('synced', null);
+    expect(store.getState()).toMatchObject({ aiContextSyncStatus: 'synced', aiContextSyncMessage: null });
+  });
+
+  test('successful calculation prunes only its route focus and selected rows', () => {
+    const store = readyStore();
+    store.getState().initializeRoute('relationship', { ...draftA, route: 'relationship', type: 'synastry', secondaryProfileId: 'p2' });
+    store.getState().setFocus('personal', 'ring:missing');
+    store.getState().setBulkSelection('personal', ['ring:a', 'ring:missing']);
+    store.getState().setFocus('relationship', 'ring:missing');
+    store.getState().setBulkSelection('relationship', ['ring:missing']);
+    const sequence = store.getState().submit(snapshotA)!;
+    store.getState().acceptSuccess('personal', sequence, resultA, snapshotA);
+
+    expect(store.getState().interactions.personal).toMatchObject({ focusedIdentity: null, bulkSelection: ['ring:a', 'ring:missing'] });
+    expect(store.getState().interactions.relationship).toMatchObject({ focusedIdentity: 'ring:missing', bulkSelection: ['ring:missing'] });
+  });
+
   test('owns one toggled focus independently from hover and active tab', () => {
     const store = readyStore();
     store.getState().setActiveTab('houses');
-    store.getState().setFocus('a:sun');
-    store.getState().setHover('a:moon');
-    expect(store.getState()).toMatchObject({ focusedIdentity: 'a:sun', hoverIdentity: 'a:moon', activeTab: 'houses' });
-    store.getState().setFocus('a:moon');
-    expect(store.getState()).toMatchObject({ focusedIdentity: 'a:moon', hoverIdentity: 'a:moon', activeTab: 'houses' });
-    store.getState().setFocus('a:moon');
-    expect(store.getState().focusedIdentity).toBeNull();
-    store.getState().setFocus('a:sun');
-    store.getState().clearFocus();
-    expect(store.getState()).toMatchObject({ focusedIdentity: null, hoverIdentity: 'a:moon', activeTab: 'houses' });
+    store.getState().setFocus('personal', 'a:sun');
+    store.getState().setHover('personal', 'a:moon');
+    expect(store.getState()).toMatchObject({ interactions: { personal: { focusedIdentity: 'a:sun', hoverIdentity: 'a:moon' } }, activeTab: 'houses' });
+    store.getState().setFocus('personal', 'a:moon');
+    expect(store.getState().interactions.personal).toMatchObject({ focusedIdentity: 'a:moon', hoverIdentity: 'a:moon' });
+    store.getState().setFocus('personal', 'a:moon');
+    expect(store.getState().interactions.personal.focusedIdentity).toBeNull();
+    store.getState().setFocus('personal', 'a:sun');
+    store.getState().clearFocus('personal');
+    expect(store.getState()).toMatchObject({ interactions: { personal: { focusedIdentity: null, hoverIdentity: 'a:moon' } }, activeTab: 'houses' });
   });
 
   test('marks accepted success stale against edits and clears stale on revert', () => {
@@ -87,18 +133,18 @@ describe('chart workspace request state', () => {
     const store = readyStore();
     let sequence = store.getState().submit(snapshotA)!;
     store.getState().acceptSuccess('personal', sequence, resultA, snapshotA);
-    store.getState().setFocus('ring:a');
+    store.getState().setFocus('personal', 'ring:a');
     store.getState().setTransform({ scale: 2, x: 3, y: 4 });
     store.getState().setActiveTab('aspects');
-    store.getState().setBulkSelection(['ring:a']);
+    store.getState().setBulkSelection('personal', ['ring:a']);
     store.getState().setAiContextSource('selection');
     sequence = store.getState().submit(snapshotA)!;
     store.getState().acceptFailure('personal', sequence, 'domain', 'bad');
     expect(store.getState()).toMatchObject({
-      focusedIdentity: 'ring:a', transform: { scale: 2, x: 3, y: 4 }, activeTab: 'aspects', aiContextSource: 'selection',
+      interactions: { personal: { focusedIdentity: 'ring:a' } }, transform: { scale: 2, x: 3, y: 4 }, activeTab: 'aspects', aiContextSource: 'selection',
     });
     expect(store.getState().routes.personal!.lastSuccessfulResult).toBe(resultA);
-    expect(store.getState().bulkSelection).toEqual(['ring:a']);
+    expect(store.getState().interactions.personal.bulkSelection).toEqual(['ring:a']);
   });
 
   test('blocks only an equivalent unresolved snapshot and permits settled retry', () => {
@@ -200,14 +246,14 @@ describe('chart workspace request state', () => {
 
   test('keeps active cells per tab and prunes bulk row IDs against visible rows', () => {
     const store = readyStore();
-    store.getState().setActiveCell('planets', { rowId: 'natal:sun', columnId: 'point', anchorRowId: 'natal:sun' });
-    store.getState().setActiveCell('houses', { rowId: 'house:1', columnId: 'house', anchorRowId: null });
-    store.getState().setBulkSelection(['natal:sun', 'natal:moon', 'metadata:strategyFacts']);
-    store.getState().pruneBulkSelection(new Set(['natal:moon', 'metadata:strategyFacts']));
-    expect(store.getState().activeCells).toEqual({
+    store.getState().setActiveCell('personal', 'planets', { rowId: 'natal:sun', columnId: 'point', anchorRowId: 'natal:sun' });
+    store.getState().setActiveCell('personal', 'houses', { rowId: 'house:1', columnId: 'house', anchorRowId: null });
+    store.getState().setBulkSelection('personal', ['natal:sun', 'natal:moon', 'metadata:strategyFacts']);
+    store.getState().pruneBulkSelection('personal', new Set(['natal:moon', 'metadata:strategyFacts']));
+    expect(store.getState().interactions.personal.activeCells).toEqual({
       planets: { rowId: 'natal:sun', columnId: 'point', anchorRowId: 'natal:sun' },
       houses: { rowId: 'house:1', columnId: 'house', anchorRowId: null },
     });
-    expect(store.getState().bulkSelection).toEqual(['natal:moon', 'metadata:strategyFacts']);
+    expect(store.getState().interactions.personal.bulkSelection).toEqual(['natal:moon', 'metadata:strategyFacts']);
   });
 });

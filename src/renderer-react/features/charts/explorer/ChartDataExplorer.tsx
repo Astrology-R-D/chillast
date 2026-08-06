@@ -4,6 +4,7 @@ import { useI18n } from '../../../i18n/I18nProvider';
 import { useChartWorkspace } from '../../../stores/chartWorkspace';
 import { sanitizeComparisonLayoutForMode, type ComparisonMode, type ExplorerTab, type TabLayoutV1 } from '../../../stores/chartWorkspacePersistence';
 import type { ChartType, NormalizedChartResult } from '../contracts';
+import { CHART_DESCRIPTORS } from '../catalog';
 import type { ChartSelectionTarget } from '../svg/chartSelection';
 import { ChartDataGrid, type ChartDataGridHandle } from './ChartDataGrid';
 import { columnIds, columnsFor } from './explorerColumns';
@@ -45,12 +46,14 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
 }>(function ChartDataExplorer({ result, chartType }, forwardedRef) {
   const { t } = useI18n();
   const gridRef = useRef<ChartDataGridHandle>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [exportStatus, setExportStatus] = useState('');
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const pendingReveal = useRef<ChartSelectionTarget | null>(null);
   const tableLayout = useChartWorkspace((state) => state.workspace.tableLayouts[chartType]);
-  const selected = useChartWorkspace((state) => state.bulkSelection);
-  const focusedIdentity = useChartWorkspace((state) => state.focusedIdentity);
+  const route = CHART_DESCRIPTORS[chartType].route;
+  const selected = useChartWorkspace((state) => state.interactions[route].bulkSelection);
+  const focusedIdentity = useChartWorkspace((state) => state.interactions[route].focusedIdentity);
   const setActiveTab = useChartWorkspace((state) => state.setActiveTab);
   const setComparisonMode = useChartWorkspace((state) => state.setComparisonMode);
   const setTableLayout = useChartWorkspace((state) => state.setTableLayout);
@@ -91,8 +94,8 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
     else if (event.key === 'Enter' || event.key === ' ') next = current;
     else return;
     event.preventDefault();
+    tabRefs.current[next]?.focus();
     chooseTab(TABS[next]);
-    requestAnimationFrame(() => document.getElementById(`chart-explorer-tab-${TABS[next]}`)?.focus());
   };
   const updateTabLayout = (layout: TabLayoutV1) => {
     setTableLayout(chartType, { ...tableLayout, tabs: { ...tableLayout.tabs, [activeTab]: layout } });
@@ -162,7 +165,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
 
   return <section className="chart-data-explorer" aria-label={t('chart.explorer.label')}>
     <div className="chart-data-explorer__tabs" role="tablist" aria-label={t('chart.explorer.views')}>
-      {TABS.map((tab) => <button key={tab} id={`chart-explorer-tab-${tab}`} type="button" role="tab"
+      {TABS.map((tab, index) => <button key={tab} ref={(element) => { tabRefs.current[index] = element; }} id={`chart-explorer-tab-${tab}`} type="button" role="tab"
         tabIndex={activeTab === tab ? 0 : -1} aria-selected={activeTab === tab}
         aria-controls={`chart-explorer-panel-${tab}`} onKeyDown={(event) => chooseTabByKeyboard(event, tab)}
         onClick={() => chooseTab(tab)}>{t(`chart.explorer.tabs.${tab}`)}</button>)}
@@ -206,10 +209,10 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
       className="chart-data-explorer__panel">
       {activeTab === 'comparison' && !comparisonAvailable
         ? <p role="status">{t('chart.explorer.comparisonUnavailable')}</p>
-        : <ChartDataGrid ref={gridRef} tab={activeTab} rows={rows} columns={columns}
+        : <ChartDataGrid ref={gridRef} route={route} tab={activeTab} rows={rows} columns={columns}
           layout={tableLayout.tabs[activeTab]} selectedRowIds={new Set(selected)} focusedIdentity={focusedIdentity}
-          onLayoutChange={updateTabLayout} onSelectionChange={(ids) => setBulkSelection([...ids])}
-          onFocusIdentity={(identity) => setFocus(identity)} sortLabel={t('chart.explorer.sort')}
+          onLayoutChange={updateTabLayout} onSelectionChange={(ids) => setBulkSelection(route, [...ids])}
+          onFocusIdentity={(identity) => setFocus(route, identity)} sortLabel={t('chart.explorer.sort')}
           filterLabel={t('chart.explorer.filter')} selectLabel={t('chart.explorer.columns.selected')} />}
     </div>
   </section>;

@@ -21,6 +21,7 @@ import {
 
 export type RequestStatus = 'idle' | 'loading' | 'success' | 'error' | 'cancelled';
 export type RequestFailureKind = 'parser' | 'ipc' | 'domain';
+export type AiContextSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 export interface ChartTransform { scale: number; x: number; y: number }
 export interface LayerState {
   majorAspects: boolean;
@@ -33,6 +34,13 @@ export interface ActiveCellState {
   rowId: string;
   columnId: string;
   anchorRowId: string | null;
+}
+
+export interface ChartInteractionState {
+  focusedIdentity: ChartIdentity | null;
+  hoverIdentity: ChartIdentity | null;
+  activeCells: Partial<Record<ExplorerTab, ActiveCellState>>;
+  bulkSelection: string[];
 }
 
 export interface ChartRouteState {
@@ -53,15 +61,14 @@ export interface ChartRouteState {
 export interface ChartWorkspaceState {
   routes: Partial<Record<ChartRoute, ChartRouteState>>;
   workspace: WesternChartWorkspaceV1;
-  focusedIdentity: ChartIdentity | null;
-  hoverIdentity: ChartIdentity | null;
+  interactions: Record<ChartRoute, ChartInteractionState>;
   layers: LayerState;
   transform: ChartTransform;
   activeTab: ExplorerTab;
   comparisonMode: ComparisonMode;
-  activeCells: Partial<Record<ExplorerTab, ActiveCellState>>;
-  bulkSelection: string[];
   aiContextSource: string | null;
+  aiContextSyncStatus: AiContextSyncStatus;
+  aiContextSyncMessage: string | null;
   initializeRoute(route: ChartRoute, draft: ChartDraft, replace?: boolean): void;
   editDraft(route: ChartRoute, patch: Partial<ChartDraft>): void;
   resetDraft(route: ChartRoute, draft: ChartDraft): void;
@@ -69,19 +76,20 @@ export interface ChartWorkspaceState {
   acceptSuccess(route: ChartRoute, sequence: number, result: NormalizedChartResult, snapshot: SubmittedChartSnapshot): boolean;
   acceptFailure(route: ChartRoute, sequence: number, kind: RequestFailureKind, message: string): boolean;
   cancel(route: ChartRoute): void;
-  setFocus(identity: ChartIdentity | null): void;
-  clearFocus(): void;
-  setHover(identity: ChartIdentity | null): void;
+  setFocus(route: ChartRoute, identity: ChartIdentity | null): void;
+  clearFocus(route: ChartRoute): void;
+  setHover(route: ChartRoute, identity: ChartIdentity | null): void;
   setLayers(patch: Partial<LayerState>): void;
   resetLayers(result: NormalizedChartResult): void;
   setTransform(transform: ChartTransform): void;
   setActiveTab(tab: ExplorerTab): void;
   setComparisonMode(mode: ComparisonMode): void;
   setTableLayout(chartType: ChartType, layout: ChartTableLayoutV1): void;
-  setActiveCell(tab: ExplorerTab, cell: ActiveCellState): void;
-  setBulkSelection(identities: string[]): void;
-  pruneBulkSelection(visibleIds: ReadonlySet<string>): void;
+  setActiveCell(route: ChartRoute, tab: ExplorerTab, cell: ActiveCellState): void;
+  setBulkSelection(route: ChartRoute, identities: string[]): void;
+  pruneBulkSelection(route: ChartRoute, visibleIds: ReadonlySet<string>): void;
   setAiContextSource(source: string | null): void;
+  setAiContextSync(status: AiContextSyncStatus, message?: string | null): void;
   setSplit(route: ChartRoute, orientation: 'horizontal' | 'vertical', value: [number, number]): void;
   clearRecent(key: keyof WesternChartWorkspaceV1['recents']): void;
   reconcileRecents(authority: {
@@ -117,6 +125,10 @@ function initialRouteState(draft: ChartDraft): ChartRouteState {
   };
 }
 
+function initialInteractionState(): ChartInteractionState {
+  return { focusedIdentity: null, hoverIdentity: null, activeCells: {}, bulkSelection: [] };
+}
+
 function getBrowserStorage(): Storage {
   if (typeof window !== 'undefined') {
     try { return window.localStorage; } catch { /* fall through */ }
@@ -145,15 +157,14 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
     return {
       routes: {},
       workspace: persisted,
-      focusedIdentity: null,
-      hoverIdentity: null,
+      interactions: { personal: initialInteractionState(), relationship: initialInteractionState() },
       layers: { majorAspects: true, minorAspects: false, houses: true, labels: true, rings: {} },
       transform: { scale: 1, x: 0, y: 0 },
       activeTab: 'planets',
       comparisonMode: 'merged',
-      activeCells: {},
-      bulkSelection: [],
       aiContextSource: null,
+      aiContextSyncStatus: 'idle',
+      aiContextSyncMessage: null,
       initializeRoute(route, draft, replace = false) {
         const existing = get().routes[route];
         if (existing && !replace) return;
@@ -238,8 +249,10 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
               ? pushRecent(recent.relocationPlaces, place, ({ id }) => id) : recent.relocationPlaces,
           },
         });
-        const focus = get().focusedIdentity;
-        if (focus && !result.identities.includes(focus)) set({ focusedIdentity: null });
+        const interaction = get().interactions[route];
+        if (interaction.focusedIdentity && !result.identities.includes(interaction.focusedIdentity)) {
+          set({ interactions: { ...get().interactions, [route]: { ...interaction, focusedIdentity: null } } });
+        }
         return true;
       },
       acceptFailure(route, sequence, kind, message) {
@@ -255,9 +268,20 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
           ...state, activeSequence: null, requestStatus: 'cancelled', requestFailureKind: null, requestMessage: null,
         } : state);
       },
-      setFocus: (identity) => set({ focusedIdentity: identity !== null && get().focusedIdentity === identity ? null : identity }),
-      clearFocus: () => set({ focusedIdentity: null }),
-      setHover: (hoverIdentity) => set({ hoverIdentity }),
+      setFocus(route, identity) {
+        const current = get().interactions[route];
+        set({ interactions: { ...get().interactions, [route]: {
+          ...current, focusedIdentity: identity !== null && current.focusedIdentity === identity ? null : identity,
+        } } });
+      },
+      clearFocus(route) {
+        const current = get().interactions[route];
+        set({ interactions: { ...get().interactions, [route]: { ...current, focusedIdentity: null } } });
+      },
+      setHover(route, hoverIdentity) {
+        const current = get().interactions[route];
+        set({ interactions: { ...get().interactions, [route]: { ...current, hoverIdentity } } });
+      },
       setLayers: (patch) => set({ layers: { ...get().layers, ...patch } }),
       resetLayers: (result) => set({ layers: {
         majorAspects: true, minorAspects: false, houses: true, labels: true,
@@ -270,14 +294,26 @@ export function createChartWorkspaceStore(storage: Storage): StoreApi<ChartWorks
         const workspace = get().workspace;
         persist({ ...workspace, tableLayouts: { ...workspace.tableLayouts, [chartType]: layout } });
       },
-      setActiveCell: (tab, cell) => set({ activeCells: { ...get().activeCells, [tab]: cell } }),
-      setBulkSelection: (bulkSelection) => set({ bulkSelection }),
-      pruneBulkSelection: (visibleIds) => {
-        const current = get().bulkSelection;
-        const next = current.filter((id) => visibleIds.has(id));
-        if (next.length !== current.length) set({ bulkSelection: next });
+      setActiveCell(route, tab, cell) {
+        const current = get().interactions[route];
+        set({ interactions: { ...get().interactions, [route]: { ...current, activeCells: { ...current.activeCells, [tab]: cell } } } });
+      },
+      setBulkSelection(route, bulkSelection) {
+        const current = get().interactions[route];
+        set({ interactions: { ...get().interactions, [route]: { ...current, bulkSelection } } });
+      },
+      pruneBulkSelection(route, visibleIds) {
+        const interaction = get().interactions[route];
+        const next = interaction.bulkSelection.filter((id) => visibleIds.has(id));
+        if (next.length !== interaction.bulkSelection.length) {
+          set({ interactions: { ...get().interactions, [route]: { ...interaction, bulkSelection: next } } });
+        }
       },
       setAiContextSource: (aiContextSource) => set({ aiContextSource }),
+      setAiContextSync: (aiContextSyncStatus, message) => set((state) => ({
+        aiContextSyncStatus,
+        aiContextSyncMessage: message === undefined ? state.aiContextSyncMessage : message,
+      })),
       setSplit(route, orientation, value) {
         const workspace = get().workspace;
         persist({

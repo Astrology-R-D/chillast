@@ -313,8 +313,8 @@ function rawChartResult() {
       settings: { houseSystem: 'placidus', zodiac: 'tropical' },
       generatedAt: '2026-01-01T00:00:00.000Z', instantUtc: '2000-01-01T00:00:00.000Z',
     },
-    subjects: [],
-    houses: [],
+    subjects: [{ role: 'primary', nameZh: 'A', nameEn: 'A', gender: 'other', birthLabel: '2000', location: { label: 'X', latitude: 0, longitude: 0 } }],
+    houses: Array.from({ length: 12 }, (_, index) => ({ index: index + 1, cuspLongitude: index * 30, signKey: 'aries', signGlyph: 'A', signNameZh: 'Aries', degreeInSign: 0 })),
     angles: {},
     rings: [{ id: 'natal', role: 'primary', label: 'Natal', points: [point] }],
     aspects: [],
@@ -322,6 +322,15 @@ function rawChartResult() {
       elements: { fire: 1, earth: 0, air: 0, water: 0 },
       modalities: { cardinal: 1, fixed: 0, mutable: 0 },
     },
+  };
+}
+
+function chartRequest() {
+  return {
+    type: 'natal' as const,
+    primary: {} as never,
+    settings: { houseSystem: 'placidus', zodiac: 'tropical' as const, aspects: { enabled: [], orbOverrides: {} } },
+    options: {},
   };
 }
 
@@ -333,9 +342,9 @@ describe('chart API boundary', () => {
     });
 
     await expect(apiClient.getChartCatalog()).resolves.toHaveLength(20);
-    await expect(apiClient.computeChart({} as never)).resolves.toMatchObject({
+    await expect(apiClient.computeChart(chartRequest())).resolves.toMatchObject({
       resultId: 'natal:2026-01-01T00:00:00.000Z:natal',
-      identities: ['ring:natal', 'natal:sun'],
+      identities: ['ring:natal', 'natal:sun', ...Array.from({ length: 12 }, (_, index) => `house:${index + 1}`)],
     });
   });
 
@@ -380,7 +389,18 @@ describe('chart API boundary', () => {
     }],
   ])('rejects %s result data as a parser failure', async (_label, makeResult) => {
     installApi({ computeChart: () => ok(makeResult()) });
-    await expect(apiClient.computeChart({} as never)).rejects.toMatchObject({ kind: 'parser' });
+    await expect(apiClient.computeChart(chartRequest())).rejects.toMatchObject({ kind: 'parser' });
+  });
+
+  test.each([
+    ['natal response for synastry', () => ({ ...chartRequest(), type: 'synastry' as const, secondary: {} as never }), rawChartResult],
+    ['wrong settings', () => ({ ...chartRequest(), settings: { ...chartRequest().settings, zodiac: 'sidereal' as const } }), rawChartResult],
+    ['ring count', chartRequest, () => ({ ...rawChartResult(), rings: [] })],
+    ['subject count', chartRequest, () => ({ ...rawChartResult(), subjects: [] })],
+    ['missing house', chartRequest, () => ({ ...rawChartResult(), houses: rawChartResult().houses.slice(0, 11) })],
+  ])('classifies a request-bound %s mismatch as parser failure', async (_label, makeRequest, makeResult) => {
+    installApi({ computeChart: () => ok(makeResult()) });
+    await expect(apiClient.computeChart(makeRequest())).rejects.toMatchObject({ kind: 'parser' });
   });
 });
 
