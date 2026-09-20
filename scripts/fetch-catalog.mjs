@@ -38,9 +38,18 @@ function projectModel(model) {
   };
 }
 
-const response = await fetch(CATALOG_URL);
+/** Keep chat-output models only (unknown modalities are kept). */
+function isChatModel(model) {
+  const output = model.modalities && Array.isArray(model.modalities.output);
+  return !output || model.modalities.output.includes('text');
+}
+
+const response = await fetch(CATALOG_URL, { signal: AbortSignal.timeout(30_000) });
 if (!response.ok) throw new Error(`fetch ${CATALOG_URL} failed: ${response.status}`);
 const catalog = await response.json();
+if (!catalog || typeof catalog !== 'object' || Array.isArray(catalog)) {
+  throw new Error('models.dev returned a non-object document');
+}
 
 const providers = {};
 for (const entry of PROVIDER_WHITELIST) {
@@ -48,7 +57,7 @@ for (const entry of PROVIDER_WHITELIST) {
   const src = catalog[entry.catalogId];
   if (!src) throw new Error(`whitelist provider missing from models.dev: ${entry.catalogId}`);
   const models = Object.fromEntries(Object.entries(src.models ?? {})
-    .filter(([, m]) => (m.status ?? 'active') !== 'deprecated')
+    .filter(([, m]) => m && (m.status ?? 'active') !== 'deprecated' && isChatModel(m))
     .map(([id, m]) => [id, projectModel(m)]));
   if (!Object.keys(models).length) throw new Error(`no usable models for ${entry.catalogId}`);
   providers[entry.catalogId] = {
@@ -59,6 +68,10 @@ for (const entry of PROVIDER_WHITELIST) {
   };
 }
 
-fs.writeFileSync(outPath, JSON.stringify({ fetchedAt: new Date().toISOString(), providers }, null, 1));
+// Atomic write: the committed snapshot is the app's only offline fallback —
+// an interrupted run must never leave a truncated file behind.
+const tmpPath = `${outPath}.tmp`;
+fs.writeFileSync(tmpPath, JSON.stringify({ fetchedAt: Date.now(), providers }, null, 1));
+fs.renameSync(tmpPath, outPath);
 const modelCount = Object.values(providers).reduce((sum, p) => sum + Object.keys(p.models).length, 0);
 console.log(`catalog snapshot: ${Object.keys(providers).length} providers, ${modelCount} models -> ${outPath}`);

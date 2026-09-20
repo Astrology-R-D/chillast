@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-20T10:20:00.264Z",
+ "fetchedAt": 1789900264433,
  "providers": {
   "openai": {
    "name": "OpenAI",
@@ -315,20 +315,6 @@
      "status": "active",
      "release_date": "2026-03-17",
      "tool_call": true
-    },
-    "gpt-image-2": {
-     "name": "gpt-image-2",
-     "limit": {
-      "context": 0,
-      "output": 0
-     },
-     "cost": {
-      "input": 5,
-      "output": 30
-     },
-     "status": "active",
-     "release_date": "2026-04-21",
-     "tool_call": false
     },
     "gpt-5.6": {
      "name": "GPT-5.6",
@@ -3379,20 +3365,6 @@
      "release_date": "2026-05-29",
      "tool_call": true
     },
-    "step-tts-2": {
-     "name": "Step TTS 2",
-     "limit": {
-      "context": 0,
-      "output": 0
-     },
-     "cost": {
-      "input": 0,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2026-03-01",
-     "tool_call": false
-    },
     "step-3.5-flash": {
      "name": "Step 3.5 Flash",
      "limit": {
@@ -3448,20 +3420,6 @@
      "status": "active",
      "release_date": "2026-04-02",
      "tool_call": true
-    },
-    "stepaudio-2.5-tts": {
-     "name": "StepAudio 2.5 TTS",
-     "limit": {
-      "context": 0,
-      "output": 0
-     },
-     "cost": {
-      "input": 0,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2026-04-16",
-     "tool_call": false
     },
     "step-1-32k": {
      "name": "Step 1 (32K)",
@@ -3955,8 +3913,8 @@
       "output": 32768
      },
      "cost": {
-      "input": 0.13,
-      "output": 0.52
+      "input": 0.2,
+      "output": 0.7
      },
      "status": "active",
      "release_date": "2025-10-06",
@@ -4414,11 +4372,11 @@
      "name": "DeepSeek Pro Latest",
      "limit": {
       "context": 1048576,
-      "output": 393216
+      "output": 384000
      },
      "cost": {
-      "input": 0.5676,
-      "output": 1.7028
+      "input": 0.56628,
+      "output": 1.69884
      },
      "status": "active",
      "release_date": "2026-09-14",
