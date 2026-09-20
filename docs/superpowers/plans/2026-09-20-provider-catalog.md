@@ -340,6 +340,14 @@ test('drops non-chat families by id pattern even when modalities are mislabeled 
   assert.equal(isChatModel({ id: 'chatgpt-tts-latest' }), false);
   assert.equal(isChatModel({ id: 'sora-2' }), false);
   assert.equal(isChatModel({ id: 'veo-3' }), false);
+  // image 后缀家族与 ASR（不匹配任何 id 模式，验证模态规则独立生效）
+  assert.equal(isChatModel({ id: 'gpt-5-image' }), false);
+  assert.equal(isChatModel({ id: 'google/gemini-2.5-flash-image' }), false);
+  assert.equal(isChatModel({ id: 'qwen3-asr-flash' }), false);
+  assert.equal(isChatModel({ id: 'mystery-audio', modalities: { output: ['audio'] } }), false);
+  // 输入为空对象/null 的防御分支
+  assert.equal(isChatModel(null), false);
+  assert.equal(isChatModel(undefined), false);
 });
 ```
 
@@ -369,17 +377,18 @@ Expected: FAIL — 模块不存在。
  *     non-chat families are also excluded by id.
  */
 const NON_CHAT_ID_PATTERNS = [
-  /text-embedding/i,
-  /embedding/i,
+  /embedding/i,                 // text-embedding-* / gemini-embedding-*（text-embedding 已被子串覆盖）
   /gpt-image/i,
   /chatgpt-image/i,
   /dall-e/i,
   /imagen/i,
   /image-generation/i,
+  /(?:^|[-/])image(?:[-.\d]|$)/i, // gpt-5-image / gemini-2.5-flash-image 等 image 后缀家族
   /whisper/i,
   /\btts\b/i,
-  /sora/i,
-  /veo/i,
+  /\basr\b/i,                    // 语音识别（qwen3-asr-flash / stepaudio-2.5-asr）
+  /\bsora\b/i,
+  /\bveo\b/i,
 ];
 
 function isChatModel(model) {
@@ -390,7 +399,7 @@ function isChatModel(model) {
   return !NON_CHAT_ID_PATTERNS.some((re) => re.test(id));
 }
 
-module.exports = { isChatModel, NON_CHAT_ID_PATTERNS };
+module.exports = { isChatModel };
 ```
 
 - [ ] **Step 4: 跑测试确认通过**
