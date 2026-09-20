@@ -32,7 +32,8 @@
 **目标**
 
 1. 模型清单、输出上限、价格、上下文窗口来自 models.dev 目录，新模型上线**不再需要改代码**。
-2. maxTokens 滑条模型感知：默认值 = 所选模型真实输出上限，上限 = 真实上限，用户可往下调（成本控制）。
+2. maxTokens 控件模型感知（滑条 + 数字输入联动）：默认值 = 所选模型真实输出上限，
+   上限 = 真实上限，用户可往下调（成本控制），也可直接键入精确数值。
 3. 修复静默截断：`finish_reason=length` 时 UI 明确提示。
 4. 白名单新增主流国产/国际 provider（minimax、火山方舟、硅基流动、阶跃星辰、OpenRouter）。
 5. 退役 `@langchain/community` 中的 ChatMoonshot / ChatZhipuAI / ChatAlibabaTongyi 专用适配类。
@@ -142,13 +143,19 @@ openai / anthropic / ollama / openai_compat → 不变
 
 **PROVIDER_MAP 静态默认值删除**，由目录数据取代；`listProviders()` 改为读 CatalogService。
 
-## 6. 设置 UI 改造
+## 6. 设置 UI（老渲染层最小同步）
+
+完整设置页的 React 实装见
+`docs/superpowers/specs/2026-09-20-react-settings-page-design.md`（迁移 Phase 7）。
+老渲染层 `SettingsView.js` 在 Phase 9 cutover 前仍是默认渲染层的服役代码，只做**最小同步**：
 
 - **模型选择**：provider 选定后，model 从自由文本变为 `<select>`，选项来自
   `ai:catalog:models` IPC（deprecated 过滤、release_date 倒序、每项显示名称 + 上下文窗口 +
   价格）；末尾保留"自定义…"选项恢复自由文本输入（openai_compat 及目录外模型用）。
-- **maxTokens 滑条模型感知**：选中模型后 min=512 / **max=模型 limit.output / 默认值=limit.output**；
-  滑条旁显示"当前模型上限 N"。模型上限 < 512 的极端情况 clamp 到 512。
+- **maxTokens 控件（滑条 + 数字输入联动）**：滑条与一个 number `<input>` 双向联动——拖动滑条
+  同步输入框数值，直接键入数字同步滑条位置；两者都 clamp 到 `[512, 模型 limit.output]`。
+  选中模型后滑条 max 与默认值 = `limit.output`；控件旁显示"当前模型上限 N"。模型上限 < 512
+  的极端情况 clamp 到 512。
 - **新增 IPC**：`ai:catalog:providers`、`ai:catalog:models`（IpcRouter 注册，读
   CatalogService）；preload 桥接补对应方法。
 - baseUrl 输入框保留：目录 `api` 仅作初始默认值。
