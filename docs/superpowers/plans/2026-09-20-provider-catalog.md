@@ -227,9 +227,18 @@ function projectModel(model) {
   };
 }
 
-const response = await fetch(CATALOG_URL);
+const response = await fetch(CATALOG_URL, { signal: AbortSignal.timeout(30_000) });
 if (!response.ok) throw new Error(`fetch ${CATALOG_URL} failed: ${response.status}`);
 const catalog = await response.json();
+if (!catalog || typeof catalog !== 'object' || Array.isArray(catalog)) {
+  throw new Error('models.dev returned a non-object document');
+}
+
+/** Keep chat-output models only (unknown modalities are kept). */
+function isChatModel(model) {
+  const output = model.modalities && Array.isArray(model.modalities.output);
+  return !output || model.modalities.output.includes('text');
+}
 
 const providers = {};
 for (const entry of PROVIDER_WHITELIST) {
@@ -237,7 +246,7 @@ for (const entry of PROVIDER_WHITELIST) {
   const src = catalog[entry.catalogId];
   if (!src) throw new Error(`whitelist provider missing from models.dev: ${entry.catalogId}`);
   const models = Object.fromEntries(Object.entries(src.models ?? {})
-    .filter(([, m]) => (m.status ?? 'active') !== 'deprecated')
+    .filter(([, m]) => m && (m.status ?? 'active') !== 'deprecated' && isChatModel(m))
     .map(([id, m]) => [id, projectModel(m)]));
   if (!Object.keys(models).length) throw new Error(`no usable models for ${entry.catalogId}`);
   providers[entry.catalogId] = {
@@ -248,7 +257,11 @@ for (const entry of PROVIDER_WHITELIST) {
   };
 }
 
-fs.writeFileSync(outPath, JSON.stringify({ fetchedAt: new Date().toISOString(), providers }, null, 1));
+// Atomic write: the committed snapshot is the app's only offline fallback —
+// an interrupted run must never leave a truncated file behind.
+const tmpPath = `${outPath}.tmp`;
+fs.writeFileSync(tmpPath, JSON.stringify({ fetchedAt: Date.now(), providers }, null, 1));
+fs.renameSync(tmpPath, outPath);
 const modelCount = Object.values(providers).reduce((sum, p) => sum + Object.keys(p.models).length, 0);
 console.log(`catalog snapshot: ${Object.keys(providers).length} providers, ${modelCount} models -> ${outPath}`);
 ```
@@ -274,6 +287,139 @@ Expected: providers 列表含 `deepseek`、`moonshotai-cn`、`zhipuai`、`alibab
 ```bash
 git add scripts/fetch-catalog.mjs assets/catalog-snapshot.json
 git commit -m "feat(ai): models.dev catalog snapshot fetch script"
+```
+
+---
+
+### Task 2b: 共享聊天模型过滤模块（审查追加）
+
+> 2026-09-20 Task 2 质量审查发现：models.dev 的 `modalities.output` 标注不一致
+> （`text-embedding-3-*` 被标 `output:["text"]`、`gpt-image-1.5` 标 `["text","image"]`），
+> 仅靠模态规则无法滤净 embedding/图像模型。且 CatalogService 的运行时刷新路径
+> 必须复用同一过滤（否则后台刷新把非聊天模型灌回缓存）——抽成共享模块。
+
+**Files:**
+- Create: `src/core/ai/catalogFilter.js`
+- Test: `tests/catalogFilter.test.js`
+- Modify: `scripts/fetch-catalog.mjs`（改为 import 共享过滤）
+
+- [ ] **Step 1: 写失败测试**
+
+`tests/catalogFilter.test.js`（新文件）：
+
+```js
+'use strict';
+
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { isChatModel } = require('../src/core/ai/catalogFilter');
+
+test('keeps ordinary chat models, including ones without modalities', () => {
+  assert.equal(isChatModel({ id: 'deepseek-v4-flash' }), true);
+  assert.equal(isChatModel({ id: 'gpt-5', modalities: { output: ['text'] } }), true);
+  // 音频输入但文本输出的多模态聊天模型必须保留
+  assert.equal(isChatModel({ id: 'qwen2-audio', modalities: { output: ['text'] } }), true);
+});
+
+test('drops models whose output modalities exclude text', () => {
+  assert.equal(isChatModel({ id: 'step-tts-2', modalities: { output: ['audio'] } }), false);
+  assert.equal(isChatModel({ id: 'gpt-image-2', modalities: { output: ['image'] } }), false);
+});
+
+test('drops non-chat families by id pattern even when modalities are mislabeled upstream', () => {
+  // models.dev 实测标注错误案例
+  assert.equal(isChatModel({ id: 'text-embedding-3-small', modalities: { output: ['text'] } }), false);
+  assert.equal(isChatModel({ id: 'text-embedding-ada-002', modalities: { output: ['text'] } }), false);
+  assert.equal(isChatModel({ id: 'gpt-image-1.5', modalities: { output: ['text', 'image'] } }), false);
+  assert.equal(isChatModel({ id: 'chatgpt-image-latest' }), false);
+  // 其余明确的非聊天家族
+  assert.equal(isChatModel({ id: 'gemini-embedding-001' }), false);
+  assert.equal(isChatModel({ id: 'dall-e-3' }), false);
+  assert.equal(isChatModel({ id: 'image-generation-3' }), false);
+  assert.equal(isChatModel({ id: 'whisper-1' }), false);
+  assert.equal(isChatModel({ id: 'chatgpt-tts-latest' }), false);
+  assert.equal(isChatModel({ id: 'sora-2' }), false);
+  assert.equal(isChatModel({ id: 'veo-3' }), false);
+});
+```
+
+- [ ] **Step 2: 跑测试确认失败**
+
+```bash
+node --test tests/catalogFilter.test.js
+```
+
+Expected: FAIL — 模块不存在。
+
+- [ ] **Step 3: 实现** — `src/core/ai/catalogFilter.js`（新文件）：
+
+```js
+'use strict';
+
+/**
+ * Chat-model filter shared by the build-time snapshot script
+ * (scripts/fetch-catalog.mjs) and the runtime catalog refresh
+ * (CatalogService._project) so both paths produce identical model sets.
+ *
+ * Two rules:
+ *  1. modalities: drop models whose declared output excludes text. Audio-input
+ *     chat models (e.g. qwen2-audio) still output text — kept.
+ *  2. id patterns: models.dev's modality tagging is inconsistent upstream
+ *     (2026-09-20 实测 text-embedding-3-* 被标 output:["text"]), so clear-cut
+ *     non-chat families are also excluded by id.
+ */
+const NON_CHAT_ID_PATTERNS = [
+  /text-embedding/i,
+  /embedding/i,
+  /gpt-image/i,
+  /chatgpt-image/i,
+  /dall-e/i,
+  /imagen/i,
+  /image-generation/i,
+  /whisper/i,
+  /\btts\b/i,
+  /sora/i,
+  /veo/i,
+];
+
+function isChatModel(model) {
+  if (!model) return false;
+  const output = model.modalities && Array.isArray(model.modalities.output);
+  if (output && !model.modalities.output.includes('text')) return false;
+  const id = String(model.id || '');
+  return !NON_CHAT_ID_PATTERNS.some((re) => re.test(id));
+}
+
+module.exports = { isChatModel, NON_CHAT_ID_PATTERNS };
+```
+
+- [ ] **Step 4: 跑测试确认通过**
+
+```bash
+node --test tests/catalogFilter.test.js
+```
+
+Expected: PASS（3 test）。
+
+- [ ] **Step 5: 脚本改用共享过滤**
+
+`scripts/fetch-catalog.mjs`：
+1. import 区加 `import { isChatModel } from '../src/core/ai/catalogFilter.js';`
+2. 删除内联的 `isChatModel` 函数定义（保留原注释意图由共享模块承担）。
+
+- [ ] **Step 6: 重新生成快照并验证**
+
+```bash
+node scripts/fetch-catalog.mjs
+```
+
+验证（node 脚本）：`fetchedAt` 为数字；11 家 provider；openai 条目不再含任何 `text-embedding-`/`gpt-image-`/`chatgpt-image-` key；deepseek api 正确；无 .tmp 残留。
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/core/ai/catalogFilter.js tests/catalogFilter.test.js scripts/fetch-catalog.mjs assets/catalog-snapshot.json
+git commit -m "feat(ai): shared chat-model filter — snapshot and runtime refresh agree"
 ```
 
 ---
@@ -415,6 +561,7 @@ Expected: FAIL — `Cannot find module '../src/core/ai/CatalogService.js'`
 
 const fs = require('fs');
 const { PROVIDER_WHITELIST, resolveProviderEntry } = require('./ProviderCatalogWhitelist');
+const { isChatModel } = require('./catalogFilter');
 
 const CATALOG_URL = 'https://models.dev/api.json';
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -489,6 +636,7 @@ class CatalogService {
       const models = {};
       for (const [id, m] of Object.entries(src.models || {})) {
         if ((m.status ?? 'active') === 'deprecated') continue;
+        if (!isChatModel(m)) continue; // 与快照脚本同一套过滤（Task 2b）
         models[id] = {
           name: m.name || id,
           limit: { context: m.limit?.context ?? 0, output: m.limit?.output ?? 0 },

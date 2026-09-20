@@ -105,22 +105,30 @@ openai / anthropic / ollama / openai_compat → 不变
 
 ```jsonc
 {
-  "<providerId>": {
-    "id": "deepseek", "name": "DeepSeek", "api": "https://api.deepseek.com",
-    "env": ["DEEPSEEK_API_KEY"],
-    "models": {
-      "deepseek-v4-flash": {
-        "name": "DeepSeek V4 Flash",
-        "limit": { "context": 1000000, "output": 384000 },
-        "cost": { "input": 0.15, "output": 0.6, "cache_read": 0, "cache_write": 0 },
-        "status": "active", "release_date": "2026-09-10", "tool_call": true
-        // 注：目录中 active 模型的 status 字段缺省（仅 deprecated/alpha 有值），
-        // 投影时归一化为 "active"
+  "fetchedAt": 1761234567890,  // epoch 毫秒（缓存与快照共用此类型）
+  "providers": {
+    "deepseek": {
+      "name": "DeepSeek", "api": "https://api.deepseek.com",
+      "env": ["DEEPSEEK_API_KEY"],
+      "models": {
+        "deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash",
+          "limit": { "context": 1000000, "output": 384000 },
+          "cost": { "input": 0.15, "output": 0.6 },
+          "status": "active", "release_date": "2026-09-10", "tool_call": true
+          // 注：目录中 active 模型的 status 字段缺省（仅 deprecated/alpha 有值），
+          // 投影时归一化为 "active"
+        }
       }
     }
   }
 }
 ```
+
+补充契约：
+
+- 只投影**输出含文本的聊天模型**（`modalities.output` 缺省视为保留；embedding/图像/音频模型过滤掉，不进设置页模型下拉）。
+- 快照写入走 tmp + rename 原子替换，中断不会留下截断文件。
 
 **加载顺序**：userData 缓存 → 缓存缺失/超 24h 时用打包快照 + 后台异步刷新（成功写缓存，
 失败静默保留现有数据）。**离线与首次启动永不被网络阻塞。**
