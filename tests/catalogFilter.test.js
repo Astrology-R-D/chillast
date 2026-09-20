@@ -30,4 +30,8 @@ test('drops non-chat families by id pattern even when modalities are mislabeled 
   assert.equal(isChatModel({ id: 'chatgpt-tts-latest' }), false);
   assert.equal(isChatModel({ id: 'sora-2' }), false);
   assert.equal(isChatModel({ id: 'veo-3' }), false);
+  assert.equal(isChatModel({ id: 'text-embedding-3-large', modalities: { output: ['text'] } }), false);
+  assert.equal(isChatModel({ id: 'gpt-image-1-mini', modalities: { output: ['text', 'image'] } }), false);
+  // /imagen/ 家族（google 图像模型）
+  assert.equal(isChatModel({ id: 'imagen-3.0-generate-002' }), false);
 });
