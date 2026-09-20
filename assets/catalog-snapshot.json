@@ -1,5 +1,5 @@
 {
- "fetchedAt": 1789900264433,
+ "fetchedAt": 1789900549378,
  "providers": {
   "openai": {
    "name": "OpenAI",
@@ -35,20 +35,6 @@
      "status": "active",
      "release_date": "2025-10-06",
      "tool_call": true
-    },
-    "chatgpt-image-latest": {
-     "name": "chatgpt-image-latest",
-     "limit": {
-      "context": 0,
-      "output": 0
-     },
-     "cost": {
-      "input": 0,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2025-12-16",
-     "tool_call": false
     },
     "gpt-5.6-sol": {
      "name": "GPT-5.6 Sol",
@@ -218,20 +204,6 @@
      "release_date": "2024-07-18",
      "tool_call": true
     },
-    "gpt-image-1.5": {
-     "name": "gpt-image-1.5",
-     "limit": {
-      "context": 0,
-      "output": 0
-     },
-     "cost": {
-      "input": 0,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2025-11-25",
-     "tool_call": false
-    },
     "gpt-4.1": {
      "name": "GPT-4.1",
      "limit": {
@@ -245,20 +217,6 @@
      "status": "active",
      "release_date": "2025-04-14",
      "tool_call": true
-    },
-    "text-embedding-ada-002": {
-     "name": "text-embedding-ada-002",
-     "limit": {
-      "context": 8192,
-      "output": 1536
-     },
-     "cost": {
-      "input": 0.1,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2022-12-15",
-     "tool_call": false
     },
     "gpt-5.4-nano": {
      "name": "GPT-5.4 nano",
@@ -288,20 +246,6 @@
      "release_date": "2026-04-23",
      "tool_call": true
     },
-    "gpt-image-1-mini": {
-     "name": "gpt-image-1-mini",
-     "limit": {
-      "context": 0,
-      "output": 0
-     },
-     "cost": {
-      "input": 0,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2025-09-26",
-     "tool_call": false
-    },
     "gpt-5.4-mini": {
      "name": "GPT-5.4 mini",
      "limit": {
@@ -330,20 +274,6 @@
      "release_date": "2026-07-09",
      "tool_call": true
     },
-    "text-embedding-3-small": {
-     "name": "text-embedding-3-small",
-     "limit": {
-      "context": 8191,
-      "output": 1536
-     },
-     "cost": {
-      "input": 0.02,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2024-01-25",
-     "tool_call": false
-    },
     "gpt-5-mini": {
      "name": "GPT-5 Mini",
      "limit": {
@@ -371,20 +301,6 @@
      "status": "active",
      "release_date": "2026-03-05",
      "tool_call": true
-    },
-    "text-embedding-3-large": {
-     "name": "text-embedding-3-large",
-     "limit": {
-      "context": 8191,
-      "output": 3072
-     },
-     "cost": {
-      "input": 0.13,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2024-01-25",
-     "tool_call": false
     },
     "gpt-5.6-terra": {
      "name": "GPT-5.6 Terra",

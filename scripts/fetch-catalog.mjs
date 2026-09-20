@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PROVIDER_WHITELIST } from '../src/core/ai/ProviderCatalogWhitelist.js';
+import { isChatModel } from '../src/core/ai/catalogFilter.js';
 
 const CATALOG_URL = process.env.MODELS_DEV_URL || 'https://models.dev/api.json';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,12 +37,6 @@ function projectModel(model) {
     release_date: model.release_date ?? '',
     tool_call: model.tool_call ?? true,
   };
-}
-
-/** Keep chat-output models only (unknown modalities are kept). */
-function isChatModel(model) {
-  const output = model.modalities && Array.isArray(model.modalities.output);
-  return !output || model.modalities.output.includes('text');
 }
 
 const response = await fetch(CATALOG_URL, { signal: AbortSignal.timeout(30_000) });
