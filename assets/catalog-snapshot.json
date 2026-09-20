@@ -1,5 +1,5 @@
 {
- "fetchedAt": 1789900549378,
+ "fetchedAt": 1789901436942,
  "providers": {
   "openai": {
    "name": "OpenAI",
@@ -1550,20 +1550,6 @@
      "status": "active",
      "release_date": "2025-01-01",
      "tool_call": true
-    },
-    "qwen3-asr-flash": {
-     "name": "Qwen3-ASR Flash",
-     "limit": {
-      "context": 53248,
-      "output": 4096
-     },
-     "cost": {
-      "input": 0.032,
-      "output": 0.032
-     },
-     "status": "active",
-     "release_date": "2025-09-08",
-     "tool_call": false
     },
     "qwen3-omni-flash": {
      "name": "Qwen3-Omni Flash",
@@ -3308,20 +3294,6 @@
      "status": "active",
      "release_date": "2025-01-01",
      "tool_call": true
-    },
-    "stepaudio-2.5-asr": {
-     "name": "StepAudio 2.5 ASR",
-     "limit": {
-      "context": 0,
-      "output": 0
-     },
-     "cost": {
-      "input": 0,
-      "output": 0
-     },
-     "status": "active",
-     "release_date": "2026-04-24",
-     "tool_call": false
     },
     "step-3.5-flash-2603": {
      "name": "Step 3.5 Flash 2603",
@@ -5250,20 +5222,6 @@
      "release_date": "2026-02-19",
      "tool_call": true
     },
-    "google/gemini-3.1-flash-lite-image": {
-     "name": "Nano Banana 2 Lite",
-     "limit": {
-      "context": 65536,
-      "output": 58982
-     },
-     "cost": {
-      "input": 0.25,
-      "output": 1.5
-     },
-     "status": "active",
-     "release_date": "2026-06-30",
-     "tool_call": false
-    },
     "google/gemma-3-4b-it": {
      "name": "Gemma 3 4B IT",
      "limit": {
@@ -5291,34 +5249,6 @@
      "status": "active",
      "release_date": "2026-03-25",
      "tool_call": false
-    },
-    "google/gemini-2.5-flash-image": {
-     "name": "Nano Banana",
-     "limit": {
-      "context": 32768,
-      "output": 8192
-     },
-     "cost": {
-      "input": 0.3,
-      "output": 2.5
-     },
-     "status": "active",
-     "release_date": "2025-08-26",
-     "tool_call": false
-    },
-    "google/gemini-3-pro-image": {
-     "name": "Nano Banana Pro",
-     "limit": {
-      "context": 131072,
-      "output": 32768
-     },
-     "cost": {
-      "input": 2,
-      "output": 12
-     },
-     "status": "active",
-     "release_date": "2026-05-28",
-     "tool_call": true
     },
     "google/gemini-3.1-pro-preview": {
      "name": "Gemini 3.1 Pro Preview",
@@ -5418,20 +5348,6 @@
      "release_date": "2025-03-12",
      "tool_call": true
     },
-    "google/gemini-3.1-flash-image": {
-     "name": "Nano Banana 2",
-     "limit": {
-      "context": 131072,
-      "output": 32768
-     },
-     "cost": {
-      "input": 0.5,
-      "output": 3
-     },
-     "status": "active",
-     "release_date": "2026-05-28",
-     "tool_call": false
-    },
     "google/gemini-3.5-flash-lite": {
      "name": "Gemini 3.5 Flash Lite",
      "limit": {
@@ -5459,20 +5375,6 @@
      "status": "active",
      "release_date": "2025-06-05",
      "tool_call": true
-    },
-    "google/gemini-3-pro-image-preview": {
-     "name": "Nano Banana Pro Preview",
-     "limit": {
-      "context": 65536,
-      "output": 32768
-     },
-     "cost": {
-      "input": 2,
-      "output": 12
-     },
-     "status": "active",
-     "release_date": "2025-11-20",
-     "tool_call": false
     },
     "google/gemma-4-31b-it:free": {
      "name": "Gemma 4 31B (free)",
@@ -5571,20 +5473,6 @@
      "status": "active",
      "release_date": "2025-06-17",
      "tool_call": true
-    },
-    "google/gemini-3.1-flash-image-preview": {
-     "name": "Nano Banana 2 Preview",
-     "limit": {
-      "context": 65536,
-      "output": 58982
-     },
-     "cost": {
-      "input": 0.5,
-      "output": 3
-     },
-     "status": "active",
-     "release_date": "2026-02-26",
-     "tool_call": false
     },
     "google/gemini-2.5-flash": {
      "name": "Gemini 2.5 Flash",
@@ -7322,20 +7210,6 @@
      "release_date": "2023-11-06",
      "tool_call": true
     },
-    "openai/gpt-5-image": {
-     "name": "GPT-5 Image",
-     "limit": {
-      "context": 400000,
-      "output": 128000
-     },
-     "cost": {
-      "input": 10,
-      "output": 10
-     },
-     "status": "active",
-     "release_date": "2025-10-14",
-     "tool_call": false
-    },
     "openai/gpt-5.6-sol-pro": {
      "name": "GPT-5.6 Sol Pro",
      "limit": {
@@ -7391,20 +7265,6 @@
      "status": "active",
      "release_date": "2025-11-13",
      "tool_call": true
-    },
-    "openai/gpt-5.4-image-2": {
-     "name": "GPT-5.4 Image 2",
-     "limit": {
-      "context": 272000,
-      "output": 128000
-     },
-     "cost": {
-      "input": 8,
-      "output": 15
-     },
-     "status": "active",
-     "release_date": "2026-04-21",
-     "tool_call": false
     },
     "openai/gpt-3.5-turbo-0613": {
      "name": "GPT-3.5 Turbo (older v0613)",
@@ -7615,20 +7475,6 @@
      "status": "active",
      "release_date": "2023-08-28",
      "tool_call": true
-    },
-    "openai/gpt-5-image-mini": {
-     "name": "GPT-5 Image Mini",
-     "limit": {
-      "context": 400000,
-      "output": 128000
-     },
-     "cost": {
-      "input": 2.5,
-      "output": 2
-     },
-     "status": "active",
-     "release_date": "2025-10-16",
-     "tool_call": false
     },
     "openai/gpt-3.5-turbo": {
      "name": "GPT-3.5-turbo",

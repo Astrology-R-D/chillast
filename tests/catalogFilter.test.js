@@ -34,4 +34,12 @@ test('drops non-chat families by id pattern even when modalities are mislabeled 
   assert.equal(isChatModel({ id: 'gpt-image-1-mini', modalities: { output: ['text', 'image'] } }), false);
   // /imagen/ 家族（google 图像模型）
   assert.equal(isChatModel({ id: 'imagen-3.0-generate-002' }), false);
+  // image 后缀家族与 ASR（不匹配任何 id 模式，验证模态规则独立生效）
+  assert.equal(isChatModel({ id: 'gpt-5-image' }), false);
+  assert.equal(isChatModel({ id: 'google/gemini-2.5-flash-image' }), false);
+  assert.equal(isChatModel({ id: 'qwen3-asr-flash' }), false);
+  assert.equal(isChatModel({ id: 'mystery-audio', modalities: { output: ['audio'] } }), false);
+  // 输入为空对象/null 的防御分支
+  assert.equal(isChatModel(null), false);
+  assert.equal(isChatModel(undefined), false);
 });

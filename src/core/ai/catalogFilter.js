@@ -13,17 +13,18 @@
  *     non-chat families are also excluded by id.
  */
 const NON_CHAT_ID_PATTERNS = [
-  /text-embedding/i,
-  /embedding/i,
+  /embedding/i,                 // text-embedding-* / gemini-embedding-*（text-embedding 已被子串覆盖）
   /gpt-image/i,
   /chatgpt-image/i,
   /dall-e/i,
   /imagen/i,
   /image-generation/i,
+  /(?:^|[-/])image(?:[-.\d]|$)/i, // gpt-5-image / gemini-2.5-flash-image 等 image 后缀家族
   /whisper/i,
   /\btts\b/i,
-  /sora/i,
-  /veo/i,
+  /\basr\b/i,                    // 语音识别（qwen3-asr-flash / stepaudio-2.5-asr）
+  /\bsora\b/i,
+  /\bveo\b/i,
 ];
 
 function isChatModel(model) {
@@ -34,4 +35,4 @@ function isChatModel(model) {
   return !NON_CHAT_ID_PATTERNS.some((re) => re.test(id));
 }
 
-module.exports = { isChatModel, NON_CHAT_ID_PATTERNS };
+module.exports = { isChatModel };
