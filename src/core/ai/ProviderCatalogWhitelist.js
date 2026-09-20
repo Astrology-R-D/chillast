@@ -18,14 +18,18 @@ const PROVIDER_WHITELIST = [
   { key: 'moonshot', label: 'Moonshot 月之暗面', catalogId: 'moonshotai-cn', engine: 'openai_compat', needsKey: true },
   { key: 'zhipuai', label: 'ZhipuAI 智谱', catalogId: 'zhipuai', engine: 'openai_compat', needsKey: true },
   { key: 'tongyi', label: 'Tongyi 通义千问', catalogId: 'alibaba-cn', engine: 'openai_compat', needsKey: true },
-  { key: 'minimax', label: 'MiniMax', catalogId: 'minimax-cn', engine: 'openai_compat', needsKey: true },
+  { key: 'minimax', label: 'MiniMax', catalogId: 'minimax-cn', engine: 'anthropic', needsKey: true },
   { key: 'volcengine', label: '火山方舟', catalogId: 'volcengine', engine: 'openai_compat', needsKey: true },
   { key: 'siliconflow', label: '硅基流动 SiliconFlow', catalogId: 'siliconflow-cn', engine: 'openai_compat', needsKey: true },
-  { key: 'stepfun', label: '阶跃星辰 StepFun', catalogId: 'stepfun-ai', engine: 'openai_compat', needsKey: true },
+  { key: 'stepfun', label: '阶跃星辰 StepFun', catalogId: 'stepfun', engine: 'openai_compat', needsKey: true },
   { key: 'openrouter', label: 'OpenRouter', catalogId: 'openrouter', engine: 'openai_compat', needsKey: true },
   { key: 'ollama', label: 'Ollama (本地)', catalogId: null, engine: 'ollama', needsKey: false },
   { key: 'openai_compat', label: 'OpenAI 兼容端点', catalogId: null, engine: 'openai_compat', needsKey: true },
 ];
+
+// 持久化 key 的稳定性是本表的契约，冻结防止下游意外改写
+for (const entry of PROVIDER_WHITELIST) Object.freeze(entry);
+Object.freeze(PROVIDER_WHITELIST);
 
 /** Case-insensitive whitelist lookup. Unknown keys → null. */
 function resolveProviderEntry(rawKey) {

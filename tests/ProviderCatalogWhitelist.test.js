@@ -34,4 +34,13 @@ test('resolveProviderEntry finds keys case-insensitively and returns null for un
   assert.equal(resolveProviderEntry('Moonshot').key, 'moonshot');
   assert.equal(resolveProviderEntry('tongyi').catalogId, 'alibaba-cn');
   assert.equal(resolveProviderEntry('no-such-provider'), null);
+  assert.equal(resolveProviderEntry('  Moonshot  ').key, 'moonshot'); // trims whitespace
+  assert.equal(resolveProviderEntry(null), null);                    // non-string safe
+  assert.equal(resolveProviderEntry(''), null);                      // empty → null
+});
+
+test('the whitelist table is frozen — the persisted-key contract is structural', () => {
+  assert.ok(Object.isFrozen(PROVIDER_WHITELIST));
+  for (const entry of PROVIDER_WHITELIST) assert.ok(Object.isFrozen(entry), entry.key);
+  assert.throws(() => { PROVIDER_WHITELIST[0].key = 'hijacked'; }, TypeError);
 });
