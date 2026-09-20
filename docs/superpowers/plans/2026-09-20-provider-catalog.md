@@ -92,6 +92,15 @@ test('resolveProviderEntry finds keys case-insensitively and returns null for un
   assert.equal(resolveProviderEntry('Moonshot').key, 'moonshot');
   assert.equal(resolveProviderEntry('tongyi').catalogId, 'alibaba-cn');
   assert.equal(resolveProviderEntry('no-such-provider'), null);
+  assert.equal(resolveProviderEntry('  Moonshot  ').key, 'moonshot'); // trims whitespace
+  assert.equal(resolveProviderEntry(null), null);                    // non-string safe
+  assert.equal(resolveProviderEntry(''), null);                      // empty → null
+});
+
+test('the whitelist table is frozen — the persisted-key contract is structural', () => {
+  assert.ok(Object.isFrozen(PROVIDER_WHITELIST));
+  for (const entry of PROVIDER_WHITELIST) assert.ok(Object.isFrozen(entry), entry.key);
+  assert.throws(() => { PROVIDER_WHITELIST[0].key = 'hijacked'; }, TypeError);
 });
 ```
 
@@ -128,14 +137,18 @@ const PROVIDER_WHITELIST = [
   { key: 'moonshot', label: 'Moonshot 月之暗面', catalogId: 'moonshotai-cn', engine: 'openai_compat', needsKey: true },
   { key: 'zhipuai', label: 'ZhipuAI 智谱', catalogId: 'zhipuai', engine: 'openai_compat', needsKey: true },
   { key: 'tongyi', label: 'Tongyi 通义千问', catalogId: 'alibaba-cn', engine: 'openai_compat', needsKey: true },
-  { key: 'minimax', label: 'MiniMax', catalogId: 'minimax-cn', engine: 'openai_compat', needsKey: true },
+  { key: 'minimax', label: 'MiniMax', catalogId: 'minimax-cn', engine: 'anthropic', needsKey: true },
   { key: 'volcengine', label: '火山方舟', catalogId: 'volcengine', engine: 'openai_compat', needsKey: true },
   { key: 'siliconflow', label: '硅基流动 SiliconFlow', catalogId: 'siliconflow-cn', engine: 'openai_compat', needsKey: true },
-  { key: 'stepfun', label: '阶跃星辰 StepFun', catalogId: 'stepfun-ai', engine: 'openai_compat', needsKey: true },
+  { key: 'stepfun', label: '阶跃星辰 StepFun', catalogId: 'stepfun', engine: 'openai_compat', needsKey: true },
   { key: 'openrouter', label: 'OpenRouter', catalogId: 'openrouter', engine: 'openai_compat', needsKey: true },
   { key: 'ollama', label: 'Ollama (本地)', catalogId: null, engine: 'ollama', needsKey: false },
   { key: 'openai_compat', label: 'OpenAI 兼容端点', catalogId: null, engine: 'openai_compat', needsKey: true },
 ];
+
+// 持久化 key 的稳定性是本表的契约，冻结防止下游意外改写
+for (const entry of PROVIDER_WHITELIST) Object.freeze(entry);
+Object.freeze(PROVIDER_WHITELIST);
 
 /** Case-insensitive whitelist lookup. Unknown keys → null. */
 function resolveProviderEntry(rawKey) {
@@ -254,7 +267,7 @@ Expected: 打印 `catalog snapshot: 11 providers, N models -> ...assets\catalog-
 node -e "const s=require('./assets/catalog-snapshot.json'); console.log(Object.keys(s.providers).join(',')); const ds=s.providers.deepseek; console.log('api:',ds.api); console.log('first model:', JSON.stringify(Object.values(ds.models)[0]))"
 ```
 
-Expected: providers 列表含 `deepseek`、`moonshotai-cn`、`zhipuai`、`alibaba-cn`、`minimax-cn`、`volcengine`、`siliconflow-cn`、`stepfun-ai`、`openrouter`、`openai`、`anthropic`；deepseek 条目带 `api: 'https://api.deepseek.com'`，模型含 `limit.output` 数值。
+Expected: providers 列表含 `deepseek`、`moonshotai-cn`、`zhipuai`、`alibaba-cn`、`minimax-cn`、`volcengine`、`siliconflow-cn`、`stepfun`、`openrouter`、`openai`、`anthropic`；deepseek 条目带 `api: 'https://api.deepseek.com'`，模型含 `limit.output` 数值。
 
 - [ ] **Step 4: Commit**
 

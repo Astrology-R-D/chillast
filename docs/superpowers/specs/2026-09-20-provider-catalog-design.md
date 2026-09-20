@@ -20,9 +20,11 @@
 **models.dev 目录**（222 家 provider，每个模型带 `limit:{context,output}`、`cost`、`status`、
 `release_date`、能力位）为唯一事实来源，用户配置深合并于其上。目录中已确认：
 
-- 国产厂商（deepseek / moonshotai / zhipuai / alibaba / minimax / volcengine / siliconflow /
-  stepfun）**全部标注 `npm: openai-compatible`**——统一走 OpenAI 兼容协议，映射到本项目的
-  `ChatOpenAI + baseURL` 即可，零新依赖。
+- 国产厂商（deepseek / moonshotai / zhipuai / alibaba / volcengine / siliconflow / stepfun）
+  **标注 `npm: openai-compatible`**——统一走 OpenAI 兼容协议，映射到本项目的
+  `ChatOpenAI + baseURL` 即可，零新依赖。**例外**：`minimax-cn` 为 Anthropic 协议端点
+  （`api.minimax.cn/anthropic/v1`，目录标注 `@ai-sdk/anthropic`，2026-09-20 实测），
+  映射到 `ChatAnthropic + baseURL`。
 - `status: deprecated` 的模型（含本项目现用的 `gpt-4o-2024-05-13`、`moonshot-v1-8k` 一代）已被
   社区标记淘汰。
 - 目录不含本地 `ollama`（仅 ollama-cloud），本地推理需保留现有手动配置。
@@ -79,7 +81,7 @@ IpcRouter → 渲染进程 AiSidebar（⚠️ 提示元素）
 | 月之暗面 | `moonshotai-cn` | `ChatOpenAI` + baseURL | 国内端点优先 |
 | 智谱 AI | `zhipuai` | `ChatOpenAI` + baseURL | |
 | 通义千问 | `alibaba-cn` | `ChatOpenAI` + baseURL | |
-| Minimax | `minimax` | `ChatOpenAI` + baseURL | 新增 |
+| Minimax | `minimax-cn` | `ChatAnthropic` + baseURL | 新增；Anthropic 协议端点（目录实测） |
 | 火山方舟 | `volcengine` | `ChatOpenAI` + baseURL | 新增 |
 | 硅基流动 | `siliconflow` | `ChatOpenAI` + baseURL | 新增（聚合多家） |
 | 阶跃星辰 | `stepfun` | `ChatOpenAI` + baseURL | 新增 |
