@@ -22,6 +22,7 @@ Phase 7 交汇：**本 spec 把设置页完整实装到 React，一并完成迁�
    - AI 配置（provider / model / API key / baseUrl / temperature / maxTokens / 测试连接 / 保存）
    - 工具与 MCP（provider 开关、MCP server 增删改、启用确认）
    - 知识库（列表 / 导入 / 移除 / 计数）
+   - 对话管理（sessions 列表 / 重命名 / 重新生成标题 / 删除）
 2. 消费 provider 目录 IPC：模型下拉目录化、maxTokens 控件模型感知。
 3. AiStatusPanel 增加"去设置"跳转（未配置时直达）。
 
@@ -104,7 +105,8 @@ SettingsPage
 
 - 新增 key：`settings.aiConfigTitle` / `settings.catalogCustom` / `settings.modelContext` /
   `settings.modelPrice` / `settings.maxTokensLimit`（"当前模型上限 {{count}}"）/
-  `settings.goToSettings` / `settings.saveSuccess` 等；中英双语（`locale/` 目录）。
+  `settings.saveSuccess` 等。
+- 字典目前仅有 `locale/zh.json`（项目为纯中文文案），新 key 追加到该文件，无需维护英文字典。
 - 尽量复用老层既有 key（`settings.provider` / `settings.model` / `settings.maxTokens` …）。
 
 ## 7. 测试策略
