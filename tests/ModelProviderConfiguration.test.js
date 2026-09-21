@@ -20,6 +20,7 @@ function fakeLoader({ failPackage } = {}) {
     return {
       ChatOpenAI: FakeChatModel,
       ChatAnthropic: FakeChatModel,
+      ChatOllama: FakeChatModel,
       OpenAIEmbeddings: FakeEmbeddings,
     };
   };
@@ -135,15 +136,13 @@ test('maxTokens falls back to 8192 for models the catalog does not know', async 
   assert.equal(provider.chatModel().options.configuration.baseURL, 'https://my-endpoint/v1');
 });
 
-test('legacy keys keep working and unknown providers degrade to openai_compat', async () => {
+test('legacy keys keep working (moonshot → catalog-driven compat engine)', async () => {
   const provider = new ModelProvider({
     load: fakeLoader(),
     catalog: fakeCatalog({ moonshot: { 'kimi-k2.6': { limitOutput: 262144 } } }),
   });
   await provider.configure({ provider: 'moonshot', model: 'kimi-k2.6', apiKey: 'key' });
   assert.ok(provider.chatModel() instanceof FakeChatModel);
-  await provider.configure({ provider: 'totally-unknown', model: 'm2', apiKey: 'key', baseUrl: 'https://x/v1' });
-  assert.equal(provider.chatModel().options.configuration.baseURL, 'https://x/v1');
 });
 
 test('listProviders returns whitelist summaries', () => {
@@ -152,4 +151,28 @@ test('listProviders returns whitelist summaries', () => {
   assert.deepEqual(providers[0], { key: 'openai', label: 'OpenAI', catalogId: 'openai', needsKey: true });
   const ollama = providers.find((p) => p.key === 'ollama');
   assert.equal(ollama.needsKey, false);
+});
+
+test('anthropic-engine providers (minimax) get clientOptions.baseURL with /v1 stripped', async () => {
+  const catalog = fakeCatalog(
+    { minimax: { 'MiniMax-M2': { limitOutput: 131072 } } },
+    { minimax: 'https://api.minimax.cn/anthropic/v1' },
+  );
+  const provider = new ModelProvider({ load: fakeLoader(), catalog });
+  await provider.configure({ provider: 'minimax', model: 'MiniMax-M2', apiKey: 'mm-key', maxTokens: 2000.7 });
+  const options = provider.chatModel().options;
+  assert.equal(options.apiKey, 'mm-key');
+  assert.equal(options.maxTokens, 2000, 'user value floored, kept within the limit');
+  assert.deepEqual(options.clientOptions, { baseURL: 'https://api.minimax.cn/anthropic' }, 'clientOptions not configuration; /v1 stripped');
+  assert.equal(options.configuration, undefined, 'must NOT ride the openai-style configuration key');
+});
+
+test('every whitelist engine is present in ENGINE_MAP (drift guard)', async () => {
+  const ModelProvider = require('../src/core/ai/ModelProvider');
+  const { PROVIDER_WHITELIST } = require('../src/core/ai/ProviderCatalogWhitelist');
+  for (const entry of PROVIDER_WHITELIST) {
+    const provider = new ModelProvider({ load: fakeLoader(), catalog: fakeCatalog() });
+    // eslint-disable-next-line no-await-in-loop
+    await assert.doesNotReject(provider.configure({ provider: entry.key, model: 'm', apiKey: 'k' }), `engine missing for ${entry.key}`);
+  }
 });

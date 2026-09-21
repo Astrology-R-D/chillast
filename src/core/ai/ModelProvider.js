@@ -32,7 +32,8 @@ const ENGINE_MAP = {
  */
 function resolveMaxTokens(userMax, modelLimit) {
   if (Number.isFinite(userMax) && userMax > 0) {
-    return Number.isFinite(modelLimit) && modelLimit > 0 ? Math.min(userMax, modelLimit) : userMax;
+    const floored = Math.floor(userMax);
+    return Number.isFinite(modelLimit) && modelLimit > 0 ? Math.min(floored, modelLimit) : floored;
   }
   if (Number.isFinite(modelLimit) && modelLimit > 0) return modelLimit;
   return FALLBACK_OUTPUT_LIMIT;
@@ -57,7 +58,7 @@ class ModelProvider {
     const nextSettings = { ...settings };
     const entry = resolveProviderEntry(settings.provider);
     // Unknown provider ids degrade to OpenAI-compatible semantics (user baseUrl)
-    const engine = ENGINE_MAP[entry ? entry.engine : 'openai_compat'];
+    const engine = ENGINE_MAP[entry ? entry.engine : 'openai_compat'] || ENGINE_MAP.openai_compat;
 
     const mod = await this._load(engine.pkg);
     const ChatCls = mod[engine.chatCls];
@@ -74,14 +75,24 @@ class ModelProvider {
 
     // baseURL: user override wins (cn/intl switching), then the catalog default.
     const baseUrl = settings.baseUrl
-      || (entry && entry.catalogId && this._catalog ? this._catalogApi(entry) : null)
+      || (entry && entry.catalogId && this._catalog ? this._catalogBaseUrl(entry) : null)
       || (engine === ENGINE_MAP.ollama ? 'http://localhost:11434' : null);
 
     if (engine === ENGINE_MAP.ollama) {
       if (baseUrl) chatOpts.baseUrl = baseUrl; // ChatOllama takes baseUrl directly
     } else {
       if (settings.apiKey) chatOpts.apiKey = settings.apiKey;
-      if (baseUrl) chatOpts.configuration = { baseURL: baseUrl };
+      if (baseUrl) {
+        // ChatOpenAI takes `configuration.baseURL`; ChatAnthropic takes `clientOptions.baseURL`.
+        if (engine === ENGINE_MAP.anthropic) {
+          // Anthropic SDK appends /v1/messages itself — strip a trailing /v1 from
+          // catalog bases (models.dev gives e.g. https://api.minimax.cn/anthropic/v1).
+          const anthropicBase = baseUrl.replace(/\/v1\/?$/, '');
+          chatOpts.clientOptions = { baseURL: anthropicBase };
+        } else {
+          chatOpts.configuration = { baseURL: baseUrl };
+        }
+      }
     }
 
     const nextModel = engine.needsKey && !settings.apiKey ? null : new ChatCls(chatOpts);
@@ -97,8 +108,8 @@ class ModelProvider {
     }
   }
 
-  /** Catalog api for a whitelist entry's provider (null when unknown/offline). */
-  _catalogApi(entry) {
+  /** Catalog base URL for a whitelist entry's provider (null when unknown/offline). */
+  _catalogBaseUrl(entry) {
     try {
       return this._catalog.getApi(entry.key) || null;
     } catch (_) { return null; }
