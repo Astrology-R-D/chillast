@@ -861,6 +861,12 @@ body.ai-resizing { cursor: col-resize; user-select: none; }
   width: 90px;
   padding: 4px 8px;
 }
+/* Inside .settings-row the number box is a flex item and `.settings-row .input`
+   (flex: 1) would stretch it like the text inputs. Equal specificity — this
+   later rule wins (same pattern as the `.mcp-add-row .select` override). */
+.settings-row .max-tokens-number {
+  flex: 0 0 90px;
+}
 
 .chat-truncated-notice {
   margin-top: 8px;

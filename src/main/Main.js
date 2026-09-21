@@ -14,6 +14,7 @@ try {
 } catch (_) { /* swisseph-v2 native binding not rebuilt for Electron yet */ }
 const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
+const CatalogService = require('../core/ai/CatalogService');
 const AiSessionStore = require('./AiSessionStore');
 const LocationResolver = require('../core/astrology/LocationResolver');
 const { installExternalUrlHandler, resolveSmokeReportPath } = require('./MainPolicy');
@@ -73,7 +74,6 @@ class Main {
     // Provider/model catalog: bundled snapshot (offline fallback) + userData
     // cache with a 24h background refresh. Loading is sync and never blocks
     // startup; refresh failures are logged and silently ignored.
-    const CatalogService = require('../core/ai/CatalogService');
     const catalogSnapshotPath = app.isPackaged
       ? path.join(process.resourcesPath, 'assets', 'catalog-snapshot.json')
       : path.join(__dirname, '..', '..', 'assets', 'catalog-snapshot.json');

@@ -34,6 +34,9 @@ function toolZhName(tool) {
 export class SettingsView {
   constructor(context) {
     this.ctx = context;
+    // Monotonic sequence for provider switches: an async rebuild superseded by
+    // a newer switch must not touch the DOM (rapid-switch race guard).
+    this._providerSeq = 0;
     // Refresh the tools / knowledge / status sections when the AI service finishes
     // (re)configuring — e.g. after first-launch async init or saving a key — so they
     // don't show stale "empty". Only redraw when this view is the one on screen.
@@ -130,6 +133,9 @@ export class SettingsView {
     const savedMaxTokens = (status && typeof status.maxTokens === 'number') ? String(status.maxTokens) : '';
     this._maxTokensLimit = this._currentModelLimit() || FALLBACK_MAX_TOKENS;
     const initialMax = savedMaxTokens || String(this._maxTokensLimit);
+    // Committed maxTokens — single source of truth; the visible controls only
+    // mirror it (and are consolidated back to it on blur).
+    this._maxTokens = parseInt(initialMax, 10) || this._maxTokensLimit;
 
     this.tempInput = h('input', {
       class: 'input',
@@ -147,6 +153,7 @@ export class SettingsView {
       class: 'input max-tokens-number', type: 'number',
       min: '512', max: String(this._maxTokensLimit), value: initialMax,
       oninput: (e) => this._setMaxTokens(e.target.value, 'number'),
+      onblur: () => this._setMaxTokens(this.maxTokensInput.value, 'blur'),
     });
     this.maxTokensValue = h('span', { class: 'range-value' }, initialMax);
     this._maxTokensLimitLabel = h('span', { class: 'fs-xs text-muted' }, t('settings.maxTokensLimit', { count: this._maxTokensLimit }));
@@ -494,12 +501,14 @@ export class SettingsView {
     ));
   }
 
-  _onModelSelectChange(value) {
+  _onModelSelectChange(value, fromUser = true) {
     if (value === '__custom__') {
       this._modelCustom = true;
       this.modelInput.style.display = '';
       this.modelInput.value = '';
-      this.modelInput.focus();
+      // Only a real user pick may take focus — programmatic selections
+      // (provider switch / bounds re-clamp) must not yank it away.
+      if (fromUser) this.modelInput.focus();
     } else {
       this._modelCustom = false;
       this.modelInput.style.display = 'none';
@@ -509,12 +518,19 @@ export class SettingsView {
   }
 
   async _onProviderChange(provider) {
+    // Rapid-switch guard: only the latest switch may touch the DOM once the
+    // catalog fetch resolves — a slower, superseded fetch must not clobber it.
+    const seq = ++this._providerSeq;
     // Show/hide API key field based on provider
     const needsKey = !NO_KEY_PROVIDERS.has(provider);
     this.apiKeyInput.parentElement.style.display = needsKey ? '' : 'none';
     this._catalogModels = await this._fetchCatalogModels(provider);
-    if (this._modelSelect) {
-      clear(this._modelHost);
+    if (seq !== this._providerSeq) return;
+    // Rebuild the model picker unconditionally, mirroring _draw: the initially
+    // drawn provider may have had no catalog (ollama / openai_compat leave
+    // _modelSelect null), and the old `if (this._modelSelect)` guard meant a
+    // switch to a catalog provider never built the dropdown at all.
+    if (this._catalogModels.length) {
       const options = this._catalogModels.map((m) => h('option', { value: m.id }, t('settings.modelMeta', {
         name: m.name, context: m.limitContext, price: `${m.costInput}/${m.costOutput} $/M`,
       })));
@@ -524,10 +540,13 @@ export class SettingsView {
         onchange: (e) => this._onModelSelectChange(e.target.value),
       }, options);
       mount(this._modelHost, [this._modelSelect, this.modelInput]);
-      if (this._catalogModels.length) this._onModelSelectChange(this._catalogModels[0].id);
-      // Providers without catalog models (ollama / 兼容端点): the select only
-      // offers「自定义…」, so surface the free-text input immediately.
-      else this._onModelSelectChange('__custom__');
+      this._onModelSelectChange(this._catalogModels[0].id, false);
+    } else {
+      // Providers without catalog models (ollama / 兼容端点): mirror _draw —
+      // no select at all, just surface the free-text input.
+      this._modelSelect = null;
+      mount(this._modelHost, [this.modelInput]);
+      this._onModelSelectChange('__custom__', false);
     }
     this._applyModelBounds();
   }
@@ -544,6 +563,13 @@ export class SettingsView {
     const limit = this._maxTokensLimit || FALLBACK_MAX_TOKENS;
     let value = Number.isFinite(parsed) ? parsed : limit;
     value = Math.max(512, Math.min(value, limit));
+    // Commit the clamped value — this._maxTokens is the source of truth that
+    // _onSave/_onTestConnection read; the visible controls only mirror it.
+    this._maxTokens = value;
+    // Display sync — never rewrite the focused input: while typing in the
+    // number box only the slider + readout move; every other source ('range',
+    // a model-bounds change, or 'blur' consolidating the raw typed text into
+    // the clamped value) may rewrite the now-unfocused number input.
     if (source === 'number') this.maxTokensRange.value = String(value);
     else this.maxTokensInput.value = String(value);
     this.maxTokensValue.textContent = String(value);
@@ -557,7 +583,7 @@ export class SettingsView {
     this.maxTokensRange.max = String(limit);
     this.maxTokensInput.max = String(limit);
     this._maxTokensLimitLabel.textContent = t('settings.maxTokensLimit', { count: limit });
-    this._setMaxTokens(this.maxTokensValue.textContent || String(limit), 'range');
+    this._setMaxTokens(String(this._maxTokens ?? limit), 'range');
   }
 
   async _onSave() {
@@ -568,7 +594,7 @@ export class SettingsView {
         provider: this.providerSelect.value,
         model: this.modelInput.value,
         temperature: parseFloat(this.tempInput.value),
-        maxTokens: parseInt(this.maxTokensInput.value, 10),
+        maxTokens: this._maxTokens,
         baseUrl: this.baseUrlInput.value || undefined,
       };
       if (this.apiKeyInput.value) {
@@ -598,7 +624,7 @@ export class SettingsView {
         provider: this.providerSelect.value,
         model: this.modelInput.value,
         temperature: parseFloat(this.tempInput.value),
-        maxTokens: parseInt(this.maxTokensInput.value, 10),
+        maxTokens: this._maxTokens,
         baseUrl: this.baseUrlInput.value || undefined,
       };
       if (this.apiKeyInput.value) {
