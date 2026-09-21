@@ -205,7 +205,7 @@ describe('AI settings client', () => {
     const knowledge = {
       list: () => ok([{ id: 'a.md', name: 'a.md', source: 'builtin', importedAt: '2026-01-01T00:00:00.000Z' }]),
       import: () => ok({ count: 2 }),
-      remove: () => ok(true),
+      remove: () => ok({ removed: true }),
     };
     const tools = {
       describe: () => ok([{ id: 'kb', category: 'knowledge', enabled: true, ready: true, tools: [{ name: 'search_knowledge', description: '检索' }] }]),
@@ -301,8 +301,11 @@ function parseAiCatalogModels(value: unknown): AiCatalogModel[] {
   },
   importKnowledgeDocs: (filePaths: string[]): Promise<{ count: number }> =>
     invoke<{ count: number }>((api) => api.ai.knowledge.import(filePaths)),
-  removeKnowledgeDoc: (docId: string): Promise<boolean> =>
-    invoke<boolean>((api) => api.ai.knowledge.remove(docId)),
+  removeKnowledgeDoc: async (docId: string): Promise<boolean> => {
+    // 信封 data 实际形状是 { removed: boolean }（myst-api.d.ts 已按运行时修正）
+    const value = await invoke<{ removed: boolean }>((api) => api.ai.knowledge.remove(docId));
+    return value.removed ?? false;
+  },
   describeAiToolProviders: async (): Promise<AiToolProviderDescriptor[]> => {
     const value = await invoke<unknown>((api) => api.ai.tools.describe());
     if (!Array.isArray(value)) throw new Error('工具数据无效');
