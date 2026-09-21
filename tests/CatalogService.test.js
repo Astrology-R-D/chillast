@@ -112,3 +112,22 @@ test('getApi returns the catalog endpoint', () => {
   assert.equal(svc.getApi('ollama'), null);
   assert.equal(svc.getApi('openai_compat'), null);
 });
+
+test('refreshAsync handles the flat models.dev api.json shape, filters non-chat, and sorts newest first', async () => {
+  // 平面 api.json（线上真实形状）：顶层即 { [catalogId]: provider }
+  const flatApi = {
+    deepseek: {
+      name: 'DeepSeek', api: 'https://api.deepseek.com', env: [],
+      models: {
+        'deepseek-v4-flash': { name: 'V4 Flash', limit: { context: 1000000, output: 384000 }, cost: { input: 0.15, output: 0.6 }, status: 'active', release_date: '2026-09-10', tool_call: true },
+        'deepseek-v4-pro': { name: 'V4 Pro', limit: { context: 1000000, output: 131072 }, cost: { input: 0.4, output: 0.9 }, status: 'active', release_date: '2026-08-12', tool_call: true },
+        'deepseek-tts': { name: 'TTS', limit: { context: 8000, output: 4096 }, cost: { input: 1, output: 1 }, status: 'active', release_date: '2026-09-20', tool_call: false, modalities: { output: ['audio'] } },
+      },
+    },
+  };
+  const { svc } = newService({ now: () => 25 * 60 * 60 * 1000, fetchImpl: async () => ({ ok: true, json: async () => flatApi }) });
+  await svc.refreshAsync({ force: true });
+  const models = svc.getModels('deepseek');
+  // deepseek-tts 被 chat 过滤掉；其余按 release_date 倒序
+  assert.deepEqual(models.map((m) => m.id), ['deepseek-v4-flash', 'deepseek-v4-pro']);
+});
