@@ -19,7 +19,7 @@ vi.mock('../features/charts/svg/InteractiveChart', () => ({ InteractiveChart: ()
 
 const dictionary = {
   ...locale,
-  app: { title: 'CHILLAST' }, ai: { title: 'AI 占星顾问' },
+  app: { title: 'CHILLAST' }, ai: { ...locale.ai, title: 'AI 占星顾问' },
   nav: {
     profiles: '档案管理', personal: '个人星盘', relationship: '合盘分析', chinese: '命理分析',
     solarTerms: '节气年历', settings: '设置', groupProfiles: '档案', groupCharts: '星盘',
@@ -28,7 +28,7 @@ const dictionary = {
   profiles: { ...locale.profiles, title: '档案管理', directory: '测试档案目录' },
   chart: { ...locale.chart, personalTitle: '个人星盘', relationshipTitle: '合盘分析' },
   chinese: { title: '命理分析' }, tools: { solarTermTitle: '节气年历' },
-  settings: { title: 'AI 设置', provider: '供应商', model: '模型' },
+  settings: { ...locale.settings, title: 'AI 设置', provider: '供应商', model: '模型' },
   shell: {
     ...locale.shell,
     loading: '正在读取状态…', placeholder: '{{title}}将在后续迁移阶段启用', theme: '主题', density: '密度',
@@ -271,3 +271,30 @@ test('dirty shell navigation saves the backend update before continuing', async 
   await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ notes: '已保存后导航' })));
   assertNoActWarnings();
 }, 10_000);
+
+test('settings route renders the settings page instead of the placeholder', async () => {
+  const user = userEvent.setup();
+  const api = window.mystApi;
+  Object.assign(api, {
+    ai: {
+      status: vi.fn().mockResolvedValue({ ok: true, data: { configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 } }),
+      onStatusChanged: vi.fn(() => vi.fn()), initStatus: vi.fn(), onInitProgress: vi.fn(),
+      configure: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      testWithSettings: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      catalog: {
+        providers: vi.fn().mockResolvedValue({ ok: true, data: [{ key: 'openai', label: 'OpenAI', catalogId: 'openai', needsKey: true, modelCount: 0 }] }),
+        models: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      },
+      tools: { describe: vi.fn().mockResolvedValue({ ok: true, data: [] }), setProviderEnabled: vi.fn() },
+      mcp: { list: vi.fn().mockResolvedValue({ ok: true, data: { servers: {}, toolCount: 0, connected: false } }), save: vi.fn() },
+      knowledge: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), import: vi.fn(), remove: vi.fn() },
+      sessions: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), rename: vi.fn(), generateTitle: vi.fn(), delete: vi.fn() },
+    },
+  });
+  renderShell();
+
+  await user.click(screen.getByRole('button', { name: '设置' }));
+  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('AI 设置');
+  expect(screen.queryByText(/将在后续迁移阶段启用/)).not.toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: dictionary.settings.aiConfig })).toBeInTheDocument();
+});

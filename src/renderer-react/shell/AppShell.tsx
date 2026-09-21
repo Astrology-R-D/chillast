@@ -7,6 +7,7 @@ import {
 } from '../preferences/preferences';
 import { AiStatusPanel } from './AiStatusPanel';
 import { ProfilePage } from '../features/profiles/ProfilePage';
+import { SettingsPage } from '../features/settings/SettingsPage';
 import { Navigation } from './Navigation';
 import { PanelLayout } from './PanelLayout';
 import { ROUTES, type RouteKey } from './routes';
@@ -109,7 +110,7 @@ function AppShellInner() {
   return (
     <PanelLayout
       navigation={<Navigation active={activeRoute} onNavigate={navigate} />}
-      ai={<AiStatusPanel />}
+      ai={<AiStatusPanel onNavigate={navigate} />}
       labels={{
         openAi: t('shell.openAi'),
         closeAi: t('shell.closeAi'),
@@ -150,6 +151,7 @@ function AppShellInner() {
         {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} />
           : activeRoute === 'personal' || activeRoute === 'relationship'
             ? <ChartWorkbenchRoute route={activeRoute} />
+            : activeRoute === 'settings' ? <SettingsPage onNavigate={navigate} />
             : <section className="workspace__placeholder" aria-labelledby="workspace-title">
                 <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />
                 <p>{t('shell.placeholder', { title })}</p>

@@ -31,6 +31,7 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
   const [maxTokens, setMaxTokens] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
   const [busy, setBusy] = useState<'idle' | 'saving' | 'testing'>('idle');
+  const [pendingAutoSelect, setPendingAutoSelect] = useState(false);
 
   const models = useAiCatalogModels(provider);
 
@@ -43,6 +44,18 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
     if (typeof status.temperature === 'number') setTemperature(status.temperature);
     if (typeof status.maxTokens === 'number') setMaxTokens(status.maxTokens);
   }, [status]);
+
+  // 对齐老层 _onProviderChange：用户切换 provider 后，新目录到货即选中第一个模型
+  // （程序化选中，不抢焦点）；空目录则保持自由输入。仅用户切换触发，不影响
+  // 初次加载时已存的 model 选择。
+  useEffect(() => {
+    if (!pendingAutoSelect || !models.data) return;
+    setPendingAutoSelect(false);
+    if (models.data.length > 0) {
+      setModel(models.data[0].id);
+      setModelIsCustom(false);
+    }
+  }, [pendingAutoSelect, models.data]);
 
   const providerNeedsKey = useMemo(
     () => !(providers ?? []).some((p) => p.key === provider && !p.needsKey),
@@ -113,6 +126,7 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
             setModel('');
             setModelIsCustom(false);
             setMaxTokens(null); // re-resolve against the next provider's models
+            setPendingAutoSelect(true); // 目录到货后选中第一个模型（对齐老层）
           }}
         >
           {(providers ?? []).map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -171,11 +185,13 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
       </div>
       <div className="settings-field">
         <label htmlFor="settings-temperature">{t('settings.temperature')}</label>
-        <input
-          id="settings-temperature" type="range" min={0} max={1} step={0.1} value={temperature}
-          onChange={(event) => setTemperature(Number(event.target.value))}
-        />
-        <span className="maxtokens__value">{temperature}</span>
+        <span className="settings-field-control">
+          <input
+            id="settings-temperature" type="range" min={0} max={1} step={0.1} value={temperature}
+            onChange={(event) => setTemperature(Number(event.target.value))}
+          />
+          <span className="maxtokens__value">{temperature}</span>
+        </span>
       </div>
       <MaxTokensControl
         value={effectiveMaxTokens}

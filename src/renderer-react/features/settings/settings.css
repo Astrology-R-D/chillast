@@ -33,6 +33,12 @@
   color: var(--text-secondary);
 }
 
+.settings-field-control {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .settings-row {
   display: flex;
   gap: 8px;

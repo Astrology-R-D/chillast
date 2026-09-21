@@ -59,7 +59,7 @@ export function KnowledgeSection({ docs, onChanged }: KnowledgeSectionProps) {
       </div>
       <input
         ref={fileInputRef} type="file" accept=".md,.txt,.pdf" multiple hidden
-        onChange={(event) => { void onImport(event.target.files); }}
+        onChange={(event) => { void onImport(event.target.files); event.target.value = ''; }}
       />
       <div className="settings-row">
         <button type="button" onClick={() => fileInputRef.current?.click()}>{t('settings.importDocs')}</button>

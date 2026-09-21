@@ -4,8 +4,9 @@ import { apiClient, parseAiStatus } from '../api/client';
 import { useI18n } from '../i18n/I18nProvider';
 import { useChartWorkspace } from '../stores/chartWorkspace';
 import { retryLatestChartAiContext } from '../features/charts/context/chartAiContextPublisher';
+import type { RouteKey } from './routes';
 
-export function AiStatusPanel() {
+export function AiStatusPanel({ onNavigate }: { onNavigate?: (route: RouteKey) => void }) {
   const { t } = useI18n();
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +80,13 @@ export function AiStatusPanel() {
           <p className="ai-status__state" data-configured={status.configured}>
             {status.configured ? t('shell.aiConfigured') : t('shell.aiNotConfigured')}
           </p>
+          {!status.configured && onNavigate ? (
+            <p className="ai-status__configure">
+              <button type="button" onClick={() => onNavigate('settings')}>
+                {t('ai.notConfigured')}「{t('ai.goToSettings')}」{t('ai.toConfigure')}
+              </button>
+            </p>
+          ) : null}
           <dl>
             <div><dt>{t('settings.provider')}</dt><dd>{status.provider?.trim() || '—'}</dd></div>
             <div><dt>{t('settings.model')}</dt><dd>{status.model?.trim() || '—'}</dd></div>
