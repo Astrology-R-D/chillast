@@ -103,6 +103,53 @@ function runAiTests(testFn) {
     assert.ok(events.some((e) => e.type === 'truncated'));
     assert.equal(events[events.length - 1].type, 'done');
   });
+
+  testFn('anthropic-style stop_reason=max_tokens is normalized to truncated', async () => {
+    const AiService = require('../src/core/ai/AiService');
+    const svc = new AiService({}, {});
+    svc._configured = true;
+    svc._chainFactory = {
+      async buildInterpretStream() {
+        async function* stream() {
+          yield { content: '答到一半', additional_kwargs: { stop_reason: 'max_tokens' } };
+        }
+        return stream();
+      },
+    };
+    const events = [];
+    for await (const ev of svc.interpret({}, { sessionId: 't' })) events.push(ev);
+    assert.ok(events.some((e) => e.type === 'truncated'), 'anthropic max_tokens must map to truncated');
+  });
+
+  testFn('chat intermediate length-cut turn overridden by a clean final turn emits no truncated', async () => {
+    const AiService = require('../src/core/ai/AiService');
+    const fakeEsm = {
+      load: async (pkg) => {
+        if (pkg === '@langchain/langgraph/prebuilt') {
+          return {
+            createReactAgent: () => ({
+              async *stream() {
+                yield ['messages', [{ content: '工具轮', getType: () => 'ai', response_metadata: { finish_reason: 'length' } }]];
+                yield ['messages', [{ content: '最终答案', getType: () => 'ai', response_metadata: { finish_reason: 'stop' } }]];
+              },
+            }),
+          };
+        }
+        return {
+          HumanMessage: class { constructor(c) { this.content = c; } },
+          AIMessage: class { constructor(c) { this.content = c; } },
+          SystemMessage: class { constructor(c) { this.content = c; } },
+        };
+      },
+    };
+    const svc = new AiService({}, {}, null, { esm: fakeEsm });
+    svc._configured = true;
+    svc._registry = { getTools: async () => [] };
+    const events = [];
+    for await (const ev of svc.chat([{ role: 'user', content: '问' }], { sessionId: 't' })) events.push(ev);
+    assert.ok(!events.some((e) => e.type === 'truncated'), 'final turn stop must win over intermediate length');
+    assert.equal(events[events.length - 1].type, 'done');
+  });
 }
 
 module.exports = { runAiTests };

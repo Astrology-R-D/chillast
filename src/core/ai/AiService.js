@@ -327,11 +327,22 @@ class AiService {
     return '';
   }
 
-  /** Read a chunk's finish_reason across LangChain versions/layouts. */
+  /**
+   * Read a chunk's stop signal across LangChain model families.
+   * OpenAI-family: response_metadata.finish_reason ('length' = output cap hit).
+   * Anthropic-family (incl. MiniMax): additional_kwargs.stop_reason
+   * ('max_tokens' = output cap hit) — normalized to 'length' here.
+   * ChatOllama surfaces no stop reason at all — truncation is undetectable there.
+   */
   _finishReason(chunk) {
     if (!chunk || typeof chunk !== 'object') return null;
-    const meta = chunk.response_metadata || chunk.generation_info || null;
-    return meta && meta.finish_reason ? meta.finish_reason : null;
+    const meta = chunk.response_metadata || null;
+    const finish = meta && meta.finish_reason;
+    if (finish) return String(finish);
+    const stop = (meta && meta.stop_reason)
+      || (chunk.additional_kwargs && chunk.additional_kwargs.stop_reason);
+    if (stop) return stop === 'max_tokens' ? 'length' : String(stop);
+    return null;
   }
 
   /** Normalize message content (string or content-part array) to text. */
