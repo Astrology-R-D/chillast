@@ -13,6 +13,17 @@
 
 ---
 
+## 实现偏差记录（执行期审查发现，随任务落地）
+
+1. **契约（Task 1）**：`knowledge.remove` 类型修正为 `IpcResult<{ removed: boolean }>`（运行时实际形状，IpcRouter 返回 `{removed}`）；MystAiApi 扩展导致 4 处既有 mock 需补全（第二个提交）。
+2. **组件（Task 5）**：CSS 令牌按 React 主题真实名称适配（`--border-subtle`/`--surface-panel`/`--surface-base`，themes.css 明暗双主题均有）；modelList 变量名替代 models.data 直用。
+3. **集成（Task 6）**：温度行滑条+数值用 `.settings-field-control` 包裹（2 列网格落位修复）；文件导入后 input 复位（可重复导入同一文件）；provider 切换后**自动选第一个目录模型**（pendingAutoSelect 标志，老层 `_onProviderChange` 的 parity，初始加载不触发）；测试 stub 需补 `app.*`（DirtyNavigationProvider 依赖）；时序敏感断言改 find* 变体。
+4. **maxTokens（审查修复）**：MaxTokensControl 数字框用**本地 draft 状态**（聚焦期间显示草稿，逐字输入不被受控回显打断，blur 提交）；切换 provider **保留已存值**并按新上限 clamp（不再清空采用完整上限——成本偏好 parity）。
+5. **终审修复（6746417）**：settings.css 补按钮样式（profiles.css 惯例：`--surface-raised` + `--border-strong`）；工具开关只 invalidate `tools` key（不再误清未保存的 MCP 草稿）；`draft()` 显式携带空 baseUrl（可真正清空）；知识库导入/移除错误改为可见行内反馈。
+6. **已知遗留**：apiKeyConfigured 徽标未迁移（Task 5 审查记录）；字体清单测试为基线预存失败（与分支无关）；终审曾误报 settings.css 令牌不存在（读的是本计划文档的旧代码块而非提交文件，实际代码正确）。
+
+---
+
 ### Task 1: 契约类型 + preload 类型声明
 
 **Files:**
