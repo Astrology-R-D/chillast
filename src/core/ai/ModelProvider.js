@@ -176,8 +176,13 @@ class ModelProvider {
     return { ok: true };
   }
 
-  static async testWithSettings(settings) {
-    const temp = new ModelProvider();
+  /**
+   * Test connectivity with given settings WITHOUT persisting. `catalog` resolves
+   * catalog-driven endpoints exactly like the save path (final-review blocker);
+   * `load` is the same injectable loader seam as the constructor (tests).
+   */
+  static async testWithSettings(settings, catalog = null, load = esm.load) {
+    const temp = new ModelProvider(catalog ? { catalog, load } : { load });
     await temp.configure(settings);
     return await temp.testConnection();
   }

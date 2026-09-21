@@ -191,7 +191,7 @@ class AiService {
    */
   async testWithSettings(settings) {
     const ModelProvider = require('./ModelProvider');
-    return await ModelProvider.testWithSettings(settings);
+    return await ModelProvider.testWithSettings(settings, this._catalog);
   }
 
   getKnowledgeBase() { return this._kb; }

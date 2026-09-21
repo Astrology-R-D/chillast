@@ -180,3 +180,19 @@ test('every whitelist engine is present in ENGINE_MAP (drift guard)', async () =
     await assert.doesNotReject(provider.configure({ provider: entry.key, model: 'm', apiKey: 'k' }), `engine missing for ${entry.key}`);
   }
 });
+
+test('testWithSettings resolves catalog-driven endpoints when passed the catalog', async () => {
+  // 复现 final-review blocker：目录端点的 provider 在无 baseUrl 时，
+  // 不带 catalog 的临时 provider 会打到 api.openai.com（401）。
+  const result = await ModelProvider.testWithSettings(
+    { provider: 'deepseek', model: 'deepseek-v4-flash', apiKey: 'key' },
+    DEEPSEEK_CATALOG,
+    fakeLoader(),
+  );
+  assert.equal(result.ok, true);
+  // FakeChatModel.invoke 返回 { content: 'ok' } → testConnection ok。
+  // baseURL 断言：直接构造对比，确认 catalog 路径进到了 chatOpts
+  const provider = new ModelProvider({ load: fakeLoader(), catalog: DEEPSEEK_CATALOG });
+  await provider.configure({ provider: 'deepseek', model: 'deepseek-v4-flash', apiKey: 'key' });
+  assert.equal(provider.chatModel().options.configuration.baseURL, 'https://api.deepseek.com');
+});
