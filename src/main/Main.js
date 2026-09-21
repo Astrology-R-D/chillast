@@ -69,7 +69,28 @@ class Main {
       ? path.join(process.resourcesPath, 'assets', 'knowledge', 'builtin')
       : path.join(__dirname, '..', '..', 'assets', 'knowledge', 'builtin');
     const userKnowledgePath = path.join(app.getPath('userData'), 'knowledge', 'user');
-    this.aiService = new AiService(this.astrologyService, this.chineseAstrologyService, this.profileRepository);
+
+    // Provider/model catalog: bundled snapshot (offline fallback) + userData
+    // cache with a 24h background refresh. Loading is sync and never blocks
+    // startup; refresh failures are logged and silently ignored.
+    const CatalogService = require('../core/ai/CatalogService');
+    const catalogSnapshotPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'assets', 'catalog-snapshot.json')
+      : path.join(__dirname, '..', '..', 'assets', 'catalog-snapshot.json');
+    this.catalogService = new CatalogService({
+      snapshotPath: catalogSnapshotPath,
+      cachePath: path.join(baseDir, 'catalog-cache.json'),
+      log: (message) => console.error(`[Catalog] ${message}`),
+    });
+    this.catalogService.load();
+    this.catalogService.refreshAsync().catch(() => { /* refresh failures are logged inside */ });
+
+    this.aiService = new AiService(
+      this.astrologyService,
+      this.chineseAstrologyService,
+      this.profileRepository,
+      { catalog: this.catalogService },
+    );
 
     // Load persisted non-secret settings from data/ai-settings.json
     const aiSettingsPath = path.join(baseDir, 'ai-settings.json');
