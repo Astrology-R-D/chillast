@@ -474,6 +474,10 @@
     "apiKeyNotSet": "未配置",
     "temperature": "温度",
     "maxTokens": "最大 Token 数",
+    "maxTokensLimit": "当前模型上限 {{count}}",
+    "catalogCustom": "自定义…",
+    "customModelPlaceholder": "输入模型 ID",
+    "modelMeta": "{{name}} · {{context}} 上下文 · {{price}}",
     "baseUrl": "Base URL",
     "baseUrlPlaceholder": "自定义 API 地址（如 https://api.deepseek.com）",
     "testConnection": "测试连接",
@@ -569,7 +573,8 @@
     "toolDone": "完成",
     "resize": "拖动调整宽度",
     "interpreting": "正在生成解读…",
-    "noChart": "请先计算星盘后再使用 AI 解读"
+    "noChart": "请先计算星盘后再使用 AI 解读",
+    "truncated": "⚠️ 输出因达到 Token 上限被截断，可在设置中调高「最大 Token 数」"
   },
   "tables": {
     "positions": "行星位置 · Positions",

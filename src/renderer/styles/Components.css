@@ -855,3 +855,19 @@ body.ai-resizing { cursor: col-resize; user-select: none; }
 .llm-status-text {
   letter-spacing: 0.04em;
 }
+
+/* —— Settings: catalog model picker + model-aware maxTokens combo ————— */
+.max-tokens-number {
+  width: 90px;
+  padding: 4px 8px;
+}
+
+.chat-truncated-notice {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--danger, #f44747);
+  background: rgba(244, 71, 71, 0.08);
+  color: var(--text-secondary, #9d9d9d);
+  font-size: 12px;
+  border-radius: 0 4px 4px 0;
+}

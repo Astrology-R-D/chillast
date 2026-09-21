@@ -2,29 +2,16 @@ import { h, mount, clear } from '../Dom.js';
 import { t } from '../I18n.js';
 import { notify } from '../components/Toast.js';
 
-const PROVIDER_LABELS = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic Claude',
-  deepseek: 'DeepSeek',
-  moonshot: 'Moonshot 月之暗面',
-  zhipuai: 'ZhipuAI 智谱',
-  tongyi: 'Tongyi 通义千问',
-  ollama: 'Ollama (本地)',
-  openai_compat: 'OpenAI 兼容端点',
+// Fallback labels when the catalog IPC is unavailable (offline first run).
+const PROVIDER_LABEL_FALLBACK = {
+  openai: 'OpenAI', anthropic: 'Anthropic Claude', deepseek: 'DeepSeek',
+  moonshot: 'Moonshot 月之暗面', zhipuai: 'ZhipuAI 智谱', tongyi: 'Tongyi 通义千问',
+  minimax: 'MiniMax', volcengine: '火山方舟', siliconflow: '硅基流动 SiliconFlow',
+  stepfun: '阶跃星辰 StepFun', openrouter: 'OpenRouter',
+  ollama: 'Ollama (本地)', openai_compat: 'OpenAI 兼容端点',
 };
-
-const DEFAULT_MODELS = {
-  openai: 'gpt-4o',
-  anthropic: 'claude-sonnet-4-6',
-  deepseek: 'deepseek-chat',
-  moonshot: 'moonshot-v1-8k',
-  zhipuai: 'glm-4',
-  tongyi: 'qwen-max',
-  ollama: 'qwen2.5:7b',
-  openai_compat: '',
-};
-
 const NO_KEY_PROVIDERS = new Set(['ollama']);
+const FALLBACK_MAX_TOKENS = 8192;
 
 // Chinese display names for the built-in tool providers (the `id`s are English).
 const TOOL_PROVIDER_LABELS = {
@@ -73,19 +60,56 @@ export class SettingsView {
     const toolProviders = await this._fetchTools();
     const mcpInfo = await this._fetchMcp();
 
+    this._providers = await this._fetchCatalogProviders();
     this.providerSelect = h('select', {
       class: 'select',
       onchange: (e) => this._onProviderChange(e.target.value),
-    }, Object.entries(PROVIDER_LABELS).map(([value, label]) =>
-      h('option', { value, selected: value === (status && status.provider) }, label)
+    }, (this._providers || Object.keys(PROVIDER_LABEL_FALLBACK).map((key) => ({
+      key, label: PROVIDER_LABEL_FALLBACK[key], needsKey: !NO_KEY_PROVIDERS.has(key),
+    }))).map((p) =>
+      h('option', { value: p.key, selected: p.key === (status && status.provider) }, p.label)
     ));
 
-    this.modelInput = h('input', {
-      class: 'input',
-      type: 'text',
-      value: (status && status.model) || 'gpt-4o',
-      placeholder: 'gpt-4o',
-    });
+    const providerKey = (status && status.provider) || 'openai';
+    const catalogModels = await this._fetchCatalogModels(providerKey);
+    this._catalogModels = catalogModels;
+    const currentModel = (status && status.model) || '';
+    this._modelCustom = !catalogModels.length || (!!currentModel && !catalogModels.some((m) => m.id === currentModel));
+
+    this._modelHost = h('div', {});
+    if (catalogModels.length) {
+      this._modelSelect = h('select', {
+        class: 'select',
+        onchange: (e) => this._onModelSelectChange(e.target.value),
+      }, [
+        ...catalogModels.map((m) => h('option', {
+          value: m.id,
+          selected: m.id === currentModel,
+        }, t('settings.modelMeta', {
+          name: m.name, context: m.limitContext, price: `${m.costInput}/${m.costOutput} $/M`,
+        }))),
+        h('option', { value: '__custom__', selected: this._modelCustom }, t('settings.catalogCustom')),
+      ]);
+      this.modelInput = h('input', {
+        class: 'input', type: 'text',
+        value: this._modelCustom ? currentModel : '',
+        placeholder: t('settings.customModelPlaceholder'),
+        style: { display: this._modelCustom ? '' : 'none' },
+      });
+      mount(this._modelHost, [this._modelSelect, this.modelInput]);
+      // modelInput is what _onSave/_onTestConnection read — seed it with the
+      // select's initial selection so saving without touching the dropdown
+      // keeps the displayed model (the pair stays in sync in both directions).
+      if (!this._modelCustom) this.modelInput.value = this._modelSelect.value || '';
+    } else {
+      this._modelSelect = null;
+      this.modelInput = h('input', {
+        class: 'input', type: 'text',
+        value: currentModel || 'gpt-4o',
+        placeholder: 'gpt-4o',
+      });
+      mount(this._modelHost, [this.modelInput]);
+    }
 
     this.apiKeyInput = h('input', {
       class: 'input',
@@ -103,7 +127,9 @@ export class SettingsView {
     });
 
     const savedTemp = (status && typeof status.temperature === 'number') ? String(status.temperature) : '0.7';
-    const savedMaxTokens = (status && typeof status.maxTokens === 'number') ? String(status.maxTokens) : '4096';
+    const savedMaxTokens = (status && typeof status.maxTokens === 'number') ? String(status.maxTokens) : '';
+    this._maxTokensLimit = this._currentModelLimit() || FALLBACK_MAX_TOKENS;
+    const initialMax = savedMaxTokens || String(this._maxTokensLimit);
 
     this.tempInput = h('input', {
       class: 'input',
@@ -112,12 +138,18 @@ export class SettingsView {
     });
     this.tempValue = h('span', { class: 'range-value' }, savedTemp);
 
-    this.maxTokensInput = h('input', {
-      class: 'input',
-      type: 'range', min: '512', max: '8192', step: '512', value: savedMaxTokens,
-      oninput: (e) => { this.maxTokensValue.textContent = e.target.value; },
+    this.maxTokensRange = h('input', {
+      class: 'input', type: 'range',
+      min: '512', max: String(this._maxTokensLimit), step: '512', value: initialMax,
+      oninput: (e) => this._setMaxTokens(e.target.value, 'range'),
     });
-    this.maxTokensValue = h('span', { class: 'range-value' }, savedMaxTokens);
+    this.maxTokensInput = h('input', {
+      class: 'input max-tokens-number', type: 'number',
+      min: '512', max: String(this._maxTokensLimit), value: initialMax,
+      oninput: (e) => this._setMaxTokens(e.target.value, 'number'),
+    });
+    this.maxTokensValue = h('span', { class: 'range-value' }, initialMax);
+    this._maxTokensLimitLabel = h('span', { class: 'fs-xs text-muted' }, t('settings.maxTokensLimit', { count: this._maxTokensLimit }));
 
     this.testBtn = h('button', {
       class: 'btn btn-ghost',
@@ -141,7 +173,7 @@ export class SettingsView {
       ]),
       h('div', { class: 'settings-row' }, [
         h('label', {}, t('settings.model')),
-        this.modelInput,
+        this._modelHost,
       ]),
       h('div', { class: 'settings-row' }, [
         h('label', {}, t('settings.apiKey')),
@@ -159,9 +191,11 @@ export class SettingsView {
       ]),
       h('div', { class: 'settings-row' }, [
         h('label', {}, t('settings.maxTokens')),
+        this.maxTokensRange,
         this.maxTokensInput,
         this.maxTokensValue,
       ]),
+      this._maxTokensLimitLabel,
       h('div', { class: 'settings-actions' }, [
         this.saveBtn,
         this.testBtn,
@@ -460,13 +494,70 @@ export class SettingsView {
     ));
   }
 
-  _onProviderChange(provider) {
-    if (DEFAULT_MODELS[provider]) {
-      this.modelInput.value = DEFAULT_MODELS[provider];
+  _onModelSelectChange(value) {
+    if (value === '__custom__') {
+      this._modelCustom = true;
+      this.modelInput.style.display = '';
+      this.modelInput.value = '';
+      this.modelInput.focus();
+    } else {
+      this._modelCustom = false;
+      this.modelInput.style.display = 'none';
+      this.modelInput.value = value;
     }
+    this._applyModelBounds();
+  }
+
+  async _onProviderChange(provider) {
     // Show/hide API key field based on provider
     const needsKey = !NO_KEY_PROVIDERS.has(provider);
     this.apiKeyInput.parentElement.style.display = needsKey ? '' : 'none';
+    this._catalogModels = await this._fetchCatalogModels(provider);
+    if (this._modelSelect) {
+      clear(this._modelHost);
+      const options = this._catalogModels.map((m) => h('option', { value: m.id }, t('settings.modelMeta', {
+        name: m.name, context: m.limitContext, price: `${m.costInput}/${m.costOutput} $/M`,
+      })));
+      options.push(h('option', { value: '__custom__' }, t('settings.catalogCustom')));
+      this._modelSelect = h('select', {
+        class: 'select',
+        onchange: (e) => this._onModelSelectChange(e.target.value),
+      }, options);
+      mount(this._modelHost, [this._modelSelect, this.modelInput]);
+      if (this._catalogModels.length) this._onModelSelectChange(this._catalogModels[0].id);
+      // Providers without catalog models (ollama / 兼容端点): the select only
+      // offers「自定义…」, so surface the free-text input immediately.
+      else this._onModelSelectChange('__custom__');
+    }
+    this._applyModelBounds();
+  }
+
+  /** Effective output limit of the currently selected model (null if unknown). */
+  _currentModelLimit() {
+    const modelId = this.modelInput && this.modelInput.value;
+    const hit = (this._catalogModels || []).find((m) => m.id === modelId);
+    return hit ? hit.limitOutput : null;
+  }
+
+  _setMaxTokens(raw, source) {
+    const parsed = parseInt(raw, 10);
+    const limit = this._maxTokensLimit || FALLBACK_MAX_TOKENS;
+    let value = Number.isFinite(parsed) ? parsed : limit;
+    value = Math.max(512, Math.min(value, limit));
+    if (source === 'number') this.maxTokensRange.value = String(value);
+    else this.maxTokensInput.value = String(value);
+    this.maxTokensValue.textContent = String(value);
+  }
+
+  /** Re-clamp the controls when the selected model changes. */
+  _applyModelBounds() {
+    if (!this.maxTokensRange) return;
+    const limit = this._currentModelLimit() || FALLBACK_MAX_TOKENS;
+    this._maxTokensLimit = limit;
+    this.maxTokensRange.max = String(limit);
+    this.maxTokensInput.max = String(limit);
+    this._maxTokensLimitLabel.textContent = t('settings.maxTokensLimit', { count: limit });
+    this._setMaxTokens(this.maxTokensValue.textContent || String(limit), 'range');
   }
 
   async _onSave() {
@@ -611,6 +702,21 @@ export class SettingsView {
     try {
       const result = await window.mystApi.ai.sessions.list();
       return result.ok ? (result.data || []) : [];
+    } catch (_) { return []; }
+  }
+
+  async _fetchCatalogProviders() {
+    try {
+      const result = await window.mystApi.ai.catalog.providers();
+      const providers = result.ok ? result.data : null;
+      return Array.isArray(providers) && providers.length ? providers : null;
+    } catch (_) { return null; }
+  }
+
+  async _fetchCatalogModels(providerKey) {
+    try {
+      const result = await window.mystApi.ai.catalog.models(providerKey);
+      return result.ok && Array.isArray(result.data) ? result.data : [];
     } catch (_) { return []; }
   }
 
