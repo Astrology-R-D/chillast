@@ -37,6 +37,72 @@ function runAiTests(testFn) {
     const { createTools } = require('../src/core/ai/AstroToolkit');
     assert.strictEqual(typeof createTools, 'function');
   });
+
+  testFn('interpret yields truncated when the stream ends with finish_reason=length', async () => {
+    const AiService = require('../src/core/ai/AiService');
+    const svc = new AiService({}, {});
+    svc._configured = true;
+    svc._chainFactory = {
+      async buildInterpretStream() {
+        async function* stream() {
+          yield { content: '前半' };
+          yield { content: '截', response_metadata: { finish_reason: 'length' } };
+        }
+        return stream();
+      },
+    };
+    const events = [];
+    for await (const ev of svc.interpret({}, { sessionId: 't' })) events.push(ev);
+    const types = events.map((e) => e.type);
+    assert.ok(types.includes('truncated'), `expected truncated in ${JSON.stringify(types)}`);
+    assert.equal(types[types.length - 1], 'done');
+  });
+
+  testFn('interpret stays silent when finish_reason=stop', async () => {
+    const AiService = require('../src/core/ai/AiService');
+    const svc = new AiService({}, {});
+    svc._configured = true;
+    svc._chainFactory = {
+      async buildInterpretStream() {
+        async function* stream() {
+          yield { content: '完整回答', response_metadata: { finish_reason: 'stop' } };
+        }
+        return stream();
+      },
+    };
+    const events = [];
+    for await (const ev of svc.interpret({}, { sessionId: 't' })) events.push(ev);
+    assert.ok(!events.some((e) => e.type === 'truncated'));
+  });
+
+  testFn('chat yields truncated on a length-cut final message', async () => {
+    const AiService = require('../src/core/ai/AiService');
+    const fakeEsm = {
+      load: async (pkg) => {
+        if (pkg === '@langchain/langgraph/prebuilt') {
+          return {
+            createReactAgent: () => ({
+              async *stream() {
+                yield ['messages', [{ content: '答', getType: () => 'ai', response_metadata: { finish_reason: 'length' } }]];
+              },
+            }),
+          };
+        }
+        return {
+          HumanMessage: class { constructor(c) { this.content = c; } },
+          AIMessage: class { constructor(c) { this.content = c; } },
+          SystemMessage: class { constructor(c) { this.content = c; } },
+        };
+      },
+    };
+    const svc = new AiService({}, {}, null, { esm: fakeEsm });
+    svc._configured = true;
+    svc._registry = { getTools: async () => [] };
+    const events = [];
+    for await (const ev of svc.chat([{ role: 'user', content: '问' }], { sessionId: 't' })) events.push(ev);
+    assert.ok(events.some((e) => e.type === 'truncated'));
+    assert.equal(events[events.length - 1].type, 'done');
+  });
 }
 
 module.exports = { runAiTests };

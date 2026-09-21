@@ -16,11 +16,13 @@ const { toText } = require('./prompts/ChartSerializer');
 const esm = require('./esm-bridge');
 
 class AiService {
-  constructor(astrologyService, chineseAstrologyService, profileRepository) {
+  constructor(astrologyService, chineseAstrologyService, profileRepository, { catalog = null, esm: esmImpl = esm } = {}) {
     this._astrology = astrologyService;
     this._chinese = chineseAstrologyService;
     this._profiles = profileRepository || null;
-    this._mp = new ModelProvider();
+    this._catalog = catalog;
+    this._esm = esmImpl;
+    this._mp = new ModelProvider(catalog ? { catalog } : {});
     this._kb = null;
     this._chainFactory = null;
     this._registry = null;
@@ -194,6 +196,9 @@ class AiService {
 
   getKnowledgeBase() { return this._kb; }
 
+  getCatalogProviders() { return this._catalog ? this._catalog.getProviders() : []; }
+  getCatalogModels(providerKey) { return this._catalog ? this._catalog.getModels(providerKey) : []; }
+
   setContext(context) {
     this._context = context;
   }
@@ -219,11 +224,15 @@ class AiService {
       const chartType = options.chartType || (chartData.meta && chartData.meta.typeNameZh) || '星盘';
       const stream = await this._chainFactory.buildInterpretStream(chartText, chartType, ac.signal);
 
+      let finishReason = null;
       for await (const chunk of stream) {
         if (ac.signal.aborted) break;
         const token = typeof chunk === 'string' ? chunk : (chunk.content || '');
         if (token) yield { type: 'token', data: token };
+        const fr = this._finishReason(chunk);
+        if (fr) finishReason = fr;
       }
+      if (finishReason === 'length') yield { type: 'truncated', data: { reason: 'length' } };
     } finally {
       this._abortControllers.delete(sessionId);
     }
@@ -250,8 +259,8 @@ class AiService {
       const tools = this._registry ? await this._registry.getTools() : [];
       const systemPrompt = buildChatPrompt(context.currentChartText || null);
 
-      const { createReactAgent } = await esm.load('@langchain/langgraph/prebuilt');
-      const { HumanMessage, AIMessage } = await esm.load('@langchain/core/messages');
+      const { createReactAgent } = await this._esm.load('@langchain/langgraph/prebuilt');
+      const { HumanMessage, AIMessage } = await this._esm.load('@langchain/core/messages');
 
       const agent = createReactAgent({ llm: model, tools, prompt: systemPrompt });
 
@@ -268,6 +277,7 @@ class AiService {
         { streamMode: ['messages', 'updates'], signal: ac.signal, recursionLimit: 25 },
       );
 
+      let finishReason = null;
       try {
         for await (const chunk of stream) {
           if (ac.signal.aborted) break;
@@ -279,6 +289,8 @@ class AiService {
             if (msg && this._msgType(msg) === 'ai') {
               const text = this._extractText(msg.content);
               if (text) yield { type: 'token', data: text };
+              const fr = this._finishReason(msg);
+              if (fr) finishReason = fr;
             }
           } else if (mode === 'updates') {
             // payload = { nodeName: { messages: [...] } }; surface tool activity.
@@ -297,6 +309,7 @@ class AiService {
             }
           }
         }
+        if (finishReason === 'length') yield { type: 'truncated', data: { reason: 'length' } };
       } catch (e) {
         // A user-initiated stop aborts the stream; treat that as a clean end.
         if (!ac.signal.aborted) throw e;
@@ -312,6 +325,13 @@ class AiService {
     if (typeof msg.getType === 'function') return msg.getType();
     if (typeof msg._getType === 'function') return msg._getType();
     return '';
+  }
+
+  /** Read a chunk's finish_reason across LangChain versions/layouts. */
+  _finishReason(chunk) {
+    if (!chunk || typeof chunk !== 'object') return null;
+    const meta = chunk.response_metadata || chunk.generation_info || null;
+    return meta && meta.finish_reason ? meta.finish_reason : null;
   }
 
   /** Normalize message content (string or content-part array) to text. */
@@ -340,7 +360,7 @@ class AiService {
       .slice(0, 2000);
     if (!convo) return '';
     try {
-      const { SystemMessage, HumanMessage } = await esm.load('@langchain/core/messages');
+      const { SystemMessage, HumanMessage } = await this._esm.load('@langchain/core/messages');
       const res = await model.invoke([
         new SystemMessage('你是对话标题生成器。根据对话内容用不超过12个汉字概括主题，只输出标题本身，不要任何标点、引号或解释。'),
         new HumanMessage(convo),
