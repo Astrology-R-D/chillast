@@ -14,6 +14,19 @@
 
 ---
 
+## 实现偏差记录（执行期审查发现，随任务落地）
+
+执行采用"测试即契约"，下列偏差均为双阶段审查发现后经控制器确认的修正，已提交：
+
+1. **白名单（Task 1）**：`minimax` 引擎改为 `anthropic`（models.dev 实测 minimax-cn 为 Anthropic 协议端点）；`stepfun` 目录 id 改用 `stepfun`（中国端点，`stepfun-ai` 为全球端点）；表与条目 `Object.freeze`（持久化 key 稳定性成为结构保证）。
+2. **快照脚本（Task 2/2b）**：新增共享模块 `src/core/ai/catalogFilter.js`（模态规则 + id 模式排除清单，覆盖上游标注不一致的 embedding/图像/ASR 家族）；写入改 tmp+rename 原子替换；fetch 加 30s 超时与非对象响应防护；`fetchedAt` 为 epoch 毫秒数。快照最终 593 个模型。
+3. **CatalogService（Task 3）**：读取侧补 deprecated 过滤（`isUsableModel`，防御旧缓存）；`refreshAsync` 兼容平面/`{providers:…}` 两种文档形状；缓存写入原子化。
+4. **ModelProvider（Task 4）**：anthropic 引擎的 baseURL 走 `clientOptions`（`configuration` 被 ChatAnthropic 静默丢弃，会 401）并剥结尾 `/v1`（SDK 自拼 `/v1/messages`）；`ENGINE_MAP` 查询加兜底 + 导出 `ENGINE_MAP` 供漂移测试严格断言；用户 maxTokens 取整；`_catalogApi` 更名 `_catalogBaseUrl`。
+5. **AiService（Task 5）**：`_finishReason` 跨模型族——OpenAI 族读 `response_metadata.finish_reason`，Anthropic 族读 `stop_reason`（`max_tokens` 归一化为 `length`）；网关经 OpenAI 字段发出的 `max_tokens` 同样归一化；删除 Python 惯用名 `generation_info` 死代码；新增 last-write-wins 测试（中间工具轮截断 + 最终轮正常 ⇒ 不提示）。
+6. **已知遗留**：`tests/ToolRegistry.test.mjs` 一个先于本分支的断言过时（`get_current_time` 工具未进期望数组），与本迁移无关，未修。
+
+---
+
 ### Task 0: 安装依赖
 
 **Files:** 无（环境准备）
