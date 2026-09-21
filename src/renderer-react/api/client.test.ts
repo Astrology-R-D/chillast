@@ -9,7 +9,7 @@ import {
 } from './client';
 import { CHART_DESCRIPTORS } from '../features/charts/catalog';
 import type {
-  ChineseCityRaw, IpcResult, LocationResolution, Profile, ProfileSaveInput, ResolveLocationInput, WesternCityRaw,
+  AiSettingsInput, ChineseCityRaw, IpcResult, LocationResolution, Profile, ProfileSaveInput, ResolveLocationInput, WesternCityRaw,
 } from './contracts';
 
 const birthData = {
@@ -424,5 +424,76 @@ describe('AI chart context boundary', () => {
     expect(setContext).toHaveBeenCalledWith(context);
     api.ai.setContext = () => Promise.resolve({ ok: true } as never);
     await expect(apiClient.setAiChartContext(null)).rejects.toThrow('未知错误');
+  });
+});
+
+describe('AI settings client', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test('catalog providers and models are validated on the way in', async () => {
+    installApi({
+      ai: {
+        catalog: {
+          providers: () => ok([
+            { key: 'deepseek', label: 'DeepSeek', catalogId: 'deepseek', needsKey: true, modelCount: 4 },
+          ]),
+          models: () => ok([
+            { id: 'deepseek-v4-flash', name: 'V4 Flash', limitContext: 1000000, limitOutput: 384000, costInput: 0.15, costOutput: 0.6, releaseDate: '2026-09-10' },
+          ]),
+        },
+      } as unknown as MystApi['ai'],
+    });
+    const providers = await apiClient.getAiCatalogProviders();
+    expect(providers[0].key).toBe('deepseek');
+    const models = await apiClient.getAiCatalogModels('deepseek');
+    expect(models[0].limitOutput).toBe(384000);
+  });
+
+  test('malformed catalog data throws instead of leaking to the UI', async () => {
+    installApi({
+      ai: {
+        catalog: { providers: () => ok([{ key: 1 }]), models: () => ok([]) },
+      } as unknown as MystApi['ai'],
+    });
+    await expect(apiClient.getAiCatalogProviders()).rejects.toThrow('目录数据无效');
+  });
+
+  test('configure and test pass the draft settings through and unwrap the envelope', async () => {
+    const configure = vi.fn(() => ok({}));
+    const testWithSettings = vi.fn(() => ok({ ok: true } as never));
+    installApi({ ai: { configure, testWithSettings } as unknown as MystApi['ai'] });
+    const draft: AiSettingsInput = { provider: 'deepseek', model: 'deepseek-v4-flash', temperature: 0.7, maxTokens: 4096 };
+    await apiClient.configureAi(draft);
+    await apiClient.testAiSettings(draft);
+    expect(configure).toHaveBeenCalledWith(draft);
+    expect(testWithSettings).toHaveBeenCalledWith(draft);
+  });
+
+  test('knowledge, tools, mcp and session calls unwrap typed results', async () => {
+    const knowledge = {
+      list: () => ok([{ id: 'a.md', name: 'a.md', source: 'builtin', importedAt: '2026-01-01T00:00:00.000Z' }]),
+      import: () => ok({ count: 2 }),
+      remove: () => ok({ removed: true }),
+    };
+    const tools = {
+      describe: () => ok([{ id: 'kb', category: 'knowledge', enabled: true, ready: true, tools: [{ name: 'search_knowledge', description: '检索' }] }]),
+      setProviderEnabled: () => ok({ ok: true }),
+    };
+    const mcp = { list: () => ok({ servers: {}, toolCount: 0, connected: false }), save: () => ok({ ok: true }) };
+    const sessions = {
+      list: () => ok([{ id: 's1', title: null, messages: [{ role: 'user', content: 'hi' }] }]),
+      rename: () => ok({ ok: true }),
+      generateTitle: () => ok({ title: '新标题' }),
+      delete: () => ok(true),
+    };
+    installApi({ ai: { knowledge, tools, mcp, sessions } as unknown as MystApi['ai'] });
+    expect((await apiClient.listKnowledgeDocs())[0].name).toBe('a.md');
+    expect((await apiClient.importKnowledgeDocs(['x.md'])).count).toBe(2);
+    expect(await apiClient.removeKnowledgeDoc('a.md')).toBe(true);
+    expect((await apiClient.describeAiToolProviders())[0].id).toBe('kb');
+    expect((await apiClient.listAiSessions())[0].id).toBe('s1');
+    expect((await apiClient.regenerateAiSessionTitle('s1')).title).toBe('新标题');
   });
 });

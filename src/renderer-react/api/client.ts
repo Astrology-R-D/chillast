@@ -1,11 +1,18 @@
 import type {
+  AiCatalogModel,
+  AiCatalogProvider,
+  AiMcpInfo,
+  AiSessionSummary,
+  AiSettingsInput,
   AiStatus,
+  AiToolProviderDescriptor,
   AppConfig,
   BirthData,
   ChineseCityRaw,
   CitySearchResult,
   CloseDecision,
   IpcResult,
+  KnowledgeDoc,
   LocaleDictionary,
   LocationResolution,
   Profile,
@@ -139,6 +146,44 @@ export function parseAiStatus(value: unknown): AiStatus {
     maxTokens: status.maxTokens,
     knowledgeDocCount: status.knowledgeDocCount,
   } as AiStatus;
+}
+
+function parseAiCatalogProviders(value: unknown): AiCatalogProvider[] {
+  if (!Array.isArray(value)) throw new Error('目录数据无效');
+  return value.map((entry): AiCatalogProvider => {
+    if (!isRecord(entry)
+      || typeof entry.key !== 'string' || !entry.key
+      || typeof entry.label !== 'string'
+      || typeof entry.needsKey !== 'boolean'
+      || typeof entry.modelCount !== 'number') throw new Error('目录数据无效');
+    return {
+      key: entry.key,
+      label: entry.label,
+      catalogId: typeof entry.catalogId === 'string' ? entry.catalogId : null,
+      needsKey: entry.needsKey,
+      modelCount: entry.modelCount,
+    };
+  });
+}
+
+function parseAiCatalogModels(value: unknown): AiCatalogModel[] {
+  if (!Array.isArray(value)) throw new Error('目录数据无效');
+  return value.map((entry): AiCatalogModel => {
+    if (!isRecord(entry)
+      || typeof entry.id !== 'string' || !entry.id
+      || typeof entry.name !== 'string'
+      || !isFiniteNumber(entry.limitContext) || !isFiniteNumber(entry.limitOutput)
+      || !isFiniteNumber(entry.costInput) || !isFiniteNumber(entry.costOutput)) throw new Error('目录数据无效');
+    return {
+      id: entry.id,
+      name: entry.name,
+      limitContext: entry.limitContext,
+      limitOutput: entry.limitOutput,
+      costInput: entry.costInput,
+      costOutput: entry.costOutput,
+      releaseDate: typeof entry.releaseDate === 'string' ? entry.releaseDate : '',
+    };
+  });
 }
 
 export function unwrap<T>(result: unknown): T {
@@ -316,6 +361,47 @@ export const apiClient = {
   ),
   getAiStatus: async (): Promise<AiStatus> =>
     parseAiStatus(await invoke<unknown>((api) => api.ai.status())),
+  getAiCatalogProviders: async (): Promise<AiCatalogProvider[]> =>
+    parseAiCatalogProviders(await invoke<unknown>((api) => api.ai.catalog.providers())),
+  getAiCatalogModels: async (providerKey: string): Promise<AiCatalogModel[]> =>
+    parseAiCatalogModels(await invoke<unknown>((api) => api.ai.catalog.models(providerKey))),
+  configureAi: (settings: AiSettingsInput): Promise<unknown> =>
+    invoke<unknown>((api) => api.ai.configure(settings)),
+  testAiSettings: (settings: AiSettingsInput): Promise<unknown> =>
+    invoke<unknown>((api) => api.ai.testWithSettings(settings)),
+  listKnowledgeDocs: async (): Promise<KnowledgeDoc[]> => {
+    const value = await invoke<unknown>((api) => api.ai.knowledge.list());
+    if (!Array.isArray(value)) throw new Error('知识库数据无效');
+    return value as KnowledgeDoc[];
+  },
+  importKnowledgeDocs: (filePaths: string[]): Promise<{ count: number }> =>
+    invoke<{ count: number }>((api) => api.ai.knowledge.import(filePaths)),
+  removeKnowledgeDoc: async (docId: string): Promise<boolean> => {
+    // 信封 data 实际形状是 { removed: boolean }（myst-api.d.ts 已按运行时修正）
+    const value = await invoke<{ removed: boolean }>((api) => api.ai.knowledge.remove(docId));
+    return value.removed ?? false;
+  },
+  describeAiToolProviders: async (): Promise<AiToolProviderDescriptor[]> => {
+    const value = await invoke<unknown>((api) => api.ai.tools.describe());
+    if (!Array.isArray(value)) throw new Error('工具数据无效');
+    return value as AiToolProviderDescriptor[];
+  },
+  setAiToolProviderEnabled: (id: string, enabled: boolean): Promise<unknown> =>
+    invoke<unknown>((api) => api.ai.tools.setProviderEnabled(id, enabled)),
+  listAiMcp: (): Promise<AiMcpInfo> => invoke<AiMcpInfo>((api) => api.ai.mcp.list()),
+  saveAiMcpServers: (servers: AiMcpInfo['servers']): Promise<unknown> =>
+    invoke<unknown>((api) => api.ai.mcp.save(servers)),
+  listAiSessions: async (): Promise<AiSessionSummary[]> => {
+    const value = await invoke<unknown>((api) => api.ai.sessions.list());
+    if (!Array.isArray(value)) throw new Error('会话数据无效');
+    return value as AiSessionSummary[];
+  },
+  renameAiSession: (id: string, title: string): Promise<unknown> =>
+    invoke<unknown>((api) => api.ai.sessions.rename(id, title)),
+  regenerateAiSessionTitle: (id: string): Promise<{ title: string }> =>
+    invoke<{ title: string }>((api) => api.ai.sessions.generateTitle(id)),
+  deleteAiSession: (id: string): Promise<boolean> =>
+    invoke<boolean>((api) => api.ai.sessions.delete(id)),
   setAiChartContext: (context: WesternChartAiContext | null): Promise<unknown> =>
     invoke<unknown>((api) => api.ai.setContext(context)),
   listProfiles: async (): Promise<Profile[]> => {
