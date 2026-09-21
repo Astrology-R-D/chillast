@@ -338,7 +338,7 @@ class AiService {
     if (!chunk || typeof chunk !== 'object') return null;
     const meta = chunk.response_metadata || null;
     const finish = meta && meta.finish_reason;
-    if (finish) return String(finish);
+    if (finish) return finish === 'max_tokens' ? 'length' : String(finish);
     const stop = (meta && meta.stop_reason)
       || (chunk.additional_kwargs && chunk.additional_kwargs.stop_reason);
     if (stop) return stop === 'max_tokens' ? 'length' : String(stop);

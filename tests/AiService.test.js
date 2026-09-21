@@ -150,6 +150,23 @@ function runAiTests(testFn) {
     assert.ok(!events.some((e) => e.type === 'truncated'), 'final turn stop must win over intermediate length');
     assert.equal(events[events.length - 1].type, 'done');
   });
+
+  testFn('gateway-mapped finish_reason=max_tokens through the openai field also truncates', async () => {
+    const AiService = require('../src/core/ai/AiService');
+    const svc = new AiService({}, {});
+    svc._configured = true;
+    svc._chainFactory = {
+      async buildInterpretStream() {
+        async function* stream() {
+          yield { content: 'x', response_metadata: { finish_reason: 'max_tokens' } };
+        }
+        return stream();
+      },
+    };
+    const events = [];
+    for await (const ev of svc.interpret({}, { sessionId: 't' })) events.push(ev);
+    assert.ok(events.some((e) => e.type === 'truncated'));
+  });
 }
 
 module.exports = { runAiTests };
