@@ -380,6 +380,13 @@ export class AiSidebar {
     }
   }
 
+  /** Standalone truncation notice — never injected into the markdown body. */
+  _showTruncationNotice() {
+    if (!this._aiTurnEl) return;
+    this._aiTurnEl.appendChild(h('div', { class: 'chat-truncated-notice' }, t('ai.truncated')));
+    this._scrollToBottom();
+  }
+
   _finishStreaming() {
     // Settle any cards still "running" (e.g. on error/stop).
     if (this._aiTurnEl) {
@@ -418,6 +425,8 @@ export class AiSidebar {
     window.mystApi.ai.onToken(({ type, data }) => {
       if (type === 'token') {
         this._appendToken(data);
+      } else if (type === 'truncated') {
+        this._showTruncationNotice();
       } else if (type === 'tool-call') {
         if (data.status === 'calling') this._addToolCard(data.tool);
         else if (data.status === 'done') this._completeToolCard(data.tool);
