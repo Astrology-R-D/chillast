@@ -43,6 +43,12 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
     ai: {
       status: () => ok({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
       initStatus: () => ok(null), setContext: () => ok(null), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
+      configure: () => ok({ ok: true }), testWithSettings: () => ok({ ok: true }),
+      catalog: { providers: () => ok([]), models: () => ok([]) },
+      knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok(true) },
+      tools: { describe: () => ok([]), setProviderEnabled: () => ok({ ok: true }) },
+      mcp: { list: () => ok({ servers: {}, toolCount: 0, connected: false }), save: () => ok({ ok: true }) },
+      sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false) },
     },
     ...overrides,
   };
@@ -113,7 +119,7 @@ test('accesses mystApi when a request is made rather than at module load', async
       setContext: () => ok(null),
       onStatusChanged: () => () => {},
       onInitProgress: () => () => {},
-    },
+    } as unknown as MystApi['ai'],
   });
 
   await expect(apiClient.getConfig()).resolves.toMatchObject({ locale: 'zh' });
@@ -286,7 +292,7 @@ test('getAiStatus rejects malformed successful IPC data', async () => {
       setContext: () => ok(null),
       onStatusChanged: () => () => {},
       onInitProgress: () => () => {},
-    },
+    } as unknown as MystApi['ai'],
   });
 
   await expect(apiClient.getAiStatus()).rejects.toThrow('AI 状态数据无效');

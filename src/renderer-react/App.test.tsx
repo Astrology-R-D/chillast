@@ -79,6 +79,31 @@ function installApi({
       initStatus: vi.fn().mockResolvedValue({ ok: true, data: null }),
       onStatusChanged: vi.fn(() => () => {}),
       onInitProgress: vi.fn(() => () => {}),
+      configure: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      testWithSettings: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      catalog: {
+        providers: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        models: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      },
+      knowledge: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        import: vi.fn().mockResolvedValue({ ok: true, data: { count: 0 } }),
+        remove: vi.fn().mockResolvedValue({ ok: true, data: false }),
+      },
+      tools: {
+        describe: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        setProviderEnabled: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      },
+      mcp: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: { servers: {}, toolCount: 0, connected: false } }),
+        save: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      },
+      sessions: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        rename: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+        generateTitle: vi.fn().mockResolvedValue({ ok: true, data: { title: '' } }),
+        delete: vi.fn().mockResolvedValue({ ok: true, data: false }),
+      },
     },
   };
   return { config, locale };
