@@ -45,7 +45,7 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
       initStatus: () => ok(null), setContext: () => ok(null), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
       configure: () => ok({ ok: true }), testWithSettings: () => ok({ ok: true }),
       catalog: { providers: () => ok([]), models: () => ok([]) },
-      knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok(true) },
+      knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok({ removed: true }) },
       tools: { describe: () => ok([]), setProviderEnabled: () => ok({ ok: true }) },
       mcp: { list: () => ok({ servers: {}, toolCount: 0, connected: false }), save: () => ok({ ok: true }) },
       sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false) },

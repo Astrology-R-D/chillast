@@ -35,7 +35,7 @@ declare global {
     knowledge: {
       list(): Promise<IpcResult<KnowledgeDoc[]>>;
       import(filePaths: string[]): Promise<IpcResult<{ count: number }>>;
-      remove(docId: string): Promise<IpcResult<boolean>>;
+      remove(docId: string): Promise<IpcResult<{ removed: boolean }>>;
     };
     tools: {
       describe(): Promise<IpcResult<AiToolProviderDescriptor[]>>;
