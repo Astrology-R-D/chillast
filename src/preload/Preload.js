@@ -144,6 +144,10 @@ contextBridge.exposeInMainWorld('mystApi', {
     testConnection: () => invoke('ai:testConnection'),
     testWithSettings: (settings) => invoke('ai:testWithSettings', settings),
     providers: () => invoke('ai:providers'),
+    catalog: {
+      providers: () => invoke('ai:catalog:providers'),
+      models: (providerKey) => invoke('ai:catalog:models', providerKey),
+    },
     setContext: (context) => invoke('ai:setContext', assertAiContext(context)),
     onToken: (callback) => ipcRenderer.on('ai:token', (_e, data) => callback(data)),
     onDone: (callback) => ipcRenderer.on('ai:done', (_e, data) => callback(data)),

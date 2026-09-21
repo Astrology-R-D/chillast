@@ -78,6 +78,8 @@ class IpcRouter {
         const ModelProvider = require('../core/ai/ModelProvider');
         return ModelProvider.listProviders();
       });
+      this._handle('ai:catalog:providers', () => this.ai.getCatalogProviders());
+      this._handle('ai:catalog:models', (_e, providerKey) => this.ai.getCatalogModels(providerKey));
       this._handle('ai:configure', async (_e, settings) => {
         const { app, safeStorage } = require('electron');
         const fs = require('fs');
