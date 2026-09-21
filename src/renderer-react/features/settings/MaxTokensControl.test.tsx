@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
 import { MaxTokensControl } from './MaxTokensControl';
 
@@ -34,4 +35,20 @@ test('blur after invalid input restores the last valid value', () => {
   fireEvent.change(number, { target: { value: '' } }); // mid-typing: ignored
   fireEvent.blur(number);
   expect(number.value).toBe('4096');
+});
+
+test('char-by-char typing is not fought by the controlled echo; blur commits the intended value', () => {
+  function EchoParent() {
+    const [v, setV] = useState(4096);
+    return <MaxTokensControl value={v} max={262144} onChange={setV} limitLabel="x" ariaLabel="最大 Token 数" />;
+  }
+  render(<EchoParent />);
+  const number = screen.getByRole('spinbutton', { name: '最大 Token 数' }) as HTMLInputElement;
+  fireEvent.change(number, { target: { value: '1' } });
+  fireEvent.change(number, { target: { value: '10' } });
+  fireEvent.change(number, { target: { value: '102' } });
+  fireEvent.change(number, { target: { value: '1024' } });
+  expect(number.value).toBe('1024'); // draft preserved through typing
+  fireEvent.blur(number);
+  expect(number.value).toBe('1024'); // committed value displayed
 });

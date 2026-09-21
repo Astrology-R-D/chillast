@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 
 interface MaxTokensControlProps {
   value: number;
@@ -11,12 +11,15 @@ interface MaxTokensControlProps {
 }
 
 /**
- * Slider + number-input combo for maxTokens (spec §4). Both controls share one
- * value; typed input is clamped to [min, max] on change, and blur restores the
- * last valid value so half-typed or invalid states never reach the form state.
+ * Slider + number-input combo for maxTokens (spec §4). While the number input
+ * is focused it displays a local draft (so char-by-char typing is never fought
+ * by the controlled echo); each well-formed keystroke reports the clamped
+ * value upstream, and blur drops the draft so the input snaps to the committed
+ * value — invalid or half-typed states never reach the form state.
  */
 export function MaxTokensControl({ value, max, min = 512, step = 512, limitLabel, ariaLabel, onChange }: MaxTokensControlProps) {
   const id = useId();
+  const [draft, setDraft] = useState<string | null>(null); // non-null while the number input is focused
   const clamp = (candidate: number) => Math.max(min, Math.min(candidate, max));
   return (
     <div className="maxtokens">
@@ -29,14 +32,18 @@ export function MaxTokensControl({ value, max, min = 512, step = 512, limitLabel
       <input
         id={`${id}-number`} type="number" aria-label={ariaLabel}
         className="maxtokens__number"
-        min={min} max={max} value={value}
+        min={min} max={max}
+        value={draft ?? String(value)}
+        onFocus={() => setDraft(String(value))}
         onChange={(event) => {
-          const raw = event.target.value.trim();
-          if (raw === '') return; // mid-typing; normalize on blur
-          const parsed = Number(raw);
+          const raw = event.target.value;
+          setDraft(raw);
+          const trimmed = raw.trim();
+          if (trimmed === '') return; // mid-typing; committed value stays
+          const parsed = Number(trimmed);
           if (Number.isFinite(parsed)) onChange(clamp(parsed));
         }}
-        onBlur={(event) => { event.target.value = String(value); }}
+        onBlur={() => setDraft(null)}
       />
       <span className="maxtokens__value">{value}</span>
       <span className="maxtokens__limit">{limitLabel}</span>
