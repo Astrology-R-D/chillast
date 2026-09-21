@@ -745,7 +745,8 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
   const modelList = models.data ?? [];
   const selectedModel = modelList.find((m) => m.id === model);
   const modelLimit = selectedModel ? selectedModel.limitOutput : FALLBACK_MAX_TOKENS;
-  const effectiveMaxTokens = maxTokens ?? modelLimit;
+  // 切到上限更小的模型时，已存值 clamp 到新上限（避免滑条/数字框上下文不一致）
+  const effectiveMaxTokens = Math.min(maxTokens ?? modelLimit, modelLimit);
 
   const modelOptions = modelList.map((m) => ({
     value: m.id,
