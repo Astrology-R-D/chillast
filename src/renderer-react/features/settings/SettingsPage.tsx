@@ -56,7 +56,8 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
       <ToolsAndMcpSection
         tools={tools.data}
         mcp={mcp.data}
-        onChanged={() => refresh([aiQueryKeys.tools, aiQueryKeys.mcp])}
+        onToolsChanged={() => refresh([aiQueryKeys.tools])}
+        onMcpChanged={() => refresh([aiQueryKeys.mcp])}
       />
       <KnowledgeSection docs={knowledge.data} onChanged={() => refresh([aiQueryKeys.knowledge, aiQueryKeys.status])} />
       <SessionsSection sessions={sessions.data} onChanged={() => refresh([aiQueryKeys.sessions])} />

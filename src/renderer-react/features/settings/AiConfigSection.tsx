@@ -80,7 +80,7 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
       temperature,
       maxTokens: effectiveMaxTokens,
     };
-    if (baseUrl) settings.baseUrl = baseUrl;
+    settings.baseUrl = baseUrl; // 显式带上空值——否则主进程合并会保留旧地址，无法真正清空
     if (apiKey) settings.apiKey = apiKey;
     return settings;
   }

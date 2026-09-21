@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { KnowledgeDoc } from '../../api/contracts';
 import { apiClient } from '../../api/client';
 import { useI18n } from '../../i18n/I18nProvider';
@@ -12,6 +12,7 @@ interface KnowledgeSectionProps {
 export function KnowledgeSection({ docs, onChanged }: KnowledgeSectionProps) {
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [error, setError] = useState('');
   const builtin = (docs ?? []).filter((d) => d.source === 'builtin');
   const user = (docs ?? []).filter((d) => d.source === 'user');
 
@@ -23,18 +24,20 @@ export function KnowledgeSection({ docs, onChanged }: KnowledgeSectionProps) {
       .map((file) => (file as File & { path?: string }).path)
       .filter((p): p is string => !!p);
     if (!paths.length) return;
+    setError('');
     try {
       await apiClient.importKnowledgeDocs(paths);
       onChanged();
-    } catch { /* 主进程信封错误经 apiClient 抛出；静默避免打断列表操作 */ }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }
 
   async function onRemove(doc: KnowledgeDoc) {
     if (!window.confirm(t('settings.removeConfirm', { name: doc.name }))) return;
+    setError('');
     try {
       await apiClient.removeKnowledgeDoc(doc.id);
       onChanged();
-    } catch { /* best-effort */ }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }
 
   return (
@@ -64,6 +67,7 @@ export function KnowledgeSection({ docs, onChanged }: KnowledgeSectionProps) {
       <div className="settings-row">
         <button type="button" onClick={() => fileInputRef.current?.click()}>{t('settings.importDocs')}</button>
       </div>
+      {error ? <span className="settings-feedback" data-kind="error">{error}</span> : null}
     </section>
   );
 }

@@ -6,11 +6,12 @@ import { useI18n } from '../../i18n/I18nProvider';
 interface ToolsAndMcpSectionProps {
   tools: AiToolProviderDescriptor[] | undefined;
   mcp: AiMcpInfo | undefined;
-  onChanged(): void;
+  onToolsChanged(): void;
+  onMcpChanged(): void;
 }
 
 /** 工具开关 + MCP 增删改（行为对齐老 SettingsView：启用/保存均需 confirm）。 */
-export function ToolsAndMcpSection({ tools, mcp, onChanged }: ToolsAndMcpSectionProps) {
+export function ToolsAndMcpSection({ tools, mcp, onToolsChanged, onMcpChanged }: ToolsAndMcpSectionProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<Record<string, AiMcpInfo['servers'][string]>>({});
   const [name, setName] = useState('');
@@ -27,7 +28,7 @@ export function ToolsAndMcpSection({ tools, mcp, onChanged }: ToolsAndMcpSection
   async function toggleProvider(id: string, enabled: boolean) {
     try {
       await apiClient.setAiToolProviderEnabled(id, enabled);
-      onChanged();
+      onToolsChanged();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -60,7 +61,7 @@ export function ToolsAndMcpSection({ tools, mcp, onChanged }: ToolsAndMcpSection
     if (Object.values(draft).some((c) => c && c.enabled) && !window.confirm(t('settings.mcpSaveConfirm'))) return;
     try {
       await apiClient.saveAiMcpServers(draft);
-      onChanged();
+      onMcpChanged();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }

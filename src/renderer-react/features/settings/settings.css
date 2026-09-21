@@ -123,3 +123,18 @@
 
 .settings-feedback[data-kind='error'] { color: var(--danger); }
 .settings-feedback[data-kind='success'] { color: var(--success); }
+
+.settings-section button {
+  padding-inline: 12px;
+  min-height: 28px;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.settings-section button:disabled {
+  cursor: default;
+  opacity: .6;
+}
