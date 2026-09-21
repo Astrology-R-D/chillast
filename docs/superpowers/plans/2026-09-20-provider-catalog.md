@@ -743,17 +743,25 @@ git commit -m "feat(ai): catalog service over models.dev snapshot/cache"
 ```js
 const { PROVIDER_WHITELIST } = require('../src/core/ai/ProviderCatalogWhitelist');
 
-function fakeCatalog(modelsByProvider = {}) {
+function fakeCatalog(modelsByProvider = {}, apiByProvider = {}) {
   return {
     getModel(providerKey, modelId) {
       const m = (modelsByProvider[providerKey] || {})[modelId];
       return m ? { limitOutput: m.limitOutput } : null;
     },
+    getApi(providerKey) {
+      return apiByProvider[providerKey] || null;
+    },
   };
 }
 
+const DEEPSEEK_CATALOG = fakeCatalog(
+  { deepseek: { 'deepseek-v4-flash': { limitOutput: 384000 } } },
+  { deepseek: 'https://api.deepseek.com' },
+);
+
 test('catalog-driven maxTokens: model limit wins when user sets nothing', async () => {
-  const provider = new ModelProvider({ load: fakeLoader(), catalog: fakeCatalog({ deepseek: { 'deepseek-v4-flash': { limitOutput: 384000 } } }) });
+  const provider = new ModelProvider({ load: fakeLoader(), catalog: DEEPSEEK_CATALOG });
   await provider.configure({ provider: 'deepseek', model: 'deepseek-v4-flash', apiKey: 'key' });
   assert.equal(provider.chatModel().options.maxTokens, 384000);
   assert.equal(provider.chatModel().options.configuration.baseURL, 'https://api.deepseek.com');
