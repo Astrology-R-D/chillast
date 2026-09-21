@@ -125,7 +125,6 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
             setProvider(event.target.value);
             setModel('');
             setModelIsCustom(false);
-            setMaxTokens(null); // re-resolve against the next provider's models
             setPendingAutoSelect(true); // 目录到货后选中第一个模型（对齐老层）
           }}
         >
@@ -142,7 +141,6 @@ export function AiConfigSection({ status, providers, onSaved }: AiConfigSectionP
               if (event.target.value === CUSTOM_MODEL) { setModelIsCustom(true); setModel(''); return; }
               setModelIsCustom(false);
               setModel(event.target.value);
-              setMaxTokens(null); // follow the newly selected model's limit
             }}
           >
             {modelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

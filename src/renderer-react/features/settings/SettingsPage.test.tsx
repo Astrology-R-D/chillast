@@ -97,3 +97,18 @@ test('switching provider refetches models and re-clamps maxTokens to the next li
   await waitFor(() => expect(catalog.models).toHaveBeenCalledWith('ollama'));
   expect(await screen.findByText(locale.settings.maxTokensLimit.replace('{{count}}', '65536'))).toBeInTheDocument();
 });
+
+test('switching provider preserves the stored maxTokens, clamped to the new limit', async () => {
+  const { api } = setup();
+  await screen.findByRole('heading', { name: locale.settings.aiConfig });
+  // 已存 4096（status.maxTokens）；切 provider 后保留 4096，而非采用新模型完整上限
+  await screen.findByRole('option', { name: 'Ollama (本地)' }); // providers list committed（镜像上一条 test 的等待方式）
+  await userEvent.selectOptions(await screen.findByLabelText(locale.settings.provider), 'ollama');
+  await waitFor(() => expect(api.ai.catalog.models).toHaveBeenCalledWith('ollama'));
+  const save = await screen.findByRole('button', { name: locale.settings.save });
+  await waitFor(() => expect(save).toBeEnabled()); // 目录到货 auto-select 首个模型后 save 才可用
+  await userEvent.click(save);
+  await waitFor(() => expect(api.ai.configure).toHaveBeenCalled());
+  const draft = (api.ai.configure as ReturnType<typeof vi.fn>).mock.calls[0][0];
+  expect(draft.maxTokens).toBe(4096); // 用户偏好跨 provider 保留（Math.min 已按新上限 clamp）
+});
