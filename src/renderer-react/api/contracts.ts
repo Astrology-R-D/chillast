@@ -160,6 +160,68 @@ export interface AiStatus {
   knowledgeDocCount: number;
 }
 
+export interface AiCatalogProvider {
+  key: string;
+  label: string;
+  catalogId: string | null;
+  needsKey: boolean;
+  modelCount: number;
+}
+
+export interface AiCatalogModel {
+  id: string;
+  name: string;
+  limitContext: number;
+  limitOutput: number;
+  costInput: number;
+  costOutput: number;
+  releaseDate: string;
+}
+
+export interface AiToolProviderDescriptor {
+  id: string;
+  category: string;
+  enabled: boolean;
+  ready: boolean;
+  tools: Array<{ name: string; description: string }>;
+}
+
+export interface AiMcpInfo {
+  servers: Record<string, {
+    enabled?: boolean;
+    transport?: string;
+    command?: string;
+    args?: string[];
+    url?: string;
+  }>;
+  toolCount: number;
+  connected: boolean;
+}
+
+export interface KnowledgeDoc {
+  id: string;
+  name: string;
+  source: string;
+  importedAt: string;
+}
+
+export interface AiSessionSummary {
+  id: string;
+  title: string | null;
+  messages: Array<{ role: string; content: string }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AiSettingsInput {
+  provider: string;
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+  baseUrl?: string;
+  apiKey?: string;
+}
+
 export type AiInitProgress =
   | { phase: 'preparing'; total?: number }
   | { phase: 'model'; percent?: number; file?: string }

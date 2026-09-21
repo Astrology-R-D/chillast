@@ -1,8 +1,15 @@
 import type {
+  AiCatalogModel,
+  AiCatalogProvider,
   AiInitProgress,
+  AiMcpInfo,
+  AiSessionSummary,
+  AiSettingsInput,
+  AiToolProviderDescriptor,
   AppConfig,
   CloseDecision,
   IpcResult,
+  KnowledgeDoc,
   LocaleDictionary,
   LocationResolution,
   Profile,
@@ -19,6 +26,31 @@ declare global {
     onStatusChanged(callback: (status: unknown) => void): () => void;
     onInitProgress(callback: (progress: AiInitProgress) => void): () => void;
     setContext(context: WesternChartAiContext | null): Promise<IpcResult<unknown>>;
+    configure(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
+    testWithSettings(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
+    catalog: {
+      providers(): Promise<IpcResult<AiCatalogProvider[]>>;
+      models(providerKey: string): Promise<IpcResult<AiCatalogModel[]>>;
+    };
+    knowledge: {
+      list(): Promise<IpcResult<KnowledgeDoc[]>>;
+      import(filePaths: string[]): Promise<IpcResult<{ count: number }>>;
+      remove(docId: string): Promise<IpcResult<boolean>>;
+    };
+    tools: {
+      describe(): Promise<IpcResult<AiToolProviderDescriptor[]>>;
+      setProviderEnabled(id: string, enabled: boolean): Promise<IpcResult<unknown>>;
+    };
+    mcp: {
+      list(): Promise<IpcResult<AiMcpInfo>>;
+      save(servers: AiMcpInfo['servers']): Promise<IpcResult<unknown>>;
+    };
+    sessions: {
+      list(): Promise<IpcResult<AiSessionSummary[]>>;
+      rename(id: string, title: string): Promise<IpcResult<unknown>>;
+      generateTitle(id: string): Promise<IpcResult<{ title: string }>>;
+      delete(id: string): Promise<IpcResult<boolean>>;
+    };
   }
 
   interface MystApi {
