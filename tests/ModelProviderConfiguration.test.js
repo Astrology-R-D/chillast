@@ -170,6 +170,10 @@ test('anthropic-engine providers (minimax) get clientOptions.baseURL with /v1 st
 test('every whitelist engine is present in ENGINE_MAP (drift guard)', async () => {
   const ModelProvider = require('../src/core/ai/ModelProvider');
   const { PROVIDER_WHITELIST } = require('../src/core/ai/ProviderCatalogWhitelist');
+  const { ENGINE_MAP } = require('../src/core/ai/ModelProvider');
+  for (const entry of PROVIDER_WHITELIST) {
+    assert.ok(ENGINE_MAP[entry.engine], `ENGINE_MAP missing engine '${entry.engine}' (whitelist key ${entry.key})`);
+  }
   for (const entry of PROVIDER_WHITELIST) {
     const provider = new ModelProvider({ load: fakeLoader(), catalog: fakeCatalog() });
     // eslint-disable-next-line no-await-in-loop

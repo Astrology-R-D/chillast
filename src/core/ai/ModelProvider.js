@@ -184,3 +184,4 @@ class ModelProvider {
 }
 
 module.exports = ModelProvider;
+module.exports.ENGINE_MAP = ENGINE_MAP;
