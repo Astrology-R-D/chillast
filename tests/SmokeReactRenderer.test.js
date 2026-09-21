@@ -232,3 +232,9 @@ test('package exposes canonical source and release chart verification scripts', 
   assert.match(packageJson.scripts['verify:charts'], /^npm run rebuild:node/);
   assert.match(packageJson.scripts['verify:charts'], /npm run rebuild:electron/);
 });
+
+test('React smoke verifies the migrated settings route', () => {
+  assert.match(source, /settings route/);
+  assert.match(source, /settingsVerified/);
+  assert.match(source, /workspace__placeholder/);
+});

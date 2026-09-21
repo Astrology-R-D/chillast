@@ -1083,6 +1083,19 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript(`document.querySelector('.profile-dialog__actions button:last-child').click()`);
     await poll(win, 'delete duplicate', () => ({ ready: document.querySelectorAll('.profile-row').length === 3 && !document.querySelector('.profile-dialog') }));
 
+    // Settings route smoke: placeholder gone, real settings sections render.
+    let settingsVerified = false;
+    settingsVerified = await poll(win, 'settings route', () => {
+      const nav = [...document.querySelectorAll('nav button')].find((b) => b.textContent.trim() === '设置');
+      if (!nav) return { ready: false };
+      nav.click();
+      const h1 = document.querySelector('#workspace-title');
+      const hasAiConfig = !!document.querySelector('[aria-labelledby="settings-ai-config"]');
+      const placeholderGone = !document.querySelector('.workspace__placeholder');
+      return { ready: !!(h1 && h1.textContent.includes('AI') && hasAiConfig && placeholderGone), value: true };
+    }).then(() => true).catch(() => false);
+    if (!settingsVerified) fail('settings route did not render the settings page');
+
     await win.webContents.executeJavaScript(`
       document.querySelectorAll('.shell-nav__button')[2].click();
       const selects = document.querySelectorAll('.workspace__appearance select');
