@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, test, vi } from 'vitest';
 import {
   deactivateChartAiContextOwner,
+  invalidateLatestChartAiContext,
+  latestChartAiContext,
   publishLatestChartAiContext,
   resetChartAiContextPublisherForTests,
   retryLatestChartAiContext,
+  subscribeChartAiContext,
 } from './chartAiContextPublisher';
 
 function deferred() {
@@ -105,4 +108,20 @@ describe('application-wide chart AI publisher', () => {
     a.resolve();
     await vi.waitFor(() => expect(send.mock.calls.map(([context]) => context?.resultId)).toEqual(['A', 'B']));
   });
+});
+
+test('latestChartAiContext exposes the newest intent and notifies subscribers', async () => {
+  resetChartAiContextPublisherForTests();
+  const context = { kind: 'western-chart', resultId: 'r9' } as never;
+  const notified: number[] = [];
+  expect(latestChartAiContext()).toBeNull();
+  const unsubscribe = subscribeChartAiContext(() => notified.push(1));
+  const send = vi.fn().mockResolvedValue(null);
+  publishLatestChartAiContext(Symbol('t'), context, send, () => {});
+  expect(latestChartAiContext()).toEqual(context);
+  expect(notified).toHaveLength(1);
+  unsubscribe();
+  invalidateLatestChartAiContext();
+  expect(latestChartAiContext()).toBeNull();
+  expect(notified).toHaveLength(1);
 });

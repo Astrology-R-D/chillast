@@ -16,8 +16,12 @@ let ownerIsActive = false;
 let queue: Promise<void> = Promise.resolve();
 let latestIntent: PublicationIntent | null = null;
 
+const contextListeners = new Set<() => void>();
+const notifyContextListeners = () => { for (const listener of contextListeners) listener(); };
+
 function enqueue(owner: symbol, isActive: boolean, context: WesternChartAiContext | null, send: Sender, status: Status): void {
   latestIntent = { owner, isActive, context, send, status };
+  notifyContextListeners();
   const currentGeneration = ++generation;
   activeOwner = owner;
   ownerIsActive = isActive;
@@ -60,4 +64,20 @@ export function resetChartAiContextPublisherForTests(): void {
   ownerIsActive = false;
   queue = Promise.resolve();
   latestIntent = null;
+}
+
+/** 最近一次上下文意图（含 null 清除）；ContextStrip 的数据源（spec §4）。 */
+export function latestChartAiContext(): WesternChartAiContext | null {
+  return latestIntent?.context ?? null;
+}
+
+export function subscribeChartAiContext(listener: () => void): () => void {
+  contextListeners.add(listener);
+  return () => { contextListeners.delete(listener); };
+}
+
+/** 用户显式清除：作废最新意图（retryLatestChartAiContext 随之失效），不发 IPC。 */
+export function invalidateLatestChartAiContext(): void {
+  latestIntent = null;
+  notifyContextListeners();
 }
