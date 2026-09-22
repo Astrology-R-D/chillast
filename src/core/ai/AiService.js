@@ -300,10 +300,20 @@ class AiService {
                 const t = this._msgType(m);
                 if (t === 'ai' && m.tool_calls && m.tool_calls.length) {
                   for (const tc of m.tool_calls) {
-                    yield { type: 'tool-call', data: { tool: tc.name, status: 'calling' } };
+                    yield { type: 'tool-call', data: {
+                      tool: tc.name, status: 'calling',
+                      argsDigest: this._digestArgs(tc.args),
+                      resultExcerpt: '',
+                      requiresConfirmation: false,
+                    } };
                   }
                 } else if (t === 'tool') {
-                  yield { type: 'tool-call', data: { tool: m.name, status: 'done' } };
+                  yield { type: 'tool-call', data: {
+                    tool: m.name, status: 'done',
+                    argsDigest: '',
+                    resultExcerpt: this._excerpt(m.content),
+                    requiresConfirmation: false,
+                  } };
                 }
               }
             }
@@ -343,6 +353,21 @@ class AiService {
       || (chunk.additional_kwargs && chunk.additional_kwargs.stop_reason);
     if (stop) return stop === 'max_tokens' ? 'length' : String(stop);
     return null;
+  }
+
+  /** Compact one-line digest of tool arguments (capped for the UI strip). */
+  _digestArgs(args) {
+    try {
+      const s = typeof args === 'string' ? args : JSON.stringify(args || {});
+      const flat = s.replace(/\s+/g, ' ').trim();
+      return flat.length > 120 ? `${flat.slice(0, 117)}…` : flat;
+    } catch (_) { return ''; }
+  }
+
+  /** Result excerpt for the expandable tool row (capped at ~200 chars). */
+  _excerpt(content) {
+    const text = this._extractText(content).replace(/\s+/g, ' ').trim();
+    return text.length > 200 ? `${text.slice(0, 197)}…` : text;
   }
 
   /** Normalize message content (string or content-part array) to text. */

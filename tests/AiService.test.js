@@ -167,6 +167,55 @@ function runAiTests(testFn) {
     for await (const ev of svc.interpret({}, { sessionId: 't' })) events.push(ev);
     assert.ok(events.some((e) => e.type === 'truncated'));
   });
+
+  testFn('chat tool-call events carry args digest and result excerpt', async () => {
+    const AiService = require('../src/core/ai/AiService');
+    const fakeEsm = {
+      load: async (pkg) => {
+        if (pkg === '@langchain/langgraph/prebuilt') {
+          return {
+            createReactAgent: () => ({
+              async *stream() {
+                yield ['updates', {
+                  agent: {
+                    messages: [
+                      { getType: () => 'ai', tool_calls: [{ name: 'search_knowledge', args: { query: '火星落宫' } }] },
+                    ],
+                  },
+                }];
+                yield ['updates', {
+                  tools: {
+                    messages: [
+                      { getType: () => 'tool', name: 'search_knowledge', content: '《行星落宫详解》：火星落第4宫……（长文）' },
+                    ],
+                  },
+                }];
+              },
+            }),
+          };
+        }
+        return {
+          HumanMessage: class { constructor(c) { this.content = c; } },
+          AIMessage: class { constructor(c) { this.content = c; } },
+          SystemMessage: class { constructor(c) { this.content = c; } },
+        };
+      },
+    };
+    const svc = new AiService({}, {}, null, { esm: fakeEsm });
+    svc._configured = true;
+    svc._registry = { getTools: async () => [] };
+    const events = [];
+    for await (const ev of svc.chat([{ role: 'user', content: '问' }], { sessionId: 't' })) events.push(ev);
+    const calling = events.find((e) => e.type === 'tool-call' && e.data.status === 'calling');
+    const done = events.find((e) => e.type === 'tool-call' && e.data.status === 'done');
+    assert.ok(calling, 'calling event exists');
+    assert.equal(calling.data.tool, 'search_knowledge');
+    assert.ok(calling.data.argsDigest.includes('火星落宫'), 'args digest carries the query');
+    assert.equal(calling.data.requiresConfirmation, false, 'reserved field present, always false today');
+    assert.ok(done, 'done event exists');
+    assert.ok(done.data.resultExcerpt.includes('火星落第4宫'), 'result excerpt carries content');
+    assert.ok(done.data.resultExcerpt.length <= 200, 'excerpt capped');
+  });
 }
 
 module.exports = { runAiTests };
