@@ -59,6 +59,10 @@ test('startChat registers fresh listeners, previews the user message, and accumu
   segments = aiStreamStore.getState().segments;
   expect(segments).toHaveLength(3);
   expect(segments[1]).toMatchObject({ kind: 'tool', event: { tool: 'search_knowledge', status: 'done', resultExcerpt: '《书》摘录' } });
+  // done 事件的 argsDigest 为空串，不得覆盖 calling 段的参数摘要
+  const mergedTool = segments[1];
+  if (mergedTool.kind !== 'tool') throw new Error('expected the merged segment to be a tool segment');
+  expect(mergedTool.event.argsDigest).toBe('q');
 
   api.emitToken({ sessionId: 's1', type: 'truncated', data: { reason: 'length' } });
   expect(aiStreamStore.getState().truncated).toBe(true);

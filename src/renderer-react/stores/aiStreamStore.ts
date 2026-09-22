@@ -128,7 +128,14 @@ export function createAiStreamStore(): StoreApi<AiStreamState> {
             for (let index = segments.length - 1; index >= 0; index -= 1) {
               const segment = segments[index];
               if (segment.kind === 'tool' && segment.event.tool === toolEvent.tool && segment.event.status === 'calling') {
-                segments[index] = { kind: 'tool', event: { ...segment.event, ...toolEvent } };
+                // done 事件只补状态与结果摘录；argsDigest 保留 calling 段的值
+                //（主进程 done 分支固定发 argsDigest: ''，直接 spread 会把它清掉）。
+                segments[index] = { kind: 'tool', event: {
+                  ...segment.event,
+                  status: toolEvent.status,
+                  resultExcerpt: toolEvent.resultExcerpt,
+                  requiresConfirmation: toolEvent.requiresConfirmation,
+                } };
                 break;
               }
             }
