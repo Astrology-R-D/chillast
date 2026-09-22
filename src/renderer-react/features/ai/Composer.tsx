@@ -12,9 +12,12 @@ export interface ComposerProps {
   statusChip?: string | null;
   onSend(text: string, attachments: ChatAttachment[]): void;
   onStop(): void;
+  /** 引用预填（ChatMode 的引用按钮驱动）；应用后由 onQuoteConsumed 清空。 */
+  quoteDraft?: string;
+  onQuoteConsumed?(): void;
 }
 
-export function Composer({ disabled, statusChip, onSend, onStop }: ComposerProps) {
+export function Composer({ disabled, statusChip, onSend, onStop, quoteDraft, onQuoteConsumed }: ComposerProps) {
   const { t } = useI18n();
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -24,6 +27,14 @@ export function Composer({ disabled, statusChip, onSend, onStop }: ComposerProps
   const active = useAiStreamStore((state) => state.active);
   const toolCalling = useAiStreamStore((state) => state.active
     && state.segments.some((segment) => segment.kind === 'tool' && segment.event.status === 'calling'));
+
+  const quoteAppliedRef = useRef('');
+  if (quoteDraft && quoteAppliedRef.current !== quoteDraft) {
+    quoteAppliedRef.current = quoteDraft;
+    setText((current) => (current ? `${current}\n\n${quoteDraft}` : quoteDraft));
+    onQuoteConsumed?.();
+  }
+
   const blocked = disabled || active;
 
   const autoGrow = () => {
