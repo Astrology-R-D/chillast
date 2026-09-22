@@ -73,9 +73,18 @@
       "node_modules/swisseph-v2/**"
     ],
     "extraResources": [
-      { "from": "assets", "to": "assets" },
-      { "from": "resources/models", "to": "models" },
-      { "from": "resources/vector-index", "to": "vector-index" }
+      {
+        "from": "assets",
+        "to": "assets"
+      },
+      {
+        "from": "resources/models",
+        "to": "models"
+      },
+      {
+        "from": "resources/vector-index",
+        "to": "vector-index"
+      }
     ],
     "directories": {
       "output": "release"
@@ -113,7 +122,9 @@
     "pdf-parse": "^1.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.9",
+    "remark-gfm": "^4.0.1",
     "swisseph-v2": "^1.0.0",
     "tz-lookup": "^6.1.24",
     "zod": "^3.25.76",
