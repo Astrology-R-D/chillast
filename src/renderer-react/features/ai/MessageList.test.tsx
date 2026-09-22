@@ -45,11 +45,12 @@ test('renders history through MessageItem and an empty state when there are no m
 });
 
 test('streams: local user preview, markdown text, tool cards, truncation, and done cleanup', () => {
+  // store 的 consumeStreamEvent 已把 done 合并进 calling 段（argsDigest 保留）——
+  // 夹具模拟合并后的真实 store 状态。
   aiStreamStore.setState({
     active: true, streamKind: 'chat', localUserMessage: { role: 'user', content: '流中问题', attachments: [] },
     segments: [
       { kind: 'text', content: '正在回答' },
-      { kind: 'tool', event: { tool: 'search_knowledge', status: 'calling', argsDigest: 'q=火星', resultExcerpt: '', requiresConfirmation: false } },
       { kind: 'tool', event: { tool: 'search_knowledge', status: 'done', argsDigest: 'q=火星', resultExcerpt: '《行星落宫》摘录', requiresConfirmation: false } },
     ],
     truncated: true,

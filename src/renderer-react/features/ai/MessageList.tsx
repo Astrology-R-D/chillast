@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 import type { AiSessionSummary } from '../../api/contracts';
-import { useAiStreamStore, type StreamSegment } from '../../stores/aiStreamStore';
+import { useAiStreamStore } from '../../stores/aiStreamStore';
 import { MarkdownMessage } from './MarkdownMessage';
 import { MessageItem } from './MessageItem';
 
@@ -36,33 +36,6 @@ export function MessageList({ messages, canRegenerate, onCopy, onQuote, onEditRe
       if (messages[index].role !== 'user') return index;
     }
     return -1;
-  })();
-
-  /** 兜底合并：同一工具 calling→done 原地补状态（与 store consumeStreamEvent 同款；
-   * 正常流在 store 已合并，此处兜底未经 store 事件通道、直接注入的 segments）。 */
-  const renderedSegments = (() => {
-    const merged: StreamSegment[] = [];
-    for (const segment of segments) {
-      if (segment.kind === 'tool' && segment.event.status === 'done') {
-        let mergedIntoCalling = false;
-        for (let index = merged.length - 1; index >= 0; index -= 1) {
-          const candidate = merged[index];
-          if (candidate.kind === 'tool' && candidate.event.tool === segment.event.tool && candidate.event.status === 'calling') {
-            merged[index] = { kind: 'tool', event: {
-              ...candidate.event,
-              status: segment.event.status,
-              resultExcerpt: segment.event.resultExcerpt,
-              requiresConfirmation: segment.event.requiresConfirmation,
-            } };
-            mergedIntoCalling = true;
-            break;
-          }
-        }
-        if (mergedIntoCalling) continue;
-      }
-      merged.push(segment);
-    }
-    return merged;
   })();
 
   useEffect(() => {
@@ -110,10 +83,10 @@ export function MessageList({ messages, canRegenerate, onCopy, onQuote, onEditRe
                 </div>
               </div>
             )}
-            {renderedSegments.length > 0 && (
+            {segments.length > 0 && (
               <div className="message-item message-item--ai">
                 <div className="message-item__body">
-                  {renderedSegments.map((segment, index) => segment.kind === 'text'
+                  {segments.map((segment, index) => segment.kind === 'text'
                     ? <MarkdownMessage key={index} content={segment.content} />
                     : <ToolCard key={index} event={segment.event} />)}
                 </div>
