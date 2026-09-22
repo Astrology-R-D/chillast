@@ -208,7 +208,7 @@ export interface KnowledgeDoc {
 export interface AiSessionSummary {
   id: string;
   title: string | null;
-  messages: Array<{ role: string; content: string }>;
+  messages: Array<{ role: string; content: string; attachments?: Array<{ name: string; content: string }> }>;
   pinned?: boolean;
   forkedFrom?: { sessionId: string; messageIndex: number };
   mode?: 'chat' | 'research';

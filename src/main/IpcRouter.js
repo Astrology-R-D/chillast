@@ -177,11 +177,13 @@ class IpcRouter {
         const sessionId = context.sessionId || String(Date.now());
         try {
           let fullMessages = messages;
-          if (this.aiSessionStore && sessionId) {
+          if (this.aiSessionStore && sessionId && !context.resend) {
             const userMsg = messages[messages.length - 1];
             if (userMsg) {
               this.aiSessionStore.appendMessage(sessionId, userMsg);
             }
+          }
+          if (this.aiSessionStore && sessionId) {
             const session = this.aiSessionStore.get(sessionId);
             if (session && session.messages) {
               fullMessages = session.messages;
@@ -245,6 +247,13 @@ class IpcRouter {
         if (!this.aiSessionStore) throw new Error('会话存储未初始化');
         const updated = this.aiSessionStore.setPinned(sessionId, !!pinned);
         if (!updated) throw new Error('未找到会话');
+        if (this.webContents) this.webContents.send('ai:sessionsChanged');
+        return updated;
+      });
+      this._handle('ai:sessions:replaceFrom', (_e, sessionId, messageIndex, message) => {
+        if (!this.aiSessionStore) throw new Error('会话存储未初始化');
+        const updated = this.aiSessionStore.replaceFrom(sessionId, messageIndex, message);
+        if (!updated) throw new Error('未找到要改写的会话或消息');
         if (this.webContents) this.webContents.send('ai:sessionsChanged');
         return updated;
       });

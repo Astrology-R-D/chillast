@@ -76,6 +76,14 @@ function installApi({
     ai: {
       setContext: vi.fn(async () => ({ ok: true as const, data: null })),
       readTextAttachment: vi.fn().mockResolvedValue({ ok: true, data: { name: 'notes.txt', content: '' } }),
+      chat: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      interpret: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      stop: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      onToken: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      removeAllListeners: vi.fn(),
+      onSessionsChanged: vi.fn(),
       status: vi.fn().mockResolvedValue({ ok: true, data: status }),
       initStatus: vi.fn().mockResolvedValue({ ok: true, data: null }),
       onStatusChanged: vi.fn(() => () => {}),
@@ -106,6 +114,8 @@ function installApi({
         delete: vi.fn().mockResolvedValue({ ok: true, data: false }),
         fork: vi.fn().mockResolvedValue({ ok: true, data: { id: 'session-fork', title: null, messages: [] } }),
         setPinned: vi.fn().mockResolvedValue({ ok: true, data: { id: 'session-pin', title: null, messages: [] } }),
+        create: vi.fn().mockResolvedValue({ ok: true, data: { id: 'session-create', title: null, messages: [] } }),
+        replaceFrom: vi.fn().mockResolvedValue({ ok: true, data: { id: 'session-replace', title: null, messages: [] } }),
       },
     },
   };

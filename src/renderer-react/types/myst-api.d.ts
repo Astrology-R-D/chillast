@@ -27,6 +27,14 @@ declare global {
     onInitProgress(callback: (progress: AiInitProgress) => void): () => void;
     setContext(context: WesternChartAiContext | null): Promise<IpcResult<unknown>>;
     readTextAttachment(filePath: string): Promise<IpcResult<{ name: string; content: string }>>;
+    chat(messages: Array<{ role: string; content: string; attachments?: Array<{ name: string; content: string }> }>, context: { sessionId?: string; resend?: boolean; [key: string]: unknown }): Promise<IpcResult<unknown>>;
+    interpret(chartData: unknown, options: { sessionId?: string; chartType?: string; [key: string]: unknown }): Promise<IpcResult<unknown>>;
+    stop(sessionId: string): Promise<IpcResult<unknown>>;
+    onToken(callback: (event: { sessionId?: string; type: string; data: unknown }) => void): void;
+    onDone(callback: (event: { ok?: boolean; sessionId?: string }) => void): void;
+    onError(callback: (event: { message?: string; sessionId?: string }) => void): void;
+    removeAllListeners(): void;
+    onSessionsChanged(callback: () => void): void;
     configure(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
     testWithSettings(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
     catalog: {
@@ -53,6 +61,8 @@ declare global {
       delete(id: string): Promise<IpcResult<boolean>>;
       fork(sessionId: string, messageIndex: number): Promise<IpcResult<AiSessionSummary>>;
       setPinned(sessionId: string, pinned: boolean): Promise<IpcResult<AiSessionSummary>>;
+      create(): Promise<IpcResult<AiSessionSummary>>;
+      replaceFrom(sessionId: string, messageIndex: number, message: { role: string; content: string }): Promise<IpcResult<AiSessionSummary>>;
     };
   }
 

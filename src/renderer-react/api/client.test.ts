@@ -43,12 +43,14 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
     ai: {
       status: () => ok({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
       initStatus: () => ok(null), setContext: () => ok(null), readTextAttachment: () => ok({ name: 'notes.txt', content: '' }), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
+      chat: () => ok({ ok: true }), interpret: () => ok({ ok: true }), stop: () => ok({ ok: true }),
+      onToken: () => {}, onDone: () => {}, onError: () => {}, removeAllListeners: () => {}, onSessionsChanged: () => {},
       configure: () => ok({ ok: true }), testWithSettings: () => ok({ ok: true }),
       catalog: { providers: () => ok([]), models: () => ok([]) },
       knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok({ removed: true }) },
       tools: { describe: () => ok([]), setProviderEnabled: () => ok({ ok: true }) },
       mcp: { list: () => ok({ servers: {}, toolCount: 0, connected: false }), save: () => ok({ ok: true }) },
-      sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false), fork: () => ok({ id: 'session-fork', title: null, messages: [] }), setPinned: () => ok({ id: 'session-pin', title: null, messages: [] }) },
+      sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false), fork: () => ok({ id: 'session-fork', title: null, messages: [] }), setPinned: () => ok({ id: 'session-pin', title: null, messages: [] }), create: () => ok({ id: 'session-create', title: null, messages: [] }), replaceFrom: () => ok({ id: 'session-replace', title: null, messages: [] }) },
     },
     ...overrides,
   };

@@ -66,3 +66,25 @@ test('mode field round-trips; legacy sessions without mode read fine', () => {
   assert.ok(Array.isArray(listed) && listed.length === 1);
   assert.equal(listed[0].mode, 'chat');
 });
+
+test('replaceFrom rewrites the message at the index and drops everything after it', () => {
+  const { store } = newStore();
+  const s = store.create();
+  store.appendMessage(s.id, { role: 'user', content: '原始问题' });
+  store.appendMessage(s.id, { role: 'ai', content: '旧回复' });
+  const updated = store.replaceFrom(s.id, 0, { role: 'user', content: '改写后的问题' });
+  assert.equal(updated.messages.length, 1, 'drops everything after the rewritten index');
+  assert.equal(updated.messages[0].content, '改写后的问题');
+  assert.equal(updated.messages[0].role, 'user');
+  assert.equal(store.get(s.id).messages.length, 1);
+});
+
+test('replaceFrom rejects out-of-range indexes and missing sessions', () => {
+  const { store } = newStore();
+  const s = store.create();
+  store.appendMessage(s.id, { role: 'user', content: 'x' });
+  assert.equal(store.replaceFrom(s.id, 5, { role: 'user', content: 'y' }), null);
+  assert.equal(store.replaceFrom(s.id, -1, { role: 'user', content: 'y' }), null);
+  assert.equal(store.replaceFrom('no-such-session', 0, { role: 'user', content: 'y' }), null);
+  assert.equal(store.get(s.id).messages.length, 1, 'rejections leave the session untouched');
+});

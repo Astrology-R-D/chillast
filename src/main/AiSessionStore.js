@@ -115,6 +115,25 @@ class AiSessionStore {
     return session;
   }
 
+  /**
+   * Rewrite messages[messageIndex] with `message` and drop every message after
+   * it. Backing primitive for 编辑重发 (rewrite + regenerate) — the renderer
+   * then re-issues ai:chat with context.resend so the user message is not
+   * appended twice (design spec §4).
+   */
+  replaceFrom(id, messageIndex, message) {
+    const sessions = this._readAll();
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return null;
+    const index = Number(messageIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= session.messages.length) return null;
+    if (!message || typeof message !== 'object' || typeof message.content !== 'string') return null;
+    session.messages = [...session.messages.slice(0, index), { ...message }];
+    session.updatedAt = new Date().toISOString();
+    this._writeAll(sessions);
+    return session;
+  }
+
   delete(id) {
     const sessions = this._readAll();
     const next = sessions.filter((s) => s.id !== id);

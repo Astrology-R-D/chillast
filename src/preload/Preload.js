@@ -186,6 +186,7 @@ contextBridge.exposeInMainWorld('mystApi', {
       generateTitle: (id) => invoke('ai:sessions:generateTitle', id),
       fork: (sessionId, messageIndex) => invoke('ai:sessions:fork', sessionId, messageIndex),
       setPinned: (sessionId, pinned) => invoke('ai:sessions:setPinned', sessionId, pinned),
+      replaceFrom: (sessionId, messageIndex, message) => invoke('ai:sessions:replaceFrom', sessionId, messageIndex, message),
     },
   },
 });
