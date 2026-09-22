@@ -42,13 +42,13 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
     app: { onCloseRequested: () => () => {}, decideClose: () => ok(false) },
     ai: {
       status: () => ok({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
-      initStatus: () => ok(null), setContext: () => ok(null), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
+      initStatus: () => ok(null), setContext: () => ok(null), readTextAttachment: () => ok({ name: 'notes.txt', content: '' }), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
       configure: () => ok({ ok: true }), testWithSettings: () => ok({ ok: true }),
       catalog: { providers: () => ok([]), models: () => ok([]) },
       knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok({ removed: true }) },
       tools: { describe: () => ok([]), setProviderEnabled: () => ok({ ok: true }) },
       mcp: { list: () => ok({ servers: {}, toolCount: 0, connected: false }), save: () => ok({ ok: true }) },
-      sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false) },
+      sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false), fork: () => ok({ id: 'session-fork', title: null, messages: [] }), setPinned: () => ok({ id: 'session-pin', title: null, messages: [] }) },
     },
     ...overrides,
   };

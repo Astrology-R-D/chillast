@@ -162,6 +162,7 @@ contextBridge.exposeInMainWorld('mystApi', {
       for (const ch of ['ai:token', 'ai:done', 'ai:error'])
         ipcRenderer.removeAllListeners(ch);
     },
+    readTextAttachment: (filePath) => invoke('ai:readTextAttachment', filePath),
     knowledge: {
       list: () => invoke('ai:knowledge:list'),
       import: (filePaths) => invoke('ai:knowledge:import', filePaths),
@@ -183,6 +184,8 @@ contextBridge.exposeInMainWorld('mystApi', {
       append: (sessionId, message) => invoke('ai:sessions:append', sessionId, message),
       rename: (id, title) => invoke('ai:sessions:rename', id, title),
       generateTitle: (id) => invoke('ai:sessions:generateTitle', id),
+      fork: (sessionId, messageIndex) => invoke('ai:sessions:fork', sessionId, messageIndex),
+      setPinned: (sessionId, pinned) => invoke('ai:sessions:setPinned', sessionId, pinned),
     },
   },
 });

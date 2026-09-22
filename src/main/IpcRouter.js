@@ -234,6 +234,30 @@ class IpcRouter {
         }
         return { title };
       });
+      this._handle('ai:sessions:fork', (_e, sessionId, messageIndex) => {
+        if (!this.aiSessionStore) throw new Error('会话存储未初始化');
+        const forked = this.aiSessionStore.fork(sessionId, messageIndex);
+        if (!forked) throw new Error('未找到要分支的会话或消息');
+        if (this.webContents) this.webContents.send('ai:sessionsChanged');
+        return forked;
+      });
+      this._handle('ai:sessions:setPinned', (_e, sessionId, pinned) => {
+        if (!this.aiSessionStore) throw new Error('会话存储未初始化');
+        const updated = this.aiSessionStore.setPinned(sessionId, !!pinned);
+        if (!updated) throw new Error('未找到会话');
+        if (this.webContents) this.webContents.send('ai:sessionsChanged');
+        return updated;
+      });
+      this._handle('ai:readTextAttachment', (_e, filePath) => {
+        const fs = require('fs');
+        const path = require('path');
+        const MAX_BYTES = 200 * 1024;
+        const stat = fs.statSync(String(filePath));
+        if (!stat.isFile()) throw new Error('附件不是文件');
+        if (stat.size > MAX_BYTES) throw new Error('附件超过 200KB 上限');
+        const content = fs.readFileSync(String(filePath), 'utf-8');
+        return { name: path.basename(String(filePath)), content };
+      });
       this._handle('ai:sessions:append', (_e, sessionId, message) => {
         if (!this.aiSessionStore) return { ok: false };
         const updated = this.aiSessionStore.appendMessage(sessionId, message);

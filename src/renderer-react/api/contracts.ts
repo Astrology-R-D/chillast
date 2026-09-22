@@ -209,6 +209,9 @@ export interface AiSessionSummary {
   id: string;
   title: string | null;
   messages: Array<{ role: string; content: string }>;
+  pinned?: boolean;
+  forkedFrom?: { sessionId: string; messageIndex: number };
+  mode?: 'chat' | 'research';
   createdAt?: string;
   updatedAt?: string;
 }

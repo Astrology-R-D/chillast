@@ -75,6 +75,7 @@ function installApi({
     },
     ai: {
       setContext: vi.fn(async () => ({ ok: true as const, data: null })),
+      readTextAttachment: vi.fn().mockResolvedValue({ ok: true, data: { name: 'notes.txt', content: '' } }),
       status: vi.fn().mockResolvedValue({ ok: true, data: status }),
       initStatus: vi.fn().mockResolvedValue({ ok: true, data: null }),
       onStatusChanged: vi.fn(() => () => {}),
@@ -103,6 +104,8 @@ function installApi({
         rename: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
         generateTitle: vi.fn().mockResolvedValue({ ok: true, data: { title: '' } }),
         delete: vi.fn().mockResolvedValue({ ok: true, data: false }),
+        fork: vi.fn().mockResolvedValue({ ok: true, data: { id: 'session-fork', title: null, messages: [] } }),
+        setPinned: vi.fn().mockResolvedValue({ ok: true, data: { id: 'session-pin', title: null, messages: [] } }),
       },
     },
   };

@@ -26,6 +26,7 @@ declare global {
     onStatusChanged(callback: (status: unknown) => void): () => void;
     onInitProgress(callback: (progress: AiInitProgress) => void): () => void;
     setContext(context: WesternChartAiContext | null): Promise<IpcResult<unknown>>;
+    readTextAttachment(filePath: string): Promise<IpcResult<{ name: string; content: string }>>;
     configure(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
     testWithSettings(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
     catalog: {
@@ -50,6 +51,8 @@ declare global {
       rename(id: string, title: string): Promise<IpcResult<unknown>>;
       generateTitle(id: string): Promise<IpcResult<{ title: string }>>;
       delete(id: string): Promise<IpcResult<boolean>>;
+      fork(sessionId: string, messageIndex: number): Promise<IpcResult<AiSessionSummary>>;
+      setPinned(sessionId: string, pinned: boolean): Promise<IpcResult<AiSessionSummary>>;
     };
   }
 
