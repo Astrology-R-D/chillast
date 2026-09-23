@@ -59,8 +59,7 @@ export function AiWorkspace({ onNavigate }: { onNavigate?: (route: RouteKey) => 
       );
     };
     bootstrap();
-    // 注：myst-api.d.ts 将 onSessionsChanged 声明为 void，但 preload 实际返回退订函数（Electron ipcRenderer.on）。
-    const unsubscribe = window.mystApi.ai.onSessionsChanged(() => { void queryClient.invalidateQueries({ queryKey: ['ai-sessions'] }); }) as unknown as () => void;
+    const unsubscribe = window.mystApi.ai.onSessionsChanged(() => { void queryClient.invalidateQueries({ queryKey: ['ai-sessions'] }); });
     return () => { active = false; unsubscribe(); };
   }, [queryClient]);
 

@@ -44,7 +44,7 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
       status: () => ok({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
       initStatus: () => ok(null), setContext: () => ok(null), readTextAttachment: () => ok({ name: 'notes.txt', content: '' }), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
       chat: () => ok({ ok: true }), interpret: () => ok({ ok: true }), stop: () => ok({ ok: true }),
-      onToken: () => {}, onDone: () => {}, onError: () => {}, removeAllListeners: () => {}, onSessionsChanged: () => {},
+      onToken: () => {}, onDone: () => {}, onError: () => {}, removeAllListeners: () => {}, onSessionsChanged: () => () => {},
       configure: () => ok({ ok: true }), testWithSettings: () => ok({ ok: true }),
       catalog: { providers: () => ok([]), models: () => ok([]) },
       knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok({ removed: true }) },

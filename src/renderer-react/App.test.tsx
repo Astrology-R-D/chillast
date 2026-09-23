@@ -83,7 +83,7 @@ function installApi({
       onDone: vi.fn(),
       onError: vi.fn(),
       removeAllListeners: vi.fn(),
-      onSessionsChanged: vi.fn(),
+      onSessionsChanged: vi.fn(() => vi.fn()),
       status: vi.fn().mockResolvedValue({ ok: true, data: status }),
       initStatus: vi.fn().mockResolvedValue({ ok: true, data: null }),
       onStatusChanged: vi.fn(() => () => {}),

@@ -34,7 +34,7 @@ declare global {
     onDone(callback: (event: { ok?: boolean; sessionId?: string }) => void): void;
     onError(callback: (event: { message?: string; sessionId?: string }) => void): void;
     removeAllListeners(): void;
-    onSessionsChanged(callback: () => void): void;
+    onSessionsChanged(callback: () => void): () => void;
     configure(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
     testWithSettings(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
     catalog: {

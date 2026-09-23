@@ -155,7 +155,7 @@ contextBridge.exposeInMainWorld('mystApi', {
     onStatusChanged: (callback) => subscribe('ai:statusChanged', callback),
     onInitProgress: (callback) => subscribe('ai:initProgress', callback),
     initStatus: () => invoke('ai:initStatus'),
-    onSessionsChanged: (callback) => ipcRenderer.on('ai:sessionsChanged', () => callback()),
+    onSessionsChanged: (callback) => subscribe('ai:sessionsChanged', callback),
     removeAllListeners: () => {
       // Only the per-request streaming channels are cleared between turns;
       // statusChanged / sessionsChanged are long-lived and registered once.
