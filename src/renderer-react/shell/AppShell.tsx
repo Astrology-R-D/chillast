@@ -5,7 +5,7 @@ import {
   type ThemePreference,
   usePreferences,
 } from '../preferences/preferences';
-import { AiStatusPanel } from './AiStatusPanel';
+import { AiWorkspace } from '../features/ai/AiWorkspace';
 import { ProfilePage } from '../features/profiles/ProfilePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { Navigation } from './Navigation';
@@ -110,7 +110,7 @@ function AppShellInner() {
   return (
     <PanelLayout
       navigation={<Navigation active={activeRoute} onNavigate={navigate} />}
-      ai={<AiStatusPanel onNavigate={navigate} />}
+      ai={<AiWorkspace onNavigate={navigate} />}
       labels={{
         openAi: t('shell.openAi'),
         closeAi: t('shell.closeAi'),

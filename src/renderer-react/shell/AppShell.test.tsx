@@ -60,6 +60,18 @@ beforeEach(() => {
     ai: {
       status: vi.fn().mockResolvedValue({ ok: true, data: { configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 } }),
       onStatusChanged: vi.fn(() => vi.fn()), initStatus: vi.fn(), onInitProgress: vi.fn(),
+      onSessionsChanged: vi.fn(() => vi.fn()), onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn(),
+      removeAllListeners: vi.fn(), chat: vi.fn().mockResolvedValue({ ok: true }), interpret: vi.fn().mockResolvedValue({ ok: true }),
+      stop: vi.fn().mockResolvedValue({ ok: true }),
+      sessions: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        create: vi.fn().mockResolvedValue({ ok: true, data: { id: 'shell-session', title: null, messages: [], mode: 'chat', pinned: false } }),
+        rename: vi.fn().mockResolvedValue({ ok: true, data: null }), generateTitle: vi.fn().mockResolvedValue({ ok: true, data: { title: '' } }),
+        delete: vi.fn().mockResolvedValue({ ok: true, data: true }),
+        fork: vi.fn().mockResolvedValue({ ok: true, data: { id: 'shell-fork', title: '↩ 分支自', messages: [], mode: 'chat', pinned: false, forkedFrom: { sessionId: 's', messageIndex: 0 } } }),
+        setPinned: vi.fn().mockResolvedValue({ ok: true, data: null }),
+        replaceFrom: vi.fn().mockResolvedValue({ ok: true, data: null }),
+      },
     },
     profiles: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), save: vi.fn(), remove: vi.fn() },
     app: { onCloseRequested: vi.fn(() => () => {}), decideClose: vi.fn().mockResolvedValue({ ok: true, data: true }) },
@@ -129,6 +141,8 @@ test('navigates localized placeholders and keeps route state across shell breakp
 
 test('keeps a rejected off-chart AI clear visible in the persistent shell and retries it', async () => {
   const user = userEvent.setup();
+  // AiWorkspace 的未配置横幅也是 role="alert"：本测试聚焦上下文同步告警，置为已配置避免多匹配。
+  vi.mocked(window.mystApi.ai.status).mockResolvedValue({ ok: true, data: { configured: true, provider: 'OpenAI', model: 'gpt-test', baseUrl: '', knowledgeDocCount: 0 } });
   const catalog = [{ type: 'natal', nameZh: '本命', nameEn: 'Natal', category: 'personal', requiresSecondary: false, options: [] }];
   const result = { ...twoRingResult, resultId: 'shell-result', meta: { ...twoRingResult.meta, type: 'natal' } } as unknown as import('../features/charts/contracts').NormalizedChartResult;
   const request = {
@@ -279,6 +293,9 @@ test('settings route renders the settings page instead of the placeholder', asyn
     ai: {
       status: vi.fn().mockResolvedValue({ ok: true, data: { configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 } }),
       onStatusChanged: vi.fn(() => vi.fn()), initStatus: vi.fn(), onInitProgress: vi.fn(),
+      onSessionsChanged: vi.fn(() => vi.fn()), onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn(),
+      removeAllListeners: vi.fn(), chat: vi.fn().mockResolvedValue({ ok: true }), interpret: vi.fn().mockResolvedValue({ ok: true }),
+      stop: vi.fn().mockResolvedValue({ ok: true }),
       configure: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
       testWithSettings: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
       catalog: {
@@ -288,7 +305,14 @@ test('settings route renders the settings page instead of the placeholder', asyn
       tools: { describe: vi.fn().mockResolvedValue({ ok: true, data: [] }), setProviderEnabled: vi.fn() },
       mcp: { list: vi.fn().mockResolvedValue({ ok: true, data: { servers: {}, toolCount: 0, connected: false } }), save: vi.fn() },
       knowledge: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), import: vi.fn(), remove: vi.fn() },
-      sessions: { list: vi.fn().mockResolvedValue({ ok: true, data: [] }), rename: vi.fn(), generateTitle: vi.fn(), delete: vi.fn() },
+      sessions: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        create: vi.fn().mockResolvedValue({ ok: true, data: { id: 'settings-session', title: null, messages: [], mode: 'chat', pinned: false } }),
+        rename: vi.fn(), generateTitle: vi.fn(), delete: vi.fn(),
+        fork: vi.fn().mockResolvedValue({ ok: true, data: { id: 'settings-fork', title: null, messages: [], mode: 'chat', pinned: false } }),
+        setPinned: vi.fn().mockResolvedValue({ ok: true, data: null }),
+        replaceFrom: vi.fn().mockResolvedValue({ ok: true, data: null }),
+      },
     },
   });
   renderShell();
