@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 import { useAiStreamStore } from '../../stores/aiStreamStore';
 import type { ChatAttachment } from './chatMessage';
@@ -28,12 +28,14 @@ export function Composer({ disabled, statusChip, onSend, onStop, quoteDraft, onQ
   const toolCalling = useAiStreamStore((state) => state.active
     && state.segments.some((segment) => segment.kind === 'tool' && segment.event.status === 'calling'));
 
+  // 引用预填走 effect：userEvent/act 环境内同步 flush，渲染期 setState 会打 React 警告。
   const quoteAppliedRef = useRef('');
-  if (quoteDraft && quoteAppliedRef.current !== quoteDraft) {
+  useEffect(() => {
+    if (!quoteDraft || quoteAppliedRef.current === quoteDraft) return;
     quoteAppliedRef.current = quoteDraft;
     setText((current) => (current ? `${current}\n\n${quoteDraft}` : quoteDraft));
     onQuoteConsumed?.();
-  }
+  }, [quoteDraft, onQuoteConsumed]);
 
   const blocked = disabled || active;
 
