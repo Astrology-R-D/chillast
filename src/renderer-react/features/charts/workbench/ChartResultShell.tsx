@@ -1,8 +1,9 @@
-import { AlertTriangle, Ban, LoaderCircle, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Ban, Bot, LoaderCircle, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useI18n } from '../../../i18n/I18nProvider';
 import { useChartWorkspace, type ChartRouteState } from '../../../stores/chartWorkspace';
+import { useAiStreamStore } from '../../../stores/aiStreamStore';
 import type { ChartReferenceData, ChartRoute } from '../contracts';
 import type { ChartSelectionTarget } from '../svg/chartSelection';
 import { InteractiveChart } from '../svg/InteractiveChart';
@@ -71,6 +72,15 @@ export function ChartResultShell({ route, state, reference, profilesAvailable, v
   const ratio = clampRatio(stored[orientation], minimum);
   const result = state.lastSuccessfulResult;
   const accepted = state.accepted;
+  const startInterpret = useAiStreamStore((state) => state.startInterpret);
+  const requestPanelOpen = useAiStreamStore((state) => state.requestPanelOpen);
+  const streamActive = useAiStreamStore((state) => state.active);
+  const canInterpret = Boolean(result && accepted);
+  const interpretChart = () => {
+    if (!result || !accepted) return;
+    requestPanelOpen();
+    startInterpret({ chartData: result, chartType: accepted.type });
+  };
 
   let status: string | null = null;
   let icon = null;
@@ -88,6 +98,9 @@ export function ChartResultShell({ route, state, reference, profilesAvailable, v
     <header className="chart-result__header">
       <div aria-live="polite" role="status">{icon}{status}{state.isStale && <span className="chart-result__stale">{t('chart.workbench.stale')}</span>}</div>
       <div className="chart-result__actions">{state.requestStatus === 'loading' && <button type="button" onClick={onCancel}><X size={15} />{t('chart.workbench.cancel')}</button>}
+        {canInterpret && <button type="button" onClick={interpretChart} disabled={streamActive}>
+          <Bot size={15} />{t('ai.interpret')}
+        </button>}
         {(Boolean(startupError) || (state.requestStatus === 'error' && validDraft)) && <button type="button" onClick={onRetry}><RefreshCw size={15} />{t('chart.workbench.retry')}</button>}</div>
     </header>
     {result && accepted && <PanelGroup key={orientation} direction={orientation} className="chart-result__split"
