@@ -405,7 +405,9 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS,
     if (!aiOpenSignal) return;
     if (isNarrow) { setIsAiOpen(true); return; }
     setIsDesktopAiCollapsed(false);
-    if (observedPanelCollapseRef.current) aiPanelRef.current?.expand();
+    // 无条件 expand：持久化折叠可能早于 onCollapse 观测（挂载期回调被门控），
+    // 仅靠 React state 解隐藏而面板宽度仍为 0。测试环境的 strip 构建未注册面板会抛错，吞掉即可。
+    try { aiPanelRef.current?.expand(); } catch { /* vitest strip 构建无 panel 注册；生产不达此处 */ }
   }, [aiOpenSignal, isNarrow]);
 
   const isAiHidden = isNarrow ? !isAiOpen : isDesktopAiCollapsed;
