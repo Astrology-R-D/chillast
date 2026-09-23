@@ -20,6 +20,7 @@ export interface PanelLayoutProps {
   ai: ReactNode;
   children: ReactNode;
   labels?: PanelLayoutLabels;
+  aiOpenSignal?: number;
 }
 
 export interface PanelLayoutLabels {
@@ -55,8 +56,8 @@ export const PANEL_SIZES = Object.freeze({
 
 const PANEL_CONSTRAINTS = [PANEL_SIZES.navigation, PANEL_SIZES.main, PANEL_SIZES.ai];
 const KEYBOARD_RESIZE_BY = 6;
-const PANEL_STORAGE_KEY = `react-resizable-panels:${PANEL_AUTO_SAVE_ID}`;
-const PANEL_STORAGE_ENTRY_KEY = [
+export const PANEL_STORAGE_KEY = `react-resizable-panels:${PANEL_AUTO_SAVE_ID}`;
+export const PANEL_STORAGE_ENTRY_KEY = [
   'shell-navigation-panel',
   'shell-main-panel',
   'shell-ai-panel',
@@ -275,7 +276,7 @@ export function resizePanelSizesByKeyboard(
   return next;
 }
 
-export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS }: PanelLayoutProps) {
+export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS, aiOpenSignal }: PanelLayoutProps) {
   const isNarrow = useNarrowLayout();
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(
@@ -400,6 +401,13 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS 
       first.focus();
     }
   };
+  useEffect(() => {
+    if (!aiOpenSignal) return;
+    if (isNarrow) { setIsAiOpen(true); return; }
+    setIsDesktopAiCollapsed(false);
+    if (observedPanelCollapseRef.current) aiPanelRef.current?.expand();
+  }, [aiOpenSignal, isNarrow]);
+
   const isAiHidden = isNarrow ? !isAiOpen : isDesktopAiCollapsed;
 
   return (

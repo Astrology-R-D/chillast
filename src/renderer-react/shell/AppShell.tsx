@@ -5,6 +5,7 @@ import {
   type ThemePreference,
   usePreferences,
 } from '../preferences/preferences';
+import { useAiStreamStore } from '../stores/aiStreamStore';
 import { AiWorkspace } from '../features/ai/AiWorkspace';
 import { ProfilePage } from '../features/profiles/ProfilePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
@@ -97,6 +98,7 @@ function AppShellInner() {
   const [activeRoute, setActiveRoute] = useState<RouteKey>('profiles');
   const theme = usePreferences((state) => state.theme);
   const density = usePreferences((state) => state.density);
+  const aiOpenSignal = useAiStreamStore((state) => state.panelOpenSignal);
   const setTheme = usePreferences((state) => state.setTheme);
   const setDensity = usePreferences((state) => state.setDensity);
   const route = ROUTES.find(({ key }) => key === activeRoute) ?? ROUTES[0];
@@ -111,6 +113,7 @@ function AppShellInner() {
     <PanelLayout
       navigation={<Navigation active={activeRoute} onNavigate={navigate} />}
       ai={<AiWorkspace onNavigate={navigate} />}
+      aiOpenSignal={aiOpenSignal}
       labels={{
         openAi: t('shell.openAi'),
         closeAi: t('shell.closeAi'),
