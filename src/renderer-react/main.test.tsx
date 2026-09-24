@@ -46,6 +46,18 @@ test('loads locale and renders the localized application shell', async () => {
     ai: {
       status: vi.fn().mockResolvedValue({ ok: true, data: { configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 } }),
       onStatusChanged: vi.fn(() => vi.fn()), initStatus: vi.fn(), onInitProgress: vi.fn(),
+      onSessionsChanged: vi.fn(() => vi.fn()), onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn(),
+      removeAllListeners: vi.fn(), chat: vi.fn().mockResolvedValue({ ok: true }), interpret: vi.fn().mockResolvedValue({ ok: true }),
+      stop: vi.fn().mockResolvedValue({ ok: true }),
+      sessions: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        create: vi.fn().mockResolvedValue({ ok: true, data: { id: 'main-session', title: null, messages: [], mode: 'chat', pinned: false } }),
+        rename: vi.fn().mockResolvedValue({ ok: true, data: null }), generateTitle: vi.fn().mockResolvedValue({ ok: true, data: { title: '' } }),
+        delete: vi.fn().mockResolvedValue({ ok: true, data: true }),
+        fork: vi.fn().mockResolvedValue({ ok: true, data: { id: 'main-fork', title: null, messages: [], mode: 'chat', pinned: false } }),
+        setPinned: vi.fn().mockResolvedValue({ ok: true, data: null }),
+        replaceFrom: vi.fn().mockResolvedValue({ ok: true, data: null }),
+      },
     },
   });
 

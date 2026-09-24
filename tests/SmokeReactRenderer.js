@@ -765,6 +765,10 @@ app.whenReady().then(async () => {
     registerEnvelope('reference:get', () => astrology.referenceData());
     registerEnvelope('chartTypes:get', () => astrology.chartTypes());
     registerEnvelope('chart:compute', (request) => astrology.computeChart(request));
+    // AiWorkspace 挂载即拉会话列表并按需新建：未 mock 会让 invoke reject 变成页面 unhandledrejection。
+    const smokeSession = { id: 'smoke-ai-session', title: '烟测会话', messages: [], mode: 'chat', pinned: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    registerEnvelope('ai:sessions:list', () => [smokeSession]);
+    registerEnvelope('ai:sessions:create', () => ({ ...smokeSession, id: `smoke-ai-session-${Date.now()}` }));
   }
 
   win = new BrowserWindow({
@@ -945,6 +949,32 @@ app.whenReady().then(async () => {
     }
     if (desktop.separators !== 2) throw new Error(`expected two separators, got ${desktop.separators}`);
     if (!desktop.narrowToolbarsHidden) throw new Error('narrow-only toolbars are visible on desktop');
+
+    // AI 工作台探针：容器渲染、模式切换头、会话侧栏、输入区，报告/研究占位往返。
+    const aiWorkspace = await poll(win, 'ai workspace renders', () => {
+      const workspace = document.querySelector('.ai-workspace');
+      const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      const chatTab = tabs.find((tab) => tab.textContent?.includes('对话'));
+      const reportTab = tabs.find((tab) => tab.textContent?.includes('报告'));
+      const composerInput = document.querySelector('.composer__input');
+      const rail = document.querySelector('.session-rail');
+      return { ready: Boolean(workspace && chatTab && reportTab && composerInput && rail), value: {
+        tabs: tabs.length, hasChatTab: Boolean(chatTab), hasRail: Boolean(rail),
+      } };
+    });
+    await win.webContents.executeJavaScript(`(() => {
+      const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      tabs.find((tab) => tab.textContent.includes('报告')).click();
+    })()`);
+    const reportPlaceholder = await poll(win, 'report mode placeholder', () => ({
+      ready: document.querySelector('.ai-workspace__placeholder')?.textContent.includes('报告'),
+      value: true,
+    }));
+    await win.webContents.executeJavaScript(`(() => {
+      const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      tabs.find((tab) => tab.textContent.includes('对话')).click();
+    })()`);
+    await poll(win, 'back to chat mode', () => ({ ready: Boolean(document.querySelector('.composer__input')) }));
 
     await win.webContents.executeJavaScript(`(() => {
       const search = document.querySelector('[type="search"]');
@@ -1546,7 +1576,7 @@ app.whenReady().then(async () => {
     errors.push(...pageErrors);
     if (errors.length) throw new Error(errors.join(' | '));
 
-    console.log('\nReact smoke report:', JSON.stringify({ desktop, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, generatedChart, plan3Interactions, chartGeometry, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
+    console.log('\nReact smoke report:', JSON.stringify({ desktop, aiWorkspace, reportPlaceholder, keyboardResize: { before: beforeResize, after: afterResize }, narrow, overlay, restored, generatedChart, plan3Interactions, chartGeometry, initialSearchVerified, primaryMarkerVerified, nativeCloseTimedOut, nativeCloseRejectedRetained, nativeCloseIpcRejectedRetained, nativeCloseRetryCanceled, profileModalIsolated, modalPointerBlocked, modalKeyboardBlocked, closeDiagnostics, closeStages, dirtyCancelRetained, dirtySaveNavigated, dirtyDiscardNavigated, profileScreenshots }, null, 2));
     console.log('\nReact smoke passed\n');
     finish(0);
   } catch (error) {
