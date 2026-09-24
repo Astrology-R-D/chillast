@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { I18nProvider } from '../../i18n/I18nProvider';
-import { resetAiStreamStoreForTests } from '../../stores/aiStreamStore';
+import { aiStreamStore, resetAiStreamStoreForTests } from '../../stores/aiStreamStore';
 import { apiClient } from '../../api/client';
 import { SessionRail } from './SessionRail';
 
@@ -87,4 +87,29 @@ test('pin toggle, rename inline, delete with two-step confirm, and new chat call
 
   await user.click(screen.getByRole('button', { name: '新对话' }));
   expect(apiClient.createAiSession).toHaveBeenCalledTimes(1);
+});
+
+test('deleting the active session reselects the next remaining session', async () => {
+  const user = userEvent.setup();
+  vi.mocked(apiClient.deleteAiSession).mockResolvedValue(true);
+  aiStreamStore.getState().setActiveSessionId('s1');
+  renderRail();
+  await screen.findByText('置顶会话');
+  await user.click(screen.getAllByRole('button', { name: '删除' })[0]);
+  await user.click(screen.getByRole('button', { name: '确认删除？' }));
+  await waitFor(() => expect(aiStreamStore.getState().activeSessionId).toBe('s2'));
+});
+
+test('deleting the last remaining active session creates a fresh one', async () => {
+  const user = userEvent.setup();
+  vi.mocked(apiClient.deleteAiSession).mockResolvedValue(true);
+  vi.mocked(apiClient.listAiSessions).mockResolvedValue([sessions[1]] as never);
+  vi.mocked(apiClient.createAiSession).mockResolvedValue({ id: 'fresh', title: null, messages: [], mode: 'chat', pinned: false } as never);
+  aiStreamStore.getState().setActiveSessionId('s2');
+  renderRail();
+  await screen.findByText(/第一条消息很长/);
+  await user.click(screen.getAllByRole('button', { name: '删除' })[0]);
+  await user.click(screen.getByRole('button', { name: '确认删除？' }));
+  await waitFor(() => expect(apiClient.createAiSession).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(aiStreamStore.getState().activeSessionId).toBe('fresh'));
 });

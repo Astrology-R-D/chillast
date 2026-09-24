@@ -19,7 +19,17 @@ export function SessionRail() {
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ['ai-sessions'] }); };
   const setPinned = useMutation({ mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) => apiClient.setAiSessionPinned(id, pinned), onSuccess: invalidate });
   const rename = useMutation({ mutationFn: ({ id, title }: { id: string; title: string }) => apiClient.renameAiSession(id, title), onSuccess: invalidate });
-  const remove = useMutation({ mutationFn: (id: string) => apiClient.deleteAiSession(id), onSuccess: invalidate });
+  // 删除当前会话时立即重选（老层 AiSidebar 同款语义）：悬空的 activeSessionId 会让主进程静默丢消息。
+  const remove = useMutation({ mutationFn: (id: string) => apiClient.deleteAiSession(id), onSuccess: (_result, id) => {
+    if (aiStreamStore.getState().activeSessionId !== id) { invalidate(); return; }
+    const remaining = (sessionsQuery.data ?? []).filter((session) => session.id !== id);
+    if (remaining.length > 0) {
+      aiStreamStore.getState().setActiveSessionId(remaining[0].id);
+      invalidate();
+    } else {
+      create.mutate();
+    }
+  } });
   const create = useMutation({ mutationFn: () => apiClient.createAiSession(), onSuccess: (session) => {
     aiStreamStore.getState().setActiveSessionId(session.id);
     invalidate();

@@ -82,6 +82,7 @@
 .composer { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border, #2a2a33); }
 .composer__status { display: flex; gap: 8px; font-size: 12px; opacity: 0.85; }
 .composer__status[data-calling='true'] { color: var(--accent, #7c6cf0); }
+.composer__tool-activity { display: inline-flex; gap: 4px; align-items: center; }
 .composer__attachments { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
 .composer__attachment { display: inline-flex; gap: 4px; align-items: center; border: 1px solid var(--border, #2a2a33); border-radius: 8px; padding: 2px 6px; }
 .composer__attachment button { border: none; background: transparent; color: inherit; cursor: pointer; }

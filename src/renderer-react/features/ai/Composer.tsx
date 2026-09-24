@@ -31,7 +31,9 @@ export function Composer({ disabled, statusChip, onSend, onStop, quoteDraft, onQ
   // 引用预填走 effect：userEvent/act 环境内同步 flush，渲染期 setState 会打 React 警告。
   const quoteAppliedRef = useRef('');
   useEffect(() => {
-    if (!quoteDraft || quoteAppliedRef.current === quoteDraft) return;
+    // draft 清空时归零去重 ref：再次引用同一条消息不会被吞。
+    if (!quoteDraft) { quoteAppliedRef.current = ''; return; }
+    if (quoteAppliedRef.current === quoteDraft) return;
     quoteAppliedRef.current = quoteDraft;
     setText((current) => (current ? `${current}\n\n${quoteDraft}` : quoteDraft));
     onQuoteConsumed?.();
