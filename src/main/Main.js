@@ -523,6 +523,11 @@ class Main {
   }
 }
 
-if (require.main === module) new Main().start();
+// `electron .` 目录模式下 Electron 内部 loader 加载 package.json main，require.main !== module
+// （Electron 42 实测），直接跳过会让进程静默挂起（无窗口无输出）。process.type === 'browser'
+// 是「本模块作为应用主进程入口」的可靠信号；纯 node 测试进程没有该属性，仍走 require.main 分支。
+if (require.main === module || process.type === 'browser') {
+  new Main().start();
+}
 
 module.exports = Main;
