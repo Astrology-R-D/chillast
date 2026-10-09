@@ -41,6 +41,12 @@ textarea {
   font-family: var(--font-glyph);
 }
 
+button { min-height: var(--control-height); padding: 5px var(--control-padding-inline); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--surface-raised); cursor: pointer; transition: background 120ms ease, border-color 120ms ease; }
+button:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-strong); }
+button:disabled { opacity: .5; cursor: default; }
+input:not([type='checkbox']):not([type='range']), select, textarea { min-height: var(--control-height); padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-base); min-width: 0; }
+input[type='checkbox'] { accent-color: var(--focus); }
+
 button,
 input,
 select,

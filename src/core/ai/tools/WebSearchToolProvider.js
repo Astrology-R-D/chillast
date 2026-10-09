@@ -2,6 +2,7 @@
 
 const ToolProvider = require('./ToolProvider');
 const esm = require('../esm-bridge');
+const { toolResult, sourceSnapshot } = require('../ToolResult');
 
 /**
  * WebSearchToolProvider — gives the agent live internet access via two tools:
@@ -55,7 +56,8 @@ class WebSearchToolProvider extends ToolProvider {
         try {
           const results = await runSearch(provider, { apiKey, endpoint: cfg.endpoint }, input.query, n);
           if (!results.length) return '未找到相关网页结果。';
-          return results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n');
+          const sources = results.map((r) => sourceSnapshot({ ...r, content: r.snippet, source: 'web' }));
+          return toolResult(sources.map((s) => `[${s.id}] ${s.title}\n${s.url}\n${s.content}`).join('\n\n'), 'web', results, { sources });
         } catch (e) {
           return `联网搜索失败：${e.message}`;
         }
@@ -69,7 +71,9 @@ class WebSearchToolProvider extends ToolProvider {
       schema: z.object({ url: z.string().describe('完整网址，例如 https://example.com/article') }),
       func: async (input) => {
         try {
-          return await fetchText(input.url);
+          const content = await fetchText(input.url);
+          const source = sourceSnapshot({ url: input.url, content, source: 'web' });
+          return toolResult(`[${source.id}] ${input.url}\n${content}`, 'webpage', { url: input.url }, { sources: [source] });
         } catch (e) {
           return `网页抓取失败：${e.message}`;
         }

@@ -157,7 +157,7 @@ test('manifest accounts for source-missing glyphs and every supported glyph exis
   const missing = requested.filter((_character, index) => !sourceSupport[index][0]);
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 
-  expect(missing).toHaveLength(35);
+  expect(missing).toHaveLength(36);
   expect(
     [...'℞∠☉☊☋☌☍☽☿♀♂♃♄♅♆♇♈♉♊♋♌♍♎♏♐♑♒♓⚷⚸⚺⚻⚼✱'].every((character) =>
       missing.includes(character),
@@ -190,14 +190,15 @@ test('defines theme, density, token, and global foundations', () => {
   const density = readFileSync(resolve(stylesDirectory, 'density.css'), 'utf8');
   const global = readFileSync(resolve(stylesDirectory, 'global.css'), 'utf8');
 
-  expect(tokens).toContain("--font-family: 'Maple Mono NF CN'");
+  expect(tokens).toContain("--font-family: 'Segoe UI'");
+  expect(tokens).toContain("--font-mono: 'Maple Mono NF CN'");
   expect(tokens).toContain("'Microsoft YaHei', 'Segoe UI', sans-serif");
   expect(tokens).toContain(
     "--font-glyph: 'Maple Mono NF CN', 'Segoe UI Symbol', 'Microsoft YaHei', 'Segoe UI', sans-serif",
   );
-  expect(tokens).toContain('--radius-sm: 4px');
-  expect(tokens).toContain('--radius-md: 6px');
-  expect(tokens).toContain('--radius-lg: 8px');
+  expect(tokens).toContain('--radius-sm: 6px');
+  expect(tokens).toContain('--radius-md: 8px');
+  expect(tokens).toContain('--radius-lg: 12px');
   expect(tokens).toContain('--motion-fast: 120ms');
   expect(tokens).toContain('--motion-normal: 170ms');
   expect(tokens).toContain('letter-spacing: 0');

@@ -1,6 +1,7 @@
 'use strict';
 
 const esm = require('./esm-bridge');
+const { chartToolResult, baziToolResult, decorateTools } = require('./ToolResult');
 
 /**
  * Build a Profile-compatible plain object from flat birth-data input.
@@ -56,17 +57,27 @@ function _serializeCurrentChartContext(ctx) {
 }
 
 /**
- * Build the astrology/命理 computation tools (no app context needed).
+ * Build the astrology/命理 computation tools with a snapshot of chart settings.
  * Each tool takes flat numeric/string inputs and returns a string result,
  * suitable for a ReAct agent.
  *
  * @param {import('../astrology/AstrologyService')} astrologyService
  * @param {import('../chinese/ChineseAstrologyService')} chineseAstrologyService
+ * @param {object} [defaultSettings] Accepted workspace settings, never the uncalculated draft.
  * @returns {Promise<import('@langchain/core/tools').DynamicStructuredTool[]>}
  */
-async function buildComputeTools(astrologyService, chineseAstrologyService) {
+async function buildComputeTools(astrologyService, chineseAstrologyService, defaultSettings = {}) {
   const { DynamicStructuredTool } = await esm.load('@langchain/core/tools');
   const z = require('zod');
+  const { HOUSE_SYSTEMS } = require('../astrology/Constants');
+  const inheritedSettings = structuredClone(defaultSettings);
+  const chartSettingsSchema = {
+    settings: z.object({
+      houseSystem: z.enum(HOUSE_SYSTEMS.map((s) => s.value)).optional().describe('宫位制'),
+      zodiac: z.enum(['tropical', 'sidereal']).optional().describe('回归黄道或恒星黄道（Lahiri）'),
+    }).optional().describe('未指定时沿用当前已计算星盘的宫位制和黄道；没有当前星盘时为普拉西度、回归黄道。'),
+  };
+  const settingsFor = (input) => ({ houseSystem: 'placidus', zodiac: 'tropical', ...inheritedSettings, ...input.settings });
 
   const birthSchema = {
     year: z.number().int().describe('出生年份，如 1990'),
@@ -82,12 +93,12 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
     name: 'compute_natal_chart',
     description:
       '计算某人的本命星盘。输入出生年月日时分和出生地经纬度，返回完整的行星位置、宫位、相位数据。',
-    schema: z.object(birthSchema),
+    schema: z.object({ ...birthSchema, ...chartSettingsSchema }),
     func: async (input) => {
       try {
         const profile = _makeProfile('查询对象', input);
-        const chart = astrologyService.computeChart({ type: 'natal', primary: profile });
-        return _serializeChart(chart);
+        const chart = astrologyService.computeChart({ type: 'natal', primary: profile, settings: settingsFor(input) });
+        return chartToolResult(chart, _serializeChart(chart));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -100,6 +111,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
       '计算某人在指定日期的行运盘，分析天象对本命盘的影响。需要出生数据和目标日期。',
     schema: z.object({
       ...birthSchema,
+      ...chartSettingsSchema,
       targetYear: z.number().int().describe('目标年份'),
       targetMonth: z.number().int().min(1).max(12).describe('目标月份'),
       targetDay: z.number().int().min(1).max(31).describe('目标日期'),
@@ -113,9 +125,10 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
         const chart = astrologyService.computeChart({
           type: 'transit',
           primary: profile,
+          settings: settingsFor(input),
           options: { targetDate },
         });
-        return _serializeChart(chart);
+        return chartToolResult(chart, _serializeChart(chart));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -127,6 +140,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
     description:
       '计算两人之间的合盘（比较盘），分析两人的关系相容性。需要两人的出生数据。',
     schema: z.object({
+      ...chartSettingsSchema,
       year1: z.number().int().describe('第一人出生年份'),
       month1: z.number().int().min(1).max(12).describe('第一人出生月份'),
       day1: z.number().int().min(1).max(31).describe('第一人出生日期'),
@@ -155,9 +169,9 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
           latitude: input.latitude2, longitude: input.longitude2,
         });
         const chart = astrologyService.computeChart({
-          type: 'synastry', primary: profileA, secondary: profileB,
+          type: 'synastry', primary: profileA, secondary: profileB, settings: settingsFor(input),
         });
-        return _serializeChart(chart);
+        return chartToolResult(chart, _serializeChart(chart));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -181,28 +195,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
             },
           },
         });
-        const p = result.bazi.pillars;
-        const dm = result.bazi.dayMaster;
-        const lines = [
-          `八字四柱: ${p.year.full} ${p.month.full} ${p.day.full} ${p.hour.full}`,
-          `日主: ${dm.char} (${dm.element})`,
-        ];
-        const a = result.analysis;
-        if (a) {
-          const PL = { year: '年柱', month: '月柱', day: '日柱', hour: '时柱' };
-          lines.push('十神与藏干:');
-          for (const pil of a.pillars) {
-            const hidden = pil.hidden.map((h) => `${h.char}(${h.tenGod || '-'})`).join(' ');
-            lines.push(`  ${PL[pil.key]}: ${pil.stemChar}[${pil.stemTenGod}] ${pil.branchChar} 藏干:${hidden}`);
-          }
-          const ec = a.elementCounts;
-          lines.push(`五行统计(含藏干): 木${ec.wood} 火${ec.fire} 土${ec.earth} 金${ec.metal} 水${ec.water}`);
-          lines.push(`日主旺弱(参考): ${a.strength.label}`);
-        }
-        if (result.lunar) {
-          lines.push(`农历: ${result.lunar.lunarYear || ''} ${result.lunar.lunarMonth || ''}${result.lunar.lunarDay || ''}`);
-        }
-        return lines.join('\n');
+        return baziToolResult(result);
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -213,14 +206,14 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
     name: 'compute_solar_return',
     description:
       '计算某人的太阳返照盘（Solar Return），分析指定年份的年运主题。需要出生数据和目标年份。',
-    schema: z.object({ ...birthSchema, targetYear: z.number().int().describe('返照年份') }),
+    schema: z.object({ ...birthSchema, ...chartSettingsSchema, targetYear: z.number().int().describe('返照年份') }),
     func: async (input) => {
       try {
         const profile = _makeProfile('查询对象', input);
         const chart = astrologyService.computeChart({
-          type: 'solarReturn', primary: profile, options: { year: input.targetYear },
+          type: 'solarReturn', primary: profile, settings: settingsFor(input), options: { year: input.targetYear },
         });
-        return _serializeChart(chart);
+        return chartToolResult(chart, _serializeChart(chart));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -233,6 +226,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
       '计算某人的次限推运盘（Secondary Progressions），分析生命历程的内在发展。需要出生数据和目标日期。',
     schema: z.object({
       ...birthSchema,
+      ...chartSettingsSchema,
       targetYear: z.number().int().describe('目标年份'),
       targetMonth: z.number().int().min(1).max(12).describe('目标月份'),
       targetDay: z.number().int().min(1).max(31).describe('目标日期'),
@@ -244,19 +238,19 @@ async function buildComputeTools(astrologyService, chineseAstrologyService) {
           Date.UTC(input.targetYear, input.targetMonth - 1, input.targetDay, 12),
         ).toISOString();
         const chart = astrologyService.computeChart({
-          type: 'progressed', primary: profile, options: { targetDate },
+          type: 'progressed', primary: profile, settings: settingsFor(input), options: { targetDate },
         });
-        return _serializeChart(chart);
+        return chartToolResult(chart, _serializeChart(chart));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
     },
   });
 
-  return [
+  return decorateTools([
     computeNatalChart, computeTransit, computeSynastry,
     computeBazi, computeSolarReturn, computeProgressed,
-  ];
+  ], 'astro');
 }
 
 /**
@@ -294,8 +288,9 @@ async function buildContextTools(aiService) {
     schema: z.object({}),
     func: async () => {
       const ctx = (aiService && aiService.getContext()) || {};
+      if (ctx.kind === 'chinese-chart') return ctx.lastBaziData ? baziToolResult(ctx.lastBaziData) : '用户尚未计算八字命盘。';
       if (!ctx.lastChartData) return '用户尚未计算任何星盘。';
-      return _serializeCurrentChartContext(ctx);
+      return chartToolResult(ctx.lastChartData, _serializeCurrentChartContext(ctx));
     },
   });
 
@@ -334,7 +329,7 @@ async function buildContextTools(aiService) {
     },
   });
 
-  return [getCurrentContext, getCurrentChart, getActiveProfile, getCurrentTime];
+  return decorateTools([getCurrentContext, getCurrentChart, getActiveProfile, getCurrentTime], 'context');
 }
 
 /**

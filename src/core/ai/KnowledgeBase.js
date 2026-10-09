@@ -57,7 +57,7 @@ class KnowledgeBase {
         const content = fs.readFileSync(filePath, 'utf-8');
         const docs = await splitter.createDocuments(
           [content],
-          [{ source, fileName: f, domain: this._extractDomain(content) }],
+          [{ documentId: require('./ToolResult').hash(filePath), source, fileName: f, domain: this._extractDomain(content) }],
         );
         allChunks.push(...docs);
         this._docs.push({ id: filePath, name: f, source, importedAt: new Date().toISOString() });
@@ -153,6 +153,8 @@ class KnowledgeBase {
       source: (r.metadata && r.metadata.source) || 'unknown',
       fileName: (r.metadata && r.metadata.fileName) || '',
       domain: (r.metadata && r.metadata.domain) || 'general',
+      documentId: r.metadata?.documentId || `${r.metadata?.source || 'unknown'}:${r.metadata?.fileName || ''}`,
+      location: r.metadata?.loc?.lines ? { lines: r.metadata.loc.lines } : null,
     }));
   }
 
@@ -193,7 +195,7 @@ class KnowledgeBase {
         content = fs.readFileSync(filePath, 'utf-8');
       }
 
-      const docs = await splitter.createDocuments([content], [{ source: 'user', fileName: f, domain: this._extractDomain(content) }]);
+      const docs = await splitter.createDocuments([content], [{ documentId: require('./ToolResult').hash(filePath), source: 'user', fileName: f, domain: this._extractDomain(content) }]);
       allChunks.push(...docs);
       this._docs.push({ id: filePath, name: f, source: 'user', importedAt: new Date().toISOString() });
     }

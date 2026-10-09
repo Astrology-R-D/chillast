@@ -1,5 +1,6 @@
 import type { Profile } from '../../api/contracts';
-import unicodeDefaultCaseFold from '../../../core/util/UnicodeCaseFold';
+import unicodeDefaultCaseFold from '@chillast/unicode-case-fold';
+import { fuzzyMatch, searchScore } from '@chillast/search';
 
 export type RecentFilter = 'all' | '7d' | '30d';
 export type ProfileSort = 'updated-desc' | 'name-asc' | 'birth-asc' | 'recent-desc';
@@ -114,7 +115,7 @@ export function selectDirectoryProfiles(
 
   const selected = profiles.filter((profile) => {
     const haystack = searchableText(profile);
-    if (!tokens.every((token) => haystack.includes(token))) return false;
+    if (!tokens.every((token) => fuzzyMatch(token, [haystack]))) return false;
     if (query.recent === 'all') return true;
 
     const recentUse = validRecentUse(recents[profile.id], now);
@@ -122,6 +123,10 @@ export function selectDirectoryProfiles(
   });
 
   return selected.sort((left, right) => {
+    if (tokens.length) {
+      const relevance = searchScore(query.search, [searchableText(left)]) - searchScore(query.search, [searchableText(right)]);
+      if (relevance) return relevance;
+    }
     let order = 0;
 
     switch (query.sort) {

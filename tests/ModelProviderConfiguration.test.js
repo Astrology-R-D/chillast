@@ -115,7 +115,7 @@ test('unknown provider degrades to openai_compat and commits an unconfigured sta
 test('catalog-driven maxTokens: model limit wins when user sets nothing', async () => {
   const provider = new ModelProvider({ load: fakeLoader(), catalog: DEEPSEEK_CATALOG });
   await provider.configure({ provider: 'deepseek', model: 'deepseek-v4-flash', apiKey: 'key' });
-  assert.equal(provider.chatModel().options.maxTokens, 384000);
+  assert.equal(provider.chatModel().options.maxTokens, 393216);
   assert.equal(provider.chatModel().options.configuration.baseURL, 'https://api.deepseek.com');
 });
 

@@ -92,7 +92,14 @@ function assertAiContext(value) {
   let serialized;
   try { serialized = JSON.stringify(value); } catch { throw new TypeError('AI context must be serializable'); }
   if (Buffer.byteLength(serialized, 'utf8') > MAX_CONTEXT_BYTES) throw new RangeError('AI context exceeds size limit');
-  if (!western(value) && !legacy(value)) throw new TypeError('AI context has malformed or extra fields');
+  const chinese = exactKeys(value, ['kind', 'route', 'chartType', 'resultId', 'activeProfile', 'lastBaziData'])
+    && value.kind === 'chinese-chart' && value.route === 'chinese' && value.chartType === 'bazi'
+    && (value.resultId === null || shortString(value.resultId, 256)) && legacyProfile(value.activeProfile)
+    && (value.lastBaziData === null || (exactKeys(value.lastBaziData, ['bazi', 'lunar', 'analysis']) && object(value.lastBaziData.bazi)
+      && object(value.lastBaziData.bazi.pillars) && ['year', 'month', 'day', 'hour'].every((key) => object(value.lastBaziData.bazi.pillars[key]))
+      && object(value.lastBaziData.bazi.dayMaster) && object(value.lastBaziData.lunar)))
+    && ((value.lastBaziData === null) === (value.resultId === null));
+  if (!western(value) && !legacy(value) && !chinese) throw new TypeError('AI context has malformed or extra fields');
   return value;
 }
 

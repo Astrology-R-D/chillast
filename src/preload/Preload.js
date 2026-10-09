@@ -62,6 +62,13 @@ const isLegacyProfile = (value) => value === null || (isObject(value)
 const isLegacyContext = (value) => hasExactKeys(value, LEGACY_CONTEXT_KEYS) && isShortString(value.route, 64)
   && isLegacyProfile(value.activeProfile) && (value.lastChartData === null || isObject(value.lastChartData))
   && (value.chartType === null || isShortString(value.chartType, 64));
+const isChineseContext = (value) => hasExactKeys(value, ['kind', 'route', 'chartType', 'resultId', 'activeProfile', 'lastBaziData'])
+  && value.kind === 'chinese-chart' && value.route === 'chinese' && value.chartType === 'bazi'
+  && (value.resultId === null || isShortString(value.resultId, 256)) && isLegacyProfile(value.activeProfile)
+  && (value.lastBaziData === null || (hasExactKeys(value.lastBaziData, ['bazi', 'lunar', 'analysis']) && isObject(value.lastBaziData.bazi)
+    && isObject(value.lastBaziData.bazi.pillars) && ['year', 'month', 'day', 'hour'].every((key) => isObject(value.lastBaziData.bazi.pillars[key]))
+    && isObject(value.lastBaziData.bazi.dayMaster) && isObject(value.lastBaziData.lunar)))
+  && ((value.lastBaziData === null) === (value.resultId === null));
 const utf8Bytes = (value) => {
   let bytes = 0;
   for (const character of value) {
@@ -75,7 +82,7 @@ const assertAiContext = (value) => {
   let serialized;
   try { serialized = JSON.stringify(value); } catch { throw new TypeError('AI context must be serializable'); }
   if (utf8Bytes(serialized) > MAX_AI_CONTEXT_BYTES) throw new RangeError('AI context exceeds size limit');
-  if (!isWesternContext(value) && !isLegacyContext(value)) throw new TypeError('AI context has malformed or extra fields');
+  if (!isWesternContext(value) && !isLegacyContext(value) && !isChineseContext(value)) throw new TypeError('AI context has malformed or extra fields');
   return value;
 };
 
@@ -140,6 +147,13 @@ contextBridge.exposeInMainWorld('mystApi', {
     chat: (messages, context) => invoke('ai:chat', messages, context),
     stop: (sessionId) => invoke('ai:stop', sessionId),
     configure: (settings) => invoke('ai:configure', settings),
+    configurations: {
+      list: () => invoke('ai:configurations:list'),
+      save: (input) => invoke('ai:configurations:save', input),
+      activate: (id) => invoke('ai:configurations:activate', id),
+      remove: (id) => invoke('ai:configurations:remove', id),
+      test: (input) => invoke('ai:configurations:test', input),
+    },
     status: () => invoke('ai:status'),
     testConnection: () => invoke('ai:testConnection'),
     testWithSettings: (settings) => invoke('ai:testWithSettings', settings),
@@ -149,6 +163,9 @@ contextBridge.exposeInMainWorld('mystApi', {
       models: (providerKey) => invoke('ai:catalog:models', providerKey),
     },
     setContext: (context) => invoke('ai:setContext', assertAiContext(context)),
+    contextUsage: (sessionId, draft) => invoke('ai:context:usage', sessionId, draft),
+    compressContext: (sessionId) => invoke('ai:context:compress', sessionId),
+    onContextChanged: (callback) => subscribe('ai:contextChanged', callback),
     onToken: (callback) => ipcRenderer.on('ai:token', (_e, data) => callback(data)),
     onDone: (callback) => ipcRenderer.on('ai:done', (_e, data) => callback(data)),
     onError: (callback) => ipcRenderer.on('ai:error', (_e, data) => callback(data)),

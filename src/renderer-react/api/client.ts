@@ -1,10 +1,14 @@
 import type {
   AiCatalogModel,
+  AiConfigurationList,
+  AiConfigurationSaveInput,
+  AiSavedConfiguration,
   AiCatalogProvider,
   AiMcpInfo,
   AiSessionSummary,
   AiSettingsInput,
   AiStatus,
+  ContextUsage,
   AiToolProviderDescriptor,
   AppConfig,
   BirthData,
@@ -19,8 +23,9 @@ import type {
   ProfileSaveInput,
   ResolveLocationInput,
   WesternCityRaw,
-  WesternChartAiContext,
+  WorkspaceAiContext,
 } from './contracts';
+import { baziResultSchema, solarTermCalendarSchema, type BaziResult, type SolarTermCalendar } from '../features/chinese/contracts';
 import { assertCatalogMatchesDescriptors } from '../features/charts/catalog';
 import type {
   ChartCatalogDefinition,
@@ -133,6 +138,9 @@ export function parseAiStatus(value: unknown): AiStatus {
     || status.knowledgeDocCount < 0
     || !optionalNumberIsValid('temperature')
     || !optionalNumberIsValid('maxTokens')
+    || !optionalNumberIsValid('contextWindow')
+    || !optionalNumberIsValid('maxOutputTokens')
+    || (status.maxTokensMode !== undefined && status.maxTokensMode !== 'custom' && status.maxTokensMode !== 'context')
   ) {
     throw new Error('AI 状态数据无效');
   }
@@ -144,6 +152,9 @@ export function parseAiStatus(value: unknown): AiStatus {
     baseUrl: status.baseUrl,
     temperature: status.temperature,
     maxTokens: status.maxTokens,
+    ...(status.maxTokensMode !== undefined ? { maxTokensMode: status.maxTokensMode } : {}),
+    ...(status.contextWindow !== undefined ? { contextWindow: status.contextWindow } : {}),
+    ...(status.maxOutputTokens !== undefined ? { maxOutputTokens: status.maxOutputTokens } : {}),
     knowledgeDocCount: status.knowledgeDocCount,
   } as AiStatus;
 }
@@ -367,6 +378,21 @@ export const apiClient = {
     parseAiCatalogModels(await invoke<unknown>((api) => api.ai.catalog.models(providerKey))),
   configureAi: (settings: AiSettingsInput): Promise<unknown> =>
     invoke<unknown>((api) => api.ai.configure(settings)),
+  listAiConfigurations: (): Promise<AiConfigurationList> => invoke((api) => api.ai.configurations.list()),
+  saveAiConfiguration: (input: AiConfigurationSaveInput): Promise<AiSavedConfiguration> => invoke((api) => api.ai.configurations.save(input)),
+  activateAiConfiguration: (id: string): Promise<AiSavedConfiguration> => invoke((api) => api.ai.configurations.activate(id)),
+  removeAiConfiguration: (id: string): Promise<AiConfigurationList> => invoke((api) => api.ai.configurations.remove(id)),
+  testAiConfiguration: (input: AiConfigurationSaveInput): Promise<unknown> => invoke((api) => api.ai.configurations.test(input)),
+  computeBazi: async (profile: Profile): Promise<BaziResult> => {
+    const result = baziResultSchema.safeParse(await invoke((api) => api.chinese.computeBazi(profile)));
+    if (!result.success) throw new Error('命理计算结果无效，请重新排盘');
+    return result.data;
+  },
+  getSolarTerms: async (year: number): Promise<SolarTermCalendar> => {
+    const result = solarTermCalendarSchema.safeParse(await invoke((api) => api.chinese.getSolarTerms(year)));
+    if (!result.success || result.data.year !== year) throw new Error('节气年历数据无效，请重新查询');
+    return result.data;
+  },
   testAiSettings: (settings: AiSettingsInput): Promise<unknown> =>
     invoke<unknown>((api) => api.ai.testWithSettings(settings)),
   listKnowledgeDocs: async (): Promise<KnowledgeDoc[]> => {
@@ -396,6 +422,10 @@ export const apiClient = {
     if (!Array.isArray(value)) throw new Error('会话数据无效');
     return value as AiSessionSummary[];
   },
+  getAiContextUsage: (id: string, draft = ''): Promise<ContextUsage> =>
+    invoke<ContextUsage>((api) => api.ai.contextUsage(id, draft)),
+  compressAiContext: (id: string): Promise<{ usage: ContextUsage; changed: boolean; message: string }> =>
+    invoke((api) => api.ai.compressContext(id)),
   renameAiSession: (id: string, title: string): Promise<unknown> =>
     invoke<unknown>((api) => api.ai.sessions.rename(id, title)),
   regenerateAiSessionTitle: (id: string): Promise<{ title: string }> =>
@@ -410,7 +440,7 @@ export const apiClient = {
     invoke<AiSessionSummary>((api) => api.ai.sessions.setPinned(sessionId, pinned)),
   replaceAiSessionFrom: (sessionId: string, messageIndex: number, message: { role: string; content: string }): Promise<AiSessionSummary> =>
     invoke<AiSessionSummary>((api) => api.ai.sessions.replaceFrom(sessionId, messageIndex, message)),
-  setAiChartContext: (context: WesternChartAiContext | null): Promise<unknown> =>
+  setAiChartContext: (context: WorkspaceAiContext | null): Promise<unknown> =>
     invoke<unknown>((api) => api.ai.setContext(context)),
   listProfiles: async (): Promise<Profile[]> => {
     const value = await invoke<Profile[]>((api) => api.profiles.list());

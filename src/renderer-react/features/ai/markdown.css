@@ -1,0 +1,48 @@
+@import 'github-markdown-css/github-markdown.css' layer(markdown-base);
+
+/* The application's selected theme, rather than the OS query in the library, owns colors. */
+.markdown-message {
+  --fgColor-default: var(--text-primary);
+  --fgColor-muted: var(--text-secondary);
+  --fgColor-accent: var(--focus);
+  --fgColor-danger: var(--danger);
+  --fgColor-success: var(--success);
+  --fgColor-attention: var(--warning);
+  --bgColor-default: transparent;
+  --bgColor-muted: var(--surface-raised);
+  --bgColor-neutral-muted: var(--surface-hover);
+  --borderColor-default: var(--border-strong);
+  --borderColor-muted: var(--border-subtle);
+  --borderColor-accent-emphasis: var(--focus);
+  --fontStack-monospace: var(--font-mono);
+  color-scheme: inherit;
+  color: var(--text-primary);
+  background: transparent;
+  font-family: var(--ai-font-family, var(--font-family));
+  font-size: var(--ai-font-size, 16px);
+  font-weight: 400;
+  line-height: var(--ai-line-height, 1.8);
+  letter-spacing: var(--ai-letter-spacing, 0px);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.markdown-message :is(p, ul, ol, blockquote, pre, table) { margin-block: 0 var(--ai-paragraph-spacing, .9em); }
+.markdown-message > :last-child { margin-bottom: 0; }
+.markdown-message :is(h1, h2, h3, h4, h5, h6) { margin-block: 1.4em .6em; line-height: 1.4; color: var(--text-primary); }
+.markdown-message > :first-child { margin-top: 0; }
+.markdown-message h1 { font-size: 1.4em; }
+.markdown-message h2 { font-size: 1.25em; }
+.markdown-message h3 { font-size: 1.1em; }
+.markdown-message li + li { margin-top: .35em; }
+.markdown-message pre { max-width: 100%; overflow: auto; font-family: var(--font-mono); background: var(--surface-raised); border-radius: 6px; padding: 12px; }
+.markdown-message > table { display: block; max-width: 100%; overflow-x: auto; }
+.markdown-message table { font-size: .9em; border-collapse: collapse; }
+.markdown-message th, .markdown-message td { border: 1px solid var(--border-subtle); padding: 6px 10px; }
+.markdown-message tr { background: transparent; border-color: var(--border-subtle); }
+.markdown-message tr:nth-child(2n) { background: var(--surface-hover); }
+.markdown-message blockquote { border-inline-start: 3px solid var(--border-strong); color: var(--text-secondary); padding-inline: 12px; }
+.markdown-message strong { font-weight: 600; }
+.markdown-message img { max-width: 100%; }
+.markdown-message code { font-family: var(--font-mono); letter-spacing: 0; }
+.markdown-message a { color: var(--focus); }
+.markdown-message :is(button, a):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

@@ -1,6 +1,9 @@
 import type { ColumnDef, FilterFn, SortingFn } from '@tanstack/react-table';
 import type { ComparisonMode, ExplorerTab } from '../../../stores/chartWorkspacePersistence';
 import { compareNullableNumbers, type ExplorerRow, type MachineValue } from './explorerRows';
+import type { NormalizedChartResult } from '../contracts';
+import { ChartValue, presentChartValue } from './chartPresentation';
+import { fuzzyMatch } from '@chillast/search';
 
 export type ChartColumnId = string;
 
@@ -96,6 +99,8 @@ export function columnsFor(
   tab: ExplorerTab,
   mode: ComparisonMode,
   labels: Record<string, string>,
+  result?: NormalizedChartResult,
+  raw = false,
 ): ColumnDef<ExplorerRow, MachineValue>[] {
   return columnIds(tab, mode).map((id): ColumnDef<ExplorerRow, MachineValue> => {
     if (id === 'selected') {
@@ -118,7 +123,9 @@ export function columnsFor(
         // TanStack keeps undefined last in both sort directions; machine rows retain explicit null.
         return NUMERIC_IDS.has(id) && value === null ? undefined as unknown as MachineValue : value;
       },
-      filterFn: filterFor(id),
+      cell: ({ row }) => <ChartValue row={row.original} id={id} result={result} raw={raw} />,
+      filterFn: NUMERIC_IDS.has(id) || BOOLEAN_IDS.has(id) ? filterFor(id) : (row, columnId, value) =>
+        Array.isArray(value) || value instanceof Set ? tokenFilter(row, columnId, value, () => {}) : fuzzyMatch(String(value ?? ''), presentChartValue(row.original, columnId, result).aliases),
       sortingFn: NUMERIC_IDS.has(id) ? nullableNumberSort : 'alphanumeric',
       sortUndefined: 'last',
       minSize: 72,

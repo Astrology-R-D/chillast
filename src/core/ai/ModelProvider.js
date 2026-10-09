@@ -2,8 +2,7 @@
 
 const esm = require('./esm-bridge');
 const { PROVIDER_WHITELIST, resolveProviderEntry } = require('./ProviderCatalogWhitelist');
-
-const FALLBACK_OUTPUT_LIMIT = 8192;
+const { modelTokenLimits, resolveTokenBudget } = require('./TokenBudget');
 
 /**
  * Engine registry — maps an engine kind (see ProviderCatalogWhitelist) to its
@@ -23,22 +22,6 @@ const ENGINE_MAP = {
   ollama: { pkg: '@langchain/community/chat_models/ollama', chatCls: 'ChatOllama', emb: null, needsKey: false },
 };
 
-/**
- * maxTokens resolution order (spec §5):
- *   1. user-set value (kept, but clamped to the model limit — the API would
- *      reject anything above it anyway)
- *   2. catalog limit.output for the selected model
- *   3. conservative 8192 for models the catalog doesn't know
- */
-function resolveMaxTokens(userMax, modelLimit) {
-  if (Number.isFinite(userMax) && userMax > 0) {
-    const floored = Math.floor(userMax);
-    return Number.isFinite(modelLimit) && modelLimit > 0 ? Math.min(floored, modelLimit) : floored;
-  }
-  if (Number.isFinite(modelLimit) && modelLimit > 0) return modelLimit;
-  return FALLBACK_OUTPUT_LIMIT;
-}
-
 class ModelProvider {
   /** @param {{ load?: Function, catalog?: object }} [deps] — injectable for tests. */
   constructor({ load = esm.load, catalog = null } = {}) {
@@ -55,6 +38,10 @@ class ModelProvider {
   }
 
   async configure(settings) {
+    if (settings.maxTokensMode !== undefined && !['custom', 'context'].includes(settings.maxTokensMode)) throw new Error('输出额度模式无效');
+    for (const key of ['contextWindow', 'maxOutputTokens']) {
+      if (settings[key] !== undefined && (!Number.isSafeInteger(settings[key]) || settings[key] < 0)) throw new Error('模型上下文参数必须为非负整数');
+    }
     const nextSettings = { ...settings };
     const entry = resolveProviderEntry(settings.provider);
     // Unknown provider ids degrade to OpenAI-compatible semantics (user baseUrl)
@@ -70,8 +57,9 @@ class ModelProvider {
     const chatOpts = {
       model: modelId,
       temperature: settings.temperature ?? 0.7,
-      maxTokens: resolveMaxTokens(Number(settings.maxTokens), catalogModel ? catalogModel.limitOutput : NaN),
+      maxTokens: resolveTokenBudget(settings, modelTokenLimits(settings, catalogModel)),
     };
+    if (engine === ENGINE_MAP.ollama) chatOpts.numPredict = chatOpts.maxTokens;
 
     // baseURL: user override wins (cn/intl switching), then the catalog default.
     const baseUrl = settings.baseUrl
@@ -96,11 +84,26 @@ class ModelProvider {
     }
 
     const nextModel = engine.needsKey && !settings.apiKey ? null : new ChatCls(chatOpts);
+    if (nextModel && modelTokenLimits(settings, catalogModel).context) {
+      const limits = modelTokenLimits(settings, catalogModel);
+      // LangGraph binds the tool schemas before these model methods run. Recalculate
+      // for each invocation, including new tool results, without mutating shared settings.
+      for (const method of ['_generate', '_streamResponseChunks']) {
+        const original = nextModel[method];
+        if (typeof original !== 'function') continue;
+        nextModel[method] = function(messages, options, runManager) {
+          const maxTokens = resolveTokenBudget(settings, limits, messages, options?.tools);
+          const scoped = new ChatCls({ ...chatOpts, maxTokens, ...(engine === ENGINE_MAP.ollama ? { numPredict: maxTokens } : {}) });
+          return original.call(scoped, messages, options, runManager);
+        };
+      }
+    }
     const nextEmbeddings = await this._resolveEmbeddings(settings, { engine });
     const previousEmbeddings = this._embeddings;
 
     this._settings = nextSettings;
     this._model = nextModel;
+    this._modelFactory = (maxTokens) => new ChatCls({ ...chatOpts, maxTokens: Math.min(maxTokens, chatOpts.maxTokens || Infinity), ...(engine === ENGINE_MAP.ollama ? { numPredict: maxTokens } : {}) });
     this._embeddings = nextEmbeddings;
 
     if (previousEmbeddings && previousEmbeddings !== nextEmbeddings && typeof previousEmbeddings.close === 'function') {
@@ -162,7 +165,7 @@ class ModelProvider {
     this._embeddings = null;
   }
 
-  chatModel() { return this._model; }
+  chatModel(maxTokens) { return maxTokens && this._modelFactory ? this._modelFactory(maxTokens) : this._model; }
   embeddings() { return this._embeddings; }
   isConfigured() { return this._model !== null; }
 

@@ -1,5 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { History, X } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nProvider';
 import { parseAiStatus, apiClient } from '../../api/client';
 import type { AiStatus } from '../../api/contracts';
@@ -10,6 +12,8 @@ import { retryLatestChartAiContext } from '../charts/context/chartAiContextPubli
 import { ChatMode } from './ChatMode';
 import { ContextStrip } from './ContextStrip';
 import { SessionRail } from './SessionRail';
+import { ToolViewsContext } from './toolViews/ToolUserViewRegistry';
+import { profileWorkspaceStore } from '../../stores/profileWorkspace';
 import './ai-workspace.css';
 
 export function AiWorkspace({ onNavigate }: { onNavigate?: (route: RouteKey) => void }) {
@@ -19,6 +23,8 @@ export function AiWorkspace({ onNavigate }: { onNavigate?: (route: RouteKey) => 
   const setMode = useAiStreamStore((state) => state.setMode);
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [statusError, setStatusError] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyContainer, setHistoryContainer] = useState<HTMLElement | null>(null);
   const aiContextSyncStatus = useChartWorkspace((state) => state.aiContextSyncStatus);
   const aiContextSyncMessage = useChartWorkspace((state) => state.aiContextSyncMessage);
   const setAiContextSync = useChartWorkspace((state) => state.setAiContextSync);
@@ -66,8 +72,18 @@ export function AiWorkspace({ onNavigate }: { onNavigate?: (route: RouteKey) => 
   const statusChip = status?.configured ? `${status.provider || '—'} · ${status.model || '—'}` : null;
 
   return (
-    <section className="ai-workspace" aria-label={t('ai.title')}>
+    <ToolViewsContext.Provider value={{ openProfile: (id) => { profileWorkspaceStore.getState().setPrimaryProfile(id); onNavigate?.('personal'); } }}><section ref={setHistoryContainer} className="ai-workspace" aria-label={t('ai.title')}>
       <header className="ai-workspace__header">
+        <Dialog.Root open={historyOpen} onOpenChange={setHistoryOpen}>
+          <Dialog.Trigger asChild><button type="button" className="ai-workspace__history" aria-label={t('ai.history')}><History size={16} />{t('ai.history')}</button></Dialog.Trigger>
+          <Dialog.Portal container={historyContainer}>
+            <Dialog.Overlay className="session-drawer__overlay" />
+            <Dialog.Content className="session-drawer" aria-describedby={undefined}>
+              <header className="session-drawer__header"><Dialog.Title>{t('ai.history')}</Dialog.Title><Dialog.Close asChild><button type="button" aria-label={t('shell.closeAi')}><X size={18} /></button></Dialog.Close></header>
+              <SessionRail onSelect={() => setHistoryOpen(false)} />
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
         <div className="ai-workspace__modes" role="tablist" aria-label={t('ai.title')}>
           <button type="button" className="ai-workspace__mode-tab" role="tab" aria-pressed={mode === 'chat'} aria-selected={mode === 'chat'}
             onClick={() => setMode('chat')}><span aria-hidden="true">💬 </span>{t('ai.modeChat')}</button>
@@ -100,12 +116,11 @@ export function AiWorkspace({ onNavigate }: { onNavigate?: (route: RouteKey) => 
       <ContextStrip />
       <div className="ai-workspace__body">
         <div className="ai-workspace__content">
-          <SessionRail />
           {mode === 'chat' ? <ChatMode statusChip={statusChip} />
             : mode === 'report' ? <div className="ai-workspace__placeholder">{t('ai.reportPlaceholder')}</div>
             : <div className="ai-workspace__placeholder">{t('ai.researchPlaceholder')}</div>}
         </div>
       </div>
-    </section>
+    </section></ToolViewsContext.Provider>
   );
 }

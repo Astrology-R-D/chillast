@@ -52,6 +52,7 @@ export interface ChartDataGridProps {
   sortLabel?: string;
   filterLabel?: string;
   selectLabel?: string;
+  showFilters?: boolean;
 }
 
 const NUMERIC_FILTER_COLUMNS = new Set([
@@ -94,6 +95,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
   sortLabel = 'Sort',
   filterLabel = 'Filter',
   selectLabel = 'Select',
+  showFilters = true,
 }, forwardedRef) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeCellOwnsFocus = useRef(false);
@@ -401,7 +403,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
             {header.column.getIsSorted() === 'asc' ? <ArrowUp size={12} /> : header.column.getIsSorted() === 'desc' ? <ArrowDown size={12} /> : <ArrowUpDown size={12} />}
           </button> : flexRender(header.column.columnDef.header, header.getContext())}
         </div>
-        {header.column.getCanFilter() && (BOOLEAN_FILTER_COLUMNS.has(header.column.id)
+        {showFilters && header.column.getCanFilter() && (BOOLEAN_FILTER_COLUMNS.has(header.column.id)
           ? <select className="chart-data-grid__filter" aria-label={`${filterLabel} ${String(header.column.columnDef.header ?? header.column.id)}`}
             value={filterValue(header.column.id, header.column.getFilterValue())}
             onChange={(event) => setFilter(header.column.id, event.target.value, header.column.setFilterValue)}>
@@ -430,7 +432,7 @@ export const ChartDataGrid = forwardRef<ChartDataGridHandle, ChartDataGridProps>
               onKeyDown={(event) => onCellKeyDown(event, virtualRow.index, columnIndex)}>
               {cell.column.id === 'selected'
                 ? <input type="checkbox" tabIndex={-1} checked={selected} aria-label={`${selectLabel} ${row.id}`} onChange={() => toggleRow(row.id)} />
-                : String(cell.getValue<MachineValue>() ?? '')}
+                : cell.column.columnDef.cell ? flexRender(cell.column.columnDef.cell, cell.getContext()) : String(cell.getValue<MachineValue>() ?? '')}
             </div>;
           })}
         </div>;

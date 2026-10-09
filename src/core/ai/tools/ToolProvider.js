@@ -31,7 +31,7 @@ class ToolProvider {
 
   /** Return (and cache) this provider's tools. */
   async listTools() {
-    if (!this._tools) this._tools = await this._build();
+    if (!this._tools) this._tools = require('../ToolResult').decorateTools(await this._build(), this.id);
     return this._tools;
   }
 

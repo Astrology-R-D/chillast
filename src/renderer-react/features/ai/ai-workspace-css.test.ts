@@ -5,14 +5,15 @@ import { expect, test } from 'vitest';
 const css = readFileSync(resolve(process.cwd(), 'src/renderer-react/features/ai/ai-workspace.css'), 'utf8');
 
 test('workspace fills the ai panel as a column with a bounded message list', () => {
-  expect(css).toMatch(/\.ai-workspace\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*auto\s+auto\s+minmax\(0,\s*1fr\)[^}]*min-height:\s*0/s);
+  expect(css).toMatch(/\.ai-workspace\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*min-height:\s*0/s);
   expect(css).toMatch(/\.ai-workspace__body\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s);
   expect(css).toMatch(/\.message-list\s*\{[^}]*min-height:\s*0/s);
   expect(css).toMatch(/\.message-list__scroller\s*\{[^}]*overflow-y:\s*auto[^}]*min-height:\s*0/s);
 });
 
-test('chat mode and session rail split horizontally with confined overflow', () => {
-  expect(css).toMatch(/\.ai-workspace__content\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*2fr\)/s);
+test('chat fills its column and session history scrolls in an independent drawer', () => {
+  expect(css).toMatch(/\.ai-workspace__content\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
+  expect(css).toMatch(/\.session-drawer\s*\{[^}]*position:\s*fixed[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\)/s);
   expect(css).toMatch(/\.session-rail\s*\{[^}]*overflow-y:\s*auto/s);
 });
 

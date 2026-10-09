@@ -65,6 +65,16 @@ class AiSessionStore {
     return session;
   }
 
+  setContextSummary(id, summary) {
+    const { prefixHash } = require('../core/ai/ContextManager');
+    const sessions = this._readAll();
+    const session = sessions.find((s) => s.id === id);
+    if (!session || !summary || summary.prefixHash !== prefixHash(session.messages, summary.coveredMessages)) return null;
+    session.contextSummary = summary;
+    this._writeAll(sessions);
+    return session;
+  }
+
   // Set a session's display title (AI-generated summary or manual rename).
   // Does not touch updatedAt so the list ordering is preserved.
   setTitle(id, title) {
@@ -96,6 +106,7 @@ class AiSessionStore {
       mode: source.mode || 'chat',
       pinned: false,
       forkedFrom: { sessionId, messageIndex: index },
+      ...(source.contextSummary && source.contextSummary.coveredMessages <= index + 1 ? { contextSummary: source.contextSummary } : {}),
       title: `↩ 分支自 ${String(label).slice(0, 24)}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -129,6 +140,7 @@ class AiSessionStore {
     if (!Number.isInteger(index) || index < 0 || index >= session.messages.length) return null;
     if (!message || typeof message !== 'object' || typeof message.content !== 'string') return null;
     session.messages = [...session.messages.slice(0, index), { ...message }];
+    if (session.contextSummary?.coveredMessages > index) delete session.contextSummary;
     session.updatedAt = new Date().toISOString();
     this._writeAll(sessions);
     return session;

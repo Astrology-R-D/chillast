@@ -1,9 +1,12 @@
 'use strict';
 
+const { formatDegreeMinutes } = require('../../../shared/DegreeFormat');
+const { HOUSE_SYSTEMS } = require('../../astrology/Constants');
+
 const GENDER_ZH = { male: '男', female: '女', other: '其他' };
 
 function formatPoint(p) {
-  const deg = p.dms ? `${p.dms.degrees}°${String(p.dms.minutes).padStart(2, '0')}′` : `${p.degreeInSign.toFixed(2)}°`;
+  const deg = formatDegreeMinutes(p.degreeInSign);
   const retro = p.retrograde ? ' (逆行)' : '';
   const house = p.house ? ` 第${p.house}宫` : '';
   return `${p.glyph} ${p.nameZh}\t${p.signNameZh} ${deg}${house}${retro}`;
@@ -11,7 +14,7 @@ function formatPoint(p) {
 
 function formatAngle(a) {
   if (!a) return '';
-  const deg = a.dms ? `${a.dms.degrees}°${String(a.dms.minutes).padStart(2, '0')}′` : `${a.degreeInSign.toFixed(2)}°`;
+  const deg = formatDegreeMinutes(a.degreeInSign);
   return `${a.glyph} ${a.nameZh}: ${a.signNameZh || ''} ${deg}`;
 }
 
@@ -42,6 +45,12 @@ function toText(chartData) {
 
   lines.push(`【${meta.typeNameZh || meta.type || '星盘'}】${subjects}`);
   if (meta.subtitle) lines.push(meta.subtitle);
+  if (meta.settings) {
+    const house = HOUSE_SYSTEMS.find((s) => s.value === meta.settings.houseSystem);
+    const zodiac = { tropical: '回归黄道', sidereal: '恒星黄道（Lahiri）' }[meta.settings.zodiac];
+    lines.push(`计算设置：${house?.nameZh || meta.settings.houseSystem || '未指定宫位制'} · ${zodiac || '未指定黄道'}`);
+  }
+  if (meta.instantUtc) lines.push(`计算时刻（UTC）：${meta.instantUtc}`);
   lines.push('');
 
   // Subject demographics — gender / birth moment / place. Without this the LLM
@@ -74,20 +83,21 @@ function toText(chartData) {
       lines.push('');
     }
 
-    if (ring.angles) {
+    const angles = ring.angles || (ri === 0 ? chartData.angles : null);
+    if (angles && Object.keys(angles).length) {
       lines.push('── 四轴 ──');
       for (const key of ['ascendant', 'midheaven', 'descendant', 'imumcoeli']) {
-        const a = ring.angles[key];
+        const a = angles[key];
         if (a) lines.push(formatAngle(a));
       }
       lines.push('');
     }
 
-    if (ring.houses && ring.houses.length) {
+    const houses = ring.houses || (ri === 0 ? chartData.houses : null);
+    if (houses && houses.length) {
       lines.push('── 宫位 ──');
-      for (const h of ring.houses) {
-        const deg = h.degreeInSign != null ? h.degreeInSign.toFixed(2) : '?';
-        lines.push(`第${h.index}宫: ${h.signNameZh || h.signKey || ''} ${deg}°`);
+      for (const h of houses) {
+        lines.push(`第${h.index}宫: ${h.signNameZh || h.signKey || ''} ${formatDegreeMinutes(h.degreeInSign)}`);
       }
       lines.push('');
     }

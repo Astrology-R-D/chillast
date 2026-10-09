@@ -88,3 +88,27 @@ test('replaceFrom rejects out-of-range indexes and missing sessions', () => {
   assert.equal(store.replaceFrom('no-such-session', 0, { role: 'user', content: 'y' }), null);
   assert.equal(store.get(s.id).messages.length, 1, 'rejections leave the session untouched');
 });
+
+test('summary persists without deleting archives and older edits invalidate it', () => {
+  const { prefixHash, contextHistory } = require('../src/core/ai/ContextManager');
+  const { store, dir } = newStore(); const s = store.create();
+  for (const [index, content] of ['旧问题', '旧回复', '新问题', '新回复'].entries()) store.appendMessage(s.id, { role: index % 2 ? 'ai' : 'user', content });
+  const summary = { text: '早期摘要', coveredMessages: 2, prefixHash: prefixHash(store.get(s.id).messages, 2), createdAt: new Date().toISOString() };
+  assert.ok(store.setContextSummary(s.id, summary));
+  const reloaded = new AiSessionStore(dir).init();
+  assert.equal(reloaded.get(s.id).messages.length, 4);
+  assert.equal(contextHistory(reloaded.get(s.id)).length, 3);
+  const forked = store.fork(s.id, 0);
+  assert.equal(forked.contextSummary, undefined);
+  store.replaceFrom(s.id, 0, { role: 'user', content: '纠正旧问题' });
+  assert.equal(store.get(s.id).contextSummary, undefined);
+});
+
+test('summary commit rejects a concurrently changed prefix', () => {
+  const { prefixHash } = require('../src/core/ai/ContextManager');
+  const { store } = newStore(); const s = store.create();
+  store.appendMessage(s.id, { role: 'user', content: '旧问题' });
+  const summary = { text: '摘要', coveredMessages: 1, prefixHash: prefixHash(store.get(s.id).messages, 1) };
+  store.replaceFrom(s.id, 0, { role: 'user', content: '新问题' });
+  assert.equal(store.setContextSummary(s.id, summary), null);
+});

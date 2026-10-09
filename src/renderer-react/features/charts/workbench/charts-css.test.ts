@@ -17,12 +17,11 @@ test('bounds relocation results and popovers to viewport-safe scrolling blocks',
   expect(css).toMatch(/\.chart-popover\s*\{[^}]*max-block-size:\s*min\([^}]*overflow:\s*auto/s);
 });
 
-test('keeps the interactive wheel square, nonzero, and clear of fixed density controls', () => {
-  expect(css).toMatch(/\.interactive-chart\s*\{[^}]*min-height:\s*320px[^}]*padding-top:/s);
-  expect(css).toMatch(/\.interactive-chart\s*\{[^}]*container-type:\s*size/s);
-  expect(css).toMatch(/\.interactive-chart__svg\s*\{[^}]*width:\s*min\(100%,\s*100cqh\)/s);
-  expect(css).toMatch(/\.interactive-chart__svg\s*\{[^}]*min-width:\s*0[^}]*min-height:\s*0/s);
-  expect(css).toMatch(/\.interactive-chart__svg\s+svg\s*\{[^}]*width:\s*100%[^}]*height:\s*100%[^}]*aspect-ratio:\s*1/s);
+test('gives the SVG the entire bounded viewport with the toolbar in its own row', () => {
+  expect(css).toMatch(/\.interactive-chart\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\)[^}]*min-height:\s*0/s);
+  expect(css).toMatch(/\.interactive-chart__svg\s*\{[^}]*min-width:\s*0[^}]*min-height:\s*0[^}]*width:\s*100%[^}]*height:\s*100%/s);
+  expect(css).toMatch(/\.interactive-chart__svg\s+svg\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/s);
+  expect(css).not.toContain('100cqh');
   expect(css).toMatch(/data-density='compact'[^}]*--chart-control-size:\s*32px/s);
   expect(css).toMatch(/data-density='comfortable'[^}]*--chart-control-size:\s*36px/s);
   expect(css).toMatch(/\.chart-toolbar__button\s*\{[^}]*width:\s*var\(--chart-control-size\)[^}]*height:\s*var\(--chart-control-size\)/s);

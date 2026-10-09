@@ -157,6 +157,9 @@ export interface AiStatus {
   baseUrl: string;
   temperature?: number;
   maxTokens?: number;
+  maxTokensMode?: 'custom' | 'context';
+  contextWindow?: number;
+  maxOutputTokens?: number;
   knowledgeDocCount: number;
 }
 
@@ -208,7 +211,8 @@ export interface KnowledgeDoc {
 export interface AiSessionSummary {
   id: string;
   title: string | null;
-  messages: Array<{ role: string; content: string; attachments?: Array<{ name: string; content: string }> }>;
+  messages: Array<{ role: string; content: string; attachments?: Array<{ name: string; content: string }>; toolCalls?: AiToolCall[]; analysisReport?: AnalysisReport }>;
+  contextSummary?: { text: string; coveredMessages: number; prefixHash: string; createdAt: string };
   pinned?: boolean;
   forkedFrom?: { sessionId: string; messageIndex: number };
   mode?: 'chat' | 'research';
@@ -216,11 +220,67 @@ export interface AiSessionSummary {
   updatedAt?: string;
 }
 
+export interface AiSavedConfiguration {
+  id: string;
+  name: string;
+  settings: Omit<AiSettingsInput, 'apiKey'>;
+  hasApiKey: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AiConfigurationList { activeId: string | null; configurations: AiSavedConfiguration[] }
+export interface AiConfigurationSaveInput { id?: string; name: string; settings: AiSettingsInput }
+
+export interface AiToolCall {
+  callId?: string;
+  tool: string;
+  status: 'calling' | 'done' | 'error';
+  argsDigest: string;
+  resultExcerpt: string;
+  args?: string;
+  result?: string;
+  startedAt?: number;
+  durationMs?: number;
+  requiresConfirmation: boolean;
+  artifact?: ToolArtifact;
+}
+
+export interface AiActivity {
+  phase: 'preparing' | 'analysis' | 'validation' | 'answer';
+  topic?: string;
+  repair?: boolean;
+}
+
+export interface SourceSnapshot {
+  id: string; documentId: string; version: string; title: string; content: string;
+  fileName?: string; source: string; url?: string;
+  location?: { lines?: { from: number; to: number } } | null;
+}
+export interface ToolArtifact {
+  version: number; providerId?: string; tool?: string; kind: string; data: unknown;
+  sources?: SourceSnapshot[]; facts?: Record<string, string>;
+}
+export interface AnalysisReport {
+  version: number; contextKey: string; focus: string; questions: string[]; sources: SourceSnapshot[];
+  claims: Array<{ id: string; statement: string; facts: Array<{ callId: string; key: string; text: string }>;
+    sourceIds: string[]; limitations: string; question: string }>;
+}
+export interface ContextUsage {
+  used: number; limit: number; percent: number | null; reserve: number; safety: number;
+  estimated: boolean; needsCompression: boolean; compressedMessages?: number;
+}
+export interface ContextEvent {
+  sessionId: string; usage?: ContextUsage; compression?: 'running' | 'done' | 'error'; message?: string;
+}
+
 export interface AiSettingsInput {
   provider: string;
   model: string;
   temperature?: number;
   maxTokens?: number;
+  maxTokensMode?: 'custom' | 'context';
+  contextWindow?: number;
+  maxOutputTokens?: number;
   baseUrl?: string;
   apiKey?: string;
 }
@@ -262,3 +322,10 @@ export interface WesternChartAiContext {
     values: Record<string, string | number | boolean | null>;
   }>;
 }
+
+export interface ChineseChartAiContext {
+  kind: 'chinese-chart'; route: 'chinese'; chartType: 'bazi'; resultId: string | null;
+  activeProfile: Pick<Profile, 'id' | 'nameZh' | 'nameEn' | 'gender' | 'birthData'> & { displayName: string };
+  lastBaziData: import('../features/chinese/contracts').BaziResult | null;
+}
+export type WorkspaceAiContext = WesternChartAiContext | ChineseChartAiContext;

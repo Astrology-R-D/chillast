@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 import { apiClient } from '../../api/client';
-import type { WesternChartAiContext } from '../../api/contracts';
+import type { WorkspaceAiContext } from '../../api/contracts';
 import {
   invalidateLatestChartAiContext, latestChartAiContext, subscribeChartAiContext,
 } from '../charts/context/chartAiContextPublisher';
@@ -9,12 +9,12 @@ import {
 /** 当前 AI 上下文摘要条：档案 / 盘型 / 时间 / 焦点 / 已选；× 清除 = setContext(null)（spec §4）。 */
 export function ContextStrip() {
   const { t } = useI18n();
-  const [context, setContext] = useState<WesternChartAiContext | null>(() => latestChartAiContext());
+  const [context, setContext] = useState<WorkspaceAiContext | null>(() => latestChartAiContext());
 
   useEffect(() => subscribeChartAiContext(() => setContext(latestChartAiContext())), []);
 
   if (!context) return null;
-  const chips = [
+  const chips = context.kind === 'chinese-chart' ? [context.activeProfile.displayName, t('chinese.title'), context.lastBaziData ? t('chinese.generated') : ''] : [
     context.activeProfile?.displayName,
     context.successfulFilters?.type,
     context.draftSummary && typeof context.draftSummary === 'object' && 'targetLocal' in context.draftSummary

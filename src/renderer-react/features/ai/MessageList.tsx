@@ -4,6 +4,8 @@ import type { AiSessionSummary } from '../../api/contracts';
 import { useAiStreamStore } from '../../stores/aiStreamStore';
 import { MarkdownMessage } from './MarkdownMessage';
 import { MessageItem } from './MessageItem';
+import { ToolActivity } from './ToolActivity';
+import { AiActivityIndicator } from './AiActivityIndicator';
 
 const PAUSE_THRESHOLD_PX = 40;
 
@@ -28,6 +30,7 @@ export function MessageList({ messages, canRegenerate, onCopy, onQuote, onEditRe
   const segments = useAiStreamStore((state) => state.segments);
   const truncated = useAiStreamStore((state) => state.truncated);
   const error = useAiStreamStore((state) => state.error);
+  const analysisReport = useAiStreamStore((state) => state.analysisReport);
   const autoScrollPaused = useAiStreamStore((state) => state.autoScrollPaused);
   const setAutoScrollPaused = useAiStreamStore((state) => state.setAutoScrollPaused);
 
@@ -60,6 +63,7 @@ export function MessageList({ messages, canRegenerate, onCopy, onQuote, onEditRe
 
   return (
     <div className="message-list">
+      <div className="message-list__activity-slot">{active && <AiActivityIndicator />}</div>
       <div ref={scrollerRef} className="message-list__scroller" role="log" aria-label={t('ai.messagesRegion')} onScroll={handleScroll}>
         {messages.length === 0 && !active && <div className="message-list__empty">{t('ai.noMessages')}</div>}
         {messages.map((message, index) => (
@@ -86,9 +90,10 @@ export function MessageList({ messages, canRegenerate, onCopy, onQuote, onEditRe
             {segments.length > 0 && (
               <div className="message-item message-item--ai">
                 <div className="message-item__body">
+                  <ToolActivity calls={segments.flatMap((segment) => segment.kind === 'tool' ? [segment.event] : [])} />
                   {segments.map((segment, index) => segment.kind === 'text'
-                    ? <MarkdownMessage key={index} content={segment.content} />
-                    : <ToolCard key={index} event={segment.event} />)}
+                    ? <MarkdownMessage key={index} content={segment.content} report={analysisReport} />
+                    : null)}
                 </div>
               </div>
             )}
@@ -106,22 +111,6 @@ export function MessageList({ messages, canRegenerate, onCopy, onQuote, onEditRe
         <button type="button" className="message-list__back-to-latest" onClick={backToLatest}>
           {t('ai.backToLatest')}
         </button>
-      )}
-    </div>
-  );
-}
-
-/** 紧凑工具卡片：参数摘要 + 完成后的结果摘录（可展开工具行属 ResearchMode，Plan C）。 */
-function ToolCard({ event }: { event: { tool: string; status: string; argsDigest: string; resultExcerpt: string } }) {
-  const { t } = useI18n();
-  return (
-    <div className={`tool-card tool-card--${event.status}`} data-tool={event.tool}>
-      <span className="tool-card__icon">{event.status === 'done' ? '✓' : '⚙'}</span>
-      <span className="tool-card__name">{event.tool}</span>
-      {event.argsDigest && <span className="tool-card__digest">{event.argsDigest}</span>}
-      <span className="tool-card__status">{event.status === 'done' ? t('ai.toolDone') : t('ai.toolRunning')}</span>
-      {event.status === 'done' && event.resultExcerpt && (
-        <div className="tool-card__excerpt">{event.resultExcerpt}</div>
       )}
     </div>
   );

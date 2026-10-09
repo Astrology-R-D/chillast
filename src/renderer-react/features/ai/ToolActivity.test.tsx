@@ -1,0 +1,23 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { expect, test } from 'vitest';
+import { I18nProvider } from '../../i18n/I18nProvider';
+import dictionary from '../../../../locale/zh.json';
+import { ToolActivity } from './ToolActivity';
+test('collapses complete tools and retains the full result behind expandable summaries', async () => {
+  const result = '完整结果'.repeat(100);
+  const { container } = render(<I18nProvider dictionary={dictionary}><ToolActivity calls={[{callId:'a', tool:'compute_natal_chart', status:'done', argsDigest:'摘要', args:'完整参数', resultExcerpt:'截断', result, requiresConfirmation:false}]} /></I18nProvider>);
+  const group = container.querySelector('details')!;
+  expect(group.open).toBe(false);
+  fireEvent.click(group.querySelector('summary')!);
+  expect(screen.getByText('计算本命盘')).toBeInTheDocument();
+  const card = container.querySelector('.tool-card') as HTMLDetailsElement;
+  card.open = true;
+  fireEvent(card, new Event('toggle'));
+  await waitFor(() => expect(screen.getAllByText(result).length).toBeGreaterThan(0));
+  expect(screen.getAllByText('完整参数').length).toBeGreaterThan(0);
+  const raw = container.querySelector('.tool-card__raw') as HTMLDetailsElement;
+  expect(raw.querySelector('pre')).toBeNull();
+  raw.open = true;
+  fireEvent(raw, new Event('toggle'));
+  await waitFor(() => expect(raw.querySelector('pre')?.textContent).toBe('完整参数'));
+});

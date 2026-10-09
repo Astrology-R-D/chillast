@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "requestedCharacterCount": 646,
-  "subsetCharacterCount": 611,
+  "requestedCharacterCount": 724,
+  "subsetCharacterCount": 688,
   "sourceMissing": [
     {
       "character": "℞",
@@ -138,6 +138,10 @@
     {
       "character": "✱",
       "codePoint": "U+2731"
+    },
+    {
+      "character": "️",
+      "codePoint": "U+FE0F"
     },
     {
       "character": "＋",

@@ -5,6 +5,7 @@ import {
   startPreferenceSync,
   syncPreferencesToDocument,
 } from './preferences';
+import { aiReadingStyles } from './aiReading';
 
 function createStorage(values: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(values));
@@ -29,6 +30,18 @@ beforeEach(() => {
 });
 
 describe('createPreferencesStore', () => {
+  test('reading values survive restarting the store and corrupted values remain usable', () => {
+    const storage = createStorage();
+    const store = createPreferencesStore(storage);
+    store.getState().setAiReading({ font: 'serif', fontSize: 20, lineHeight: 2, paragraphSpacing: 1.2 });
+    expect(createPreferencesStore(storage).getState().aiReading).toMatchObject({ font: 'serif', fontSize: 20, lineHeight: 2, paragraphSpacing: 1.2 });
+    storage.setItem('chillast.aiReading', JSON.stringify({ font: 'custom', customFont: 'Arial; color:red', fontSize: 1000, lineHeight: -1 }));
+    const restored = createPreferencesStore(storage).getState().aiReading;
+    expect(restored).toMatchObject({ customFont: '', fontSize: 24, lineHeight: 1.3 });
+    expect(aiReadingStyles(restored)['--ai-font-family']).not.toContain('color:red');
+    storage.setItem('chillast.aiReading', 'broken JSON');
+    expect(createPreferencesStore(storage).getState().aiReading.fontSize).toBe(16);
+  });
   test('defaults to system theme and compact density', () => {
     const store = createPreferencesStore(createStorage());
 
@@ -139,8 +152,11 @@ describe('document preference sync', () => {
     expect(media.listenerCount()).toBe(1);
     store.getState().setDensity('comfortable');
     store.getState().setTheme('dark');
+    store.getState().setAiReading({ fontSize: 19, lineHeight: 2 });
     expect(document.documentElement.dataset.density).toBe('comfortable');
     expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.style.getPropertyValue('--ai-font-size')).toBe('19px');
+    expect(document.documentElement.style.getPropertyValue('--ai-line-height')).toBe('2');
 
     cleanup();
     cleanup();

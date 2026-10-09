@@ -60,7 +60,11 @@ test('initializes the active session from the list and renders chat mode with mo
   expect(screen.getByRole('tab', { name: '报告' })).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: '研究' })).toBeInTheDocument();
   await waitFor(() => expect(aiStreamStore.getState().activeSessionId).toBe('s1'));
+  expect(screen.queryByRole('complementary', { name: '对话历史' })).not.toBeInTheDocument();
+  await userEvent.setup().click(screen.getByRole('button', { name: '对话历史' }));
   expect(screen.getByRole('complementary', { name: '对话历史' })).toBeInTheDocument();
+  await userEvent.setup().keyboard('{Escape}');
+  expect(screen.queryByRole('complementary', { name: '对话历史' })).not.toBeInTheDocument();
 });
 
 test('creates a session when the list is empty', async () => {

@@ -37,6 +37,7 @@
 .shell__ai {
   border-left: 1px solid var(--border-subtle);
 }
+.shell__ai:not([hidden]) { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
 .shell__main {
   display: grid;
@@ -159,7 +160,9 @@
 }
 
 .shell__ai-content {
-  overflow: auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .shell__icon-button {
@@ -332,6 +335,14 @@
 }
 
 .workspace__route-error { padding: var(--panel-padding); overflow: auto; }
+.workspace:has(.chart-result--focused) { container-type: normal; }
+
+/* Blur creates a containing block for fixed descendants; dialogs need the viewport. */
+.shell__ai:has(.tool-chart-dialog), .shell__ai-overlay:has(.tool-chart-dialog),
+.shell__ai:has(.session-drawer), .shell__ai-overlay:has(.session-drawer) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 
 .workspace__header {
   display: flex;

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { searchScore } from '@chillast/search';
 import { useI18n } from '../../i18n/I18nProvider';
 import { apiClient } from '../../api/client';
 import { aiStreamStore, useAiStreamStore } from '../../stores/aiStreamStore';
 
 /** 会话侧栏（三模式共享，spec §2/§6）：搜索（渲染层过滤）/置顶/重命名/删除/新建。 */
-export function SessionRail() {
+export function SessionRail({ onSelect }: { onSelect?(): void } = {}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -33,16 +34,13 @@ export function SessionRail() {
   const create = useMutation({ mutationFn: () => apiClient.createAiSession(), onSuccess: (session) => {
     aiStreamStore.getState().setActiveSessionId(session.id);
     invalidate();
+    onSelect?.();
   } });
 
-  const sessions = (sessionsQuery.data ?? []).filter((session) => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return true;
-    const label = session.title
-      ?? session.messages.find((message) => message.role === 'user')?.content
-      ?? '';
-    return label.toLowerCase().includes(needle);
-  });
+  const sessionFields = (session: { title: string | null; messages: Array<{ role: string; content: string }> }) =>
+    [session.title ?? '', session.messages.find((message) => message.role === 'user')?.content ?? ''];
+  const sessions = (sessionsQuery.data ?? []).filter((session) => Number.isFinite(searchScore(search, sessionFields(session))))
+    .sort((a, b) => searchScore(search, sessionFields(a)) - searchScore(search, sessionFields(b)));
 
   const label = (session: { title: string | null; messages: Array<{ role: string; content: string }> }): string =>
     session.title
@@ -82,7 +80,7 @@ export function SessionRail() {
                 onBlur={() => submitRename(session.id)} />
             ) : (
               <button type="button" className="session-rail__select" disabled={streamActive}
-                onClick={() => aiStreamStore.getState().setActiveSessionId(session.id)}>
+                onClick={() => { aiStreamStore.getState().setActiveSessionId(session.id); onSelect?.(); }}>
                 {/* 标记包在子 span 里： getNodeText 只拼接直接文本子节点，避免破坏对标签的精确文本查询。 */}
                 <span className="session-rail__label">{session.pinned ? <span className="session-rail__pin-mark">📌 </span> : null}{session.forkedFrom ? <span className="session-rail__fork-mark">↩ </span> : null}{label(session)}</span>
               </button>

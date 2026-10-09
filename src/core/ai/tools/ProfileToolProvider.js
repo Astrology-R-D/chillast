@@ -2,6 +2,9 @@
 
 const ToolProvider = require('./ToolProvider');
 const esm = require('../esm-bridge');
+const { toolResult } = require('../ToolResult');
+const { searchScore } = require('../../util/FuzzySearch');
+const publicProfile = (p) => ({ id: p.id, nameZh: p.nameZh, nameEn: p.nameEn, gender: p.gender, birthData: p.birthData });
 
 const GENDER_ZH = { male: '男', female: '女', other: '其他' };
 
@@ -41,7 +44,7 @@ class ProfileToolProvider extends ToolProvider {
       func: async () => {
         const all = repo.list() || [];
         if (!all.length) return '工作站中还没有任何档案。';
-        return all.map((p, i) => `${i + 1}. ${_summary(p)}`).join('\n');
+        return toolResult(all.map((p, i) => `${i + 1}. ${_summary(p)}`).join('\n'), 'profiles', all.map(publicProfile), { facts: Object.fromEntries(all.map((p) => [p.id, _summary(p)])) });
       },
     });
 
@@ -54,11 +57,10 @@ class ProfileToolProvider extends ToolProvider {
         const q = String(input.name || '').trim().toLowerCase();
         if (!q) return '请提供要查找的姓名。';
         const all = repo.list() || [];
-        const matches = all.filter((p) =>
-          (p.nameZh || '').toLowerCase().includes(q) || (p.nameEn || '').toLowerCase().includes(q));
+        const matches = all.map((p) => ({ p, score: searchScore(q, [p.nameZh || '', p.nameEn || '']) }))
+          .filter(({ score }) => Number.isFinite(score)).sort((a, b) => a.score - b.score).map(({ p }) => p);
         if (!matches.length) return `没有找到姓名包含“${input.name}”的档案。`;
-        if (matches.length === 1) return _summary(matches[0]);
-        return `找到 ${matches.length} 个匹配档案：\n${matches.map((p, i) => `${i + 1}. ${_summary(p)}`).join('\n')}`;
+        return toolResult(matches.length === 1 ? _summary(matches[0]) : `找到 ${matches.length} 个匹配档案：\n${matches.map((p, i) => `${i + 1}. ${_summary(p)}`).join('\n')}`, 'profiles', matches.map(publicProfile), { facts: Object.fromEntries(matches.map((p) => [p.id, _summary(p)])) });
       },
     });
 

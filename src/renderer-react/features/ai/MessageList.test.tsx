@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { I18nProvider } from '../../i18n/I18nProvider';
@@ -12,6 +12,7 @@ const dictionary = {
     backToLatest: '↓ 回到最新', truncated: '⚠️ 输出因达到 Token 上限被截断，可在设置中调高「最大 Token 数」',
     retrySend: '重试', streamError: '请求失败',
     messagesRegion: '对话消息', noMessages: '会话暂无消息', toolRunning: '运行中…', toolDone: '完成',
+    toolNames: { search_knowledge: '检索知识库' },
   },
 };
 
@@ -44,7 +45,7 @@ test('renders history through MessageItem and an empty state when there are no m
   expect(screen.getByText('你好')).toBeInTheDocument();
 });
 
-test('streams: local user preview, markdown text, tool cards, truncation, and done cleanup', () => {
+test('streams: local user preview, markdown text, tool cards, truncation, and done cleanup', async () => {
   // store 的 consumeStreamEvent 已把 done 合并进 calling 段（argsDigest 保留）——
   // 夹具模拟合并后的真实 store 状态。
   aiStreamStore.setState({
@@ -58,7 +59,10 @@ test('streams: local user preview, markdown text, tool cards, truncation, and do
   renderList();
   expect(screen.getByText('流中问题')).toBeInTheDocument();
   expect(screen.getByText('正在回答')).toBeInTheDocument();
-  expect(screen.getByText('search_knowledge')).toBeInTheDocument();
+  expect(screen.getByText('检索知识库')).toBeInTheDocument();
+  const card = document.querySelector('.tool-card') as HTMLDetailsElement;
+  card.open = true; fireEvent(card, new Event('toggle'));
+  await waitFor(() => expect(screen.getByText('q=火星')).toBeInTheDocument());
   expect(screen.getByText('q=火星')).toBeInTheDocument();
   expect(screen.getByText('《行星落宫》摘录')).toBeInTheDocument();
   expect(screen.getByText(/Token 上限被截断/)).toBeInTheDocument();

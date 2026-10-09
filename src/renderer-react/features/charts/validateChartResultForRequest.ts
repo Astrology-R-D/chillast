@@ -1,7 +1,7 @@
 import { CHART_DESCRIPTORS } from './catalog';
 import type { ChartRequest, ChartType, NormalizedChartResult } from './contracts';
 import ringContract from '../../../shared/WesternChartResultRings.json';
-import { validateChartResultForRequestCore } from '../../../shared/ChartResultForRequest';
+import { validateChartResultForRequestCore } from '@chillast/chart-result-for-request';
 
 interface ExpectedRing { id: string; role: string }
 

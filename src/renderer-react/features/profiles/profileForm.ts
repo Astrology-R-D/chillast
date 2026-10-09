@@ -1,4 +1,4 @@
-import unicodeDefaultCaseFold from '../../../core/util/UnicodeCaseFold';
+import unicodeDefaultCaseFold from '@chillast/unicode-case-fold';
 import type { Gender, Profile, ProfileSaveInput } from '../../api/contracts';
 
 export interface ProfileDraft {

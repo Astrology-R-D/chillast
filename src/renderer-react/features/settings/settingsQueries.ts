@@ -5,6 +5,7 @@ import { apiClient } from '../../api/client';
 // 避免造一层无人使用的包装（YAGNI）。
 export const aiQueryKeys = {
   status: ['ai', 'status'] as const,
+  configurations: ['ai', 'configurations'] as const,
   catalogProviders: ['ai', 'catalog', 'providers'] as const,
   catalogModels: (providerKey: string) => ['ai', 'catalog', 'models', providerKey] as const,
   knowledge: ['ai', 'knowledge'] as const,
@@ -15,6 +16,9 @@ export const aiQueryKeys = {
 
 export function useAiStatus() {
   return useQuery({ queryKey: aiQueryKeys.status, queryFn: apiClient.getAiStatus });
+}
+export function useAiConfigurations() {
+  return useQuery({ queryKey: aiQueryKeys.configurations, queryFn: apiClient.listAiConfigurations });
 }
 
 export function useAiCatalogProviders() {

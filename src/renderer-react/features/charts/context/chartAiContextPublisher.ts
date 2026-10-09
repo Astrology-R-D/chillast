@@ -1,11 +1,11 @@
-import type { WesternChartAiContext } from '../../../api/contracts';
+import type { WorkspaceAiContext } from '../../../api/contracts';
 
-type Sender = (context: WesternChartAiContext | null) => Promise<unknown>;
+type Sender = (context: WorkspaceAiContext | null) => Promise<unknown>;
 type Status = (error: unknown | null) => void;
 interface PublicationIntent {
   owner: symbol;
   isActive: boolean;
-  context: WesternChartAiContext | null;
+  context: WorkspaceAiContext | null;
   send: Sender;
   status: Status;
 }
@@ -19,7 +19,7 @@ let latestIntent: PublicationIntent | null = null;
 const contextListeners = new Set<() => void>();
 const notifyContextListeners = () => { for (const listener of contextListeners) listener(); };
 
-function enqueue(owner: symbol, isActive: boolean, context: WesternChartAiContext | null, send: Sender, status: Status): void {
+function enqueue(owner: symbol, isActive: boolean, context: WorkspaceAiContext | null, send: Sender, status: Status): void {
   latestIntent = { owner, isActive, context, send, status };
   notifyContextListeners();
   const currentGeneration = ++generation;
@@ -42,7 +42,7 @@ function enqueue(owner: symbol, isActive: boolean, context: WesternChartAiContex
   });
 }
 
-export function publishLatestChartAiContext(owner: symbol, context: WesternChartAiContext | null, send: Sender, status: Status): void {
+export function publishLatestChartAiContext(owner: symbol, context: WorkspaceAiContext | null, send: Sender, status: Status): void {
   enqueue(owner, true, context, send, status);
 }
 
@@ -67,7 +67,7 @@ export function resetChartAiContextPublisherForTests(): void {
 }
 
 /** 最近一次上下文意图（含 null 清除）；ContextStrip 的数据源（spec §4）。 */
-export function latestChartAiContext(): WesternChartAiContext | null {
+export function latestChartAiContext(): WorkspaceAiContext | null {
   return latestIntent?.context ?? null;
 }
 

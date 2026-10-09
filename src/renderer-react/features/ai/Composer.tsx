@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 import { useAiStreamStore } from '../../stores/aiStreamStore';
 import type { ChatAttachment } from './chatMessage';
+import { ContextUsageBar } from './ContextUsageBar';
+import { buildChatMessageContent } from './chatMessage';
 
 const MAX_ATTACHMENT_BYTES = 200 * 1024;
 const MAX_INPUT_HEIGHT_PX = 120;
@@ -22,9 +24,11 @@ export function Composer({ disabled, statusChip, onSend, onStop, quoteDraft, onQ
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState('');
+  const [compressing, setCompressing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const active = useAiStreamStore((state) => state.active);
+  const stage = useAiStreamStore((state) => state.stage);
   const toolCalling = useAiStreamStore((state) => state.active
     && state.segments.some((segment) => segment.kind === 'tool' && segment.event.status === 'calling'));
 
@@ -39,7 +43,7 @@ export function Composer({ disabled, statusChip, onSend, onStop, quoteDraft, onQ
     onQuoteConsumed?.();
   }, [quoteDraft, onQuoteConsumed]);
 
-  const blocked = disabled || active;
+  const blocked = disabled || active || compressing;
 
   const autoGrow = () => {
     const element = textareaRef.current;
@@ -82,9 +86,11 @@ export function Composer({ disabled, statusChip, onSend, onStop, quoteDraft, onQ
 
   return (
     <div className="composer">
+      <ContextUsageBar draft={buildChatMessageContent(text, attachments)} onBusyChange={setCompressing} />
       {statusChip && (
         <div className="composer__status" data-calling={toolCalling ? 'true' : undefined}>
           <span>{statusChip}</span>
+          {active && stage && <span>{t(`ai.stages.${stage}`)}</span>}
           {toolCalling && <span className="composer__tool-activity"><span aria-hidden="true">⚙</span> {t('ai.toolRunning')}</span>}
         </div>
       )}

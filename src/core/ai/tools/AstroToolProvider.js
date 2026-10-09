@@ -17,6 +17,11 @@ class AstroToolProvider extends ToolProvider {
   async _build() {
     return buildComputeTools(this._astrology, this._chinese);
   }
+
+  /** Request-local tools keep UI changes and concurrent sessions from altering a running calculation. */
+  async listToolsForSettings(settings) {
+    return buildComputeTools(this._astrology, this._chinese, settings);
+  }
 }
 
 module.exports = AstroToolProvider;

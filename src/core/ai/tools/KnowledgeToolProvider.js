@@ -2,6 +2,7 @@
 
 const ToolProvider = require('./ToolProvider');
 const esm = require('../esm-bridge');
+const { toolResult, sourceSnapshot } = require('../ToolResult');
 
 /**
  * KnowledgeToolProvider — exposes the RAG knowledge base as a `search_knowledge`
@@ -32,9 +33,8 @@ class KnowledgeToolProvider extends ToolProvider {
       func: async (input) => {
         const docs = await kb.retrieve(input.query, 4);
         if (!docs.length) return '未找到相关知识';
-        return docs.map((d, i) =>
-          `[参考${i + 1}] (领域: ${d.domain || '通用'}, 来源: ${d.fileName || d.source})\n${d.content}`
-        ).join('\n\n---\n\n');
+        const sources = docs.map(sourceSnapshot);
+        return toolResult(sources.map((s) => `[${s.id}] 来源: ${s.title}\n${s.content}`).join('\n\n---\n\n'), 'knowledge', { query: input.query }, { sources });
       },
     });
 

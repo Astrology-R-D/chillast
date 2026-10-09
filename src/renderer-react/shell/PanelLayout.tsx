@@ -278,6 +278,7 @@ export function resizePanelSizesByKeyboard(
 
 export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS, aiOpenSignal }: PanelLayoutProps) {
   const isNarrow = useNarrowLayout();
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(
     readInitialDesktopAiCollapsed,
@@ -339,7 +340,7 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS,
   }, [isDesktopAiCollapsed, isNarrow]);
 
   useEffect(() => {
-    if (!isAiOpen) return;
+    if (!isNarrow || !isAiOpen) return;
 
     closeRef.current?.focus();
     const handleEscape = (event: globalThis.KeyboardEvent) => {
@@ -359,7 +360,7 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS,
       if (restoreOpenerOnCloseRef.current) openerRef.current?.focus();
       restoreOpenerOnCloseRef.current = true;
     };
-  }, [isAiOpen]);
+  }, [isAiOpen, isNarrow]);
 
   const isHiddenFromFocus = (element: HTMLElement) => {
     if (element.tabIndex < 0 || element.matches(':disabled, [aria-disabled="true"]')) return true;
@@ -381,7 +382,7 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS,
   };
 
   const trapFocus = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Tab') return;
+    if (!isNarrow || !isAiOpen || event.key !== 'Tab') return;
     const focusable = Array.from(
       dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
     ).filter((element) => !isHiddenFromFocus(element));
@@ -429,9 +430,11 @@ export function PanelLayout({ navigation, ai, children, labels = DEFAULT_LABELS,
         maxSize={PANEL_SIZES.navigation.maxSize}
         collapsible
         collapsedSize={PANEL_SIZES.navigation.collapsedSize}
+        onCollapse={() => setNavigationCollapsed(true)}
+        onExpand={() => setNavigationCollapsed(false)}
       >
         <nav
-          className={`shell__navigation${isNarrow ? ' shell__navigation--rail' : ''}`}
+          className={`shell__navigation${isNarrow || navigationCollapsed ? ' shell__navigation--rail' : ''}`}
           aria-label={labels.navigationRegion}
           aria-hidden={isNarrow && isAiOpen ? true : undefined}
           inert={isNarrow && isAiOpen}

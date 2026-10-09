@@ -1,5 +1,10 @@
 import type {
   AiCatalogModel,
+  AiConfigurationList,
+  AiConfigurationSaveInput,
+  AiSavedConfiguration,
+  ContextUsage,
+  ContextEvent,
   AiCatalogProvider,
   AiInitProgress,
   AiMcpInfo,
@@ -15,7 +20,7 @@ import type {
   Profile,
   ProfileSaveInput,
   ResolveLocationInput,
-  WesternChartAiContext,
+  WorkspaceAiContext,
 } from '../api/contracts';
 import type { ChartRequest } from '../features/charts/contracts';
 
@@ -25,17 +30,27 @@ declare global {
     initStatus(): Promise<IpcResult<AiInitProgress | null>>;
     onStatusChanged(callback: (status: unknown) => void): () => void;
     onInitProgress(callback: (progress: AiInitProgress) => void): () => void;
-    setContext(context: WesternChartAiContext | null): Promise<IpcResult<unknown>>;
+    setContext(context: WorkspaceAiContext | null): Promise<IpcResult<unknown>>;
+    contextUsage(sessionId: string, draft?: string): Promise<IpcResult<ContextUsage>>;
+    compressContext(sessionId: string): Promise<IpcResult<{ usage: ContextUsage; changed: boolean; message: string }>>;
+    onContextChanged(callback: (event: ContextEvent) => void): () => void;
     readTextAttachment(filePath: string): Promise<IpcResult<{ name: string; content: string }>>;
     chat(messages: Array<{ role: string; content: string; attachments?: Array<{ name: string; content: string }> }>, context: { sessionId?: string; resend?: boolean; [key: string]: unknown }): Promise<IpcResult<unknown>>;
     interpret(chartData: unknown, options: { sessionId?: string; chartType?: string; [key: string]: unknown }): Promise<IpcResult<unknown>>;
     stop(sessionId: string): Promise<IpcResult<unknown>>;
-    onToken(callback: (event: { sessionId?: string; type: string; data: unknown }) => void): void;
-    onDone(callback: (event: { ok?: boolean; sessionId?: string }) => void): void;
-    onError(callback: (event: { message?: string; sessionId?: string }) => void): void;
+    onToken(callback: (event: { sessionId?: string; requestId?: string; type: string; data: unknown }) => void): void;
+    onDone(callback: (event: { ok?: boolean; sessionId?: string; requestId?: string }) => void): void;
+    onError(callback: (event: { message?: string; sessionId?: string; requestId?: string }) => void): void;
     removeAllListeners(): void;
     onSessionsChanged(callback: () => void): () => void;
     configure(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
+    configurations: {
+      list(): Promise<IpcResult<AiConfigurationList>>;
+      save(input: AiConfigurationSaveInput): Promise<IpcResult<AiSavedConfiguration>>;
+      activate(id: string): Promise<IpcResult<AiSavedConfiguration>>;
+      remove(id: string): Promise<IpcResult<AiConfigurationList>>;
+      test(input: AiConfigurationSaveInput): Promise<IpcResult<unknown>>;
+    };
     testWithSettings(settings: AiSettingsInput): Promise<IpcResult<unknown>>;
     catalog: {
       providers(): Promise<IpcResult<AiCatalogProvider[]>>;
@@ -80,6 +95,8 @@ declare global {
     };
     searchCities(query: string): Promise<IpcResult<unknown[]>>;
     chinese: {
+      computeBazi(profile: Profile): Promise<IpcResult<unknown>>;
+      getSolarTerms(year: number): Promise<IpcResult<unknown>>;
       searchCities(query: string): Promise<IpcResult<unknown[]>>;
     };
     locations: {

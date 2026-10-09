@@ -119,7 +119,7 @@ test('regenerate rewrites the last user message in place and resends with resend
   await waitFor(() => expect(apiClient.replaceAiSessionFrom).toHaveBeenCalledWith('s1', 2, { role: 'user', content: '问题二' }));
   await waitFor(() => expect(window.mystApi.ai.chat).toHaveBeenCalledWith(
     [{ role: 'user', content: '问题二' }],
-    { sessionId: 's1', resend: true },
+    expect.objectContaining({ sessionId: 's1', resend: true }),
   ));
 });
 
@@ -143,7 +143,7 @@ test('edit-resend on a non-last user message forks first, then rewrites in the f
   expect(aiStreamStore.getState().activeSessionId).toBe('fork-1');
   expect(window.mystApi.ai.chat).toHaveBeenCalledWith(
     [{ role: 'user', content: '改写后的问题' }],
-    { sessionId: 'fork-1', resend: true },
+    expect.objectContaining({ sessionId: 'fork-1', resend: true }),
   );
 });
 
@@ -189,6 +189,6 @@ test('stream error offers retry which regenerates', async () => {
   await waitFor(() => expect(apiClient.replaceAiSessionFrom).toHaveBeenCalledWith('s1', 4, { role: 'user', content: '会失败的问题' }));
   await waitFor(() => expect(window.mystApi.ai.chat).toHaveBeenCalledWith(
     [{ role: 'user', content: '会失败的问题' }],
-    { sessionId: 's1', resend: true },
+    expect.objectContaining({ sessionId: 's1', resend: true }),
   ));
 });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 import type { AiSessionSummary } from '../../api/contracts';
 import { MarkdownMessage } from './MarkdownMessage';
+import { ToolActivity } from './ToolActivity';
 
 type ChatMessage = AiSessionSummary['messages'][number];
 
@@ -36,6 +37,7 @@ export function MessageItem({ index, message, disabled, onRegenerate, onCopy, on
   return (
     <div className={`message-item message-item--${isUser ? 'user' : 'ai'}`} data-role={message.role}>
       <div className="message-item__body">
+        {message.toolCalls && <ToolActivity calls={message.toolCalls} />}
         {hasAttachments && (
           <div className="message-item__attachments">
             {message.attachments!.map((attachment) => (
@@ -43,7 +45,7 @@ export function MessageItem({ index, message, disabled, onRegenerate, onCopy, on
             ))}
           </div>
         )}
-        {isUser ? <div className="message-item__text">{message.content}</div> : <MarkdownMessage content={message.content} />}
+        {isUser ? <div className="message-item__text">{message.content}</div> : <MarkdownMessage content={message.content} report={message.analysisReport} />}
       </div>
       <div className="message-item__actions" data-disabled={disabled ? 'true' : undefined}>
         {onCopy && <button type="button" disabled={disabled} onClick={() => onCopy(message.content)}>{t('ai.copy')}</button>}

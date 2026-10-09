@@ -4,6 +4,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { I18nProvider } from '../../i18n/I18nProvider';
 import { aiStreamStore, resetAiStreamStoreForTests } from '../../stores/aiStreamStore';
 import { Composer } from './Composer';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const dictionary = {
   ai: {
@@ -16,7 +17,7 @@ const dictionary = {
 function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {}) {
   return render(<I18nProvider dictionary={dictionary}>
     <Composer onSend={vi.fn()} onStop={vi.fn()} {...props} />
-  </I18nProvider>);
+  </I18nProvider>, { wrapper: ({ children }) => <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider> });
 }
 
 beforeEach(() => {

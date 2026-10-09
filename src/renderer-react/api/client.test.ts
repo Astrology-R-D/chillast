@@ -26,7 +26,7 @@ function ok<T>(data: T): Promise<IpcResult<T>> {
   return Promise.resolve({ ok: true, data });
 }
 
-function installApi(overrides: Partial<MystApi> = {}): MystApi {
+function installApi(overrides: Partial<Omit<MystApi, 'chinese'>> & { chinese?: Partial<MystApi['chinese']> } = {}): MystApi {
   const api: MystApi = {
     getConfig: () => ok({}),
     getLocale: () => ok({}),
@@ -37,15 +37,19 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
       list: () => ok([]), get: () => ok(null), save: (value) => ok({ ...profile, ...value }), remove: () => ok(false),
     },
     searchCities: () => ok([]),
-    chinese: { searchCities: () => ok([]) },
     locations: { resolve: () => ok({ timeZone: 'UTC', utcOffsetMinutes: 0, utcOffsetLabel: 'UTC+00:00', instantUtc: '2000-01-01T00:00:00.000Z' }) },
     app: { onCloseRequested: () => () => {}, decideClose: () => ok(false) },
     ai: {
+      contextUsage: async () => ({ ok: true, data: { used: 100, limit: 10000, percent: 1, reserve: 1000, safety: 1024, estimated: true, needsCompression: false } }),
+      compressContext: async () => ({ ok: true, data: { usage: { used: 100, limit: 10000, percent: 1, reserve: 1000, safety: 1024, estimated: true, needsCompression: false }, changed: false, message: '' } }),
+      onContextChanged: () => () => {},
+
       status: () => ok({ configured: false, provider: '', model: '', baseUrl: '', knowledgeDocCount: 0 }),
       initStatus: () => ok(null), setContext: () => ok(null), readTextAttachment: () => ok({ name: 'notes.txt', content: '' }), onStatusChanged: () => () => {}, onInitProgress: () => () => {},
       chat: () => ok({ ok: true }), interpret: () => ok({ ok: true }), stop: () => ok({ ok: true }),
       onToken: () => {}, onDone: () => {}, onError: () => {}, removeAllListeners: () => {}, onSessionsChanged: () => () => {},
       configure: () => ok({ ok: true }), testWithSettings: () => ok({ ok: true }),
+      configurations: { list: () => ok({ activeId: null, configurations: [] }), save: async () => { throw new Error('unused'); }, activate: async () => { throw new Error('unused'); }, remove: () => ok({ activeId: null, configurations: [] }), test: () => ok({ ok: true }) },
       catalog: { providers: () => ok([]), models: () => ok([]) },
       knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok({ removed: true }) },
       tools: { describe: () => ok([]), setProviderEnabled: () => ok({ ok: true }) },
@@ -53,6 +57,7 @@ function installApi(overrides: Partial<MystApi> = {}): MystApi {
       sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false), fork: () => ok({ id: 'session-fork', title: null, messages: [] }), setPinned: () => ok({ id: 'session-pin', title: null, messages: [] }), create: () => ok({ id: 'session-create', title: null, messages: [] }), replaceFrom: () => ok({ id: 'session-replace', title: null, messages: [] }) },
     },
     ...overrides,
+    chinese: { searchCities: () => ok([]), computeBazi: () => ok({}), getSolarTerms: () => ok({}), ...overrides.chinese },
   };
   window.mystApi = api;
   return api;

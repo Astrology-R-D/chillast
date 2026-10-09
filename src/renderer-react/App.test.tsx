@@ -62,7 +62,7 @@ function installApi({
       remove: vi.fn().mockResolvedValue({ ok: true, data: false }),
     },
     searchCities: vi.fn().mockResolvedValue({ ok: true, data: [] }),
-    chinese: { searchCities: vi.fn().mockResolvedValue({ ok: true, data: [] }) },
+    chinese: { searchCities: vi.fn().mockResolvedValue({ ok: true, data: [] }), computeBazi: vi.fn().mockResolvedValue({ ok: true, data: {} }), getSolarTerms: vi.fn().mockResolvedValue({ ok: true, data: {} }) },
     locations: {
       resolve: vi.fn().mockResolvedValue({
         ok: true,
@@ -74,6 +74,10 @@ function installApi({
       decideClose: vi.fn().mockResolvedValue({ ok: true, data: false }),
     },
     ai: {
+      contextUsage: async () => ({ ok: true, data: { used: 100, limit: 10000, percent: 1, reserve: 1000, safety: 1024, estimated: true, needsCompression: false } }),
+      compressContext: async () => ({ ok: true, data: { usage: { used: 100, limit: 10000, percent: 1, reserve: 1000, safety: 1024, estimated: true, needsCompression: false }, changed: false, message: '' } }),
+      onContextChanged: () => () => {},
+
       setContext: vi.fn(async () => ({ ok: true as const, data: null })),
       readTextAttachment: vi.fn().mockResolvedValue({ ok: true, data: { name: 'notes.txt', content: '' } }),
       chat: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
@@ -89,6 +93,7 @@ function installApi({
       onStatusChanged: vi.fn(() => () => {}),
       onInitProgress: vi.fn(() => () => {}),
       configure: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
+      configurations: { list: async () => ({ ok: true, data: { activeId: null, configurations: [] } }), save: async () => { throw new Error('unused'); }, activate: async () => { throw new Error('unused'); }, remove: async () => ({ ok: true, data: { activeId: null, configurations: [] } }), test: async () => ({ ok: true, data: { ok: true } }) },
       testWithSettings: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
       catalog: {
         providers: vi.fn().mockResolvedValue({ ok: true, data: [] }),

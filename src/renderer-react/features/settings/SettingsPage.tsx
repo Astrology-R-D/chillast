@@ -14,6 +14,7 @@ import { AiConfigSection } from './AiConfigSection';
 import { ToolsAndMcpSection } from './ToolsAndMcpSection';
 import { KnowledgeSection } from './KnowledgeSection';
 import { SessionsSection } from './SessionsSection';
+import { AiReadingSection } from './AiReadingSection';
 import './settings.css';
 
 interface SettingsPageProps {
@@ -48,10 +49,11 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
         </p>
         <p className="settings-hint">{t('shell.knowledgeCount', { count: status.data ? status.data.knowledgeDocCount : 0 })}</p>
       </section>
+      <AiReadingSection />
       <AiConfigSection
         status={status.data}
         providers={providers.data}
-        onSaved={() => refresh([aiQueryKeys.status])}
+        onSaved={() => refresh([aiQueryKeys.status, aiQueryKeys.configurations])}
       />
       <ToolsAndMcpSection
         tools={tools.data}

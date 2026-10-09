@@ -90,7 +90,10 @@ for (const source of sources) {
       `${source.weight} subset lost source-supported glyphs: ${lost.map(codePointLabel).join(', ')}`,
     );
   }
-  await writeFile(outputPath, subset);
+  // Reuse an identical subset; Windows may still have the preview's font file open.
+  let existing;
+  try { existing = await readFile(outputPath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (!existing?.equals(subset)) await writeFile(outputPath, subset);
   console.log(`${source.weight}: ${subset.length} bytes, ${source.supported.length} characters`);
 }
 

@@ -8,6 +8,8 @@ import { CHART_DESCRIPTORS } from '../catalog';
 import type { ChartSelectionTarget } from '../svg/chartSelection';
 import { ChartDataGrid, type ChartDataGridHandle } from './ChartDataGrid';
 import { columnIds, columnsFor } from './explorerColumns';
+import { fuzzyMatch } from '@chillast/search';
+import { presentChartValue } from './chartPresentation';
 import {
   aspectRows,
   comparisonRows,
@@ -49,6 +51,9 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [exportStatus, setExportStatus] = useState('');
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [raw, setRaw] = useState(false);
   const pendingReveal = useRef<ChartSelectionTarget | null>(null);
   const tableLayout = useChartWorkspace((state) => state.workspace.tableLayouts[chartType]);
   const route = CHART_DESCRIPTORS[chartType].route;
@@ -66,7 +71,8 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
   const labels = useMemo(() => new Proxy<Record<string, string>>({}, {
     get: (_target, key) => t(`chart.explorer.columns.${String(key)}`),
   }), [t]);
-  const columns = useMemo(() => columnsFor(activeTab, mode, labels), [activeTab, labels, mode]);
+  const columns = useMemo(() => columnsFor(activeTab, mode, labels, result, raw), [activeTab, labels, mode, result, raw]);
+  const matchingRows = useMemo(() => rows.filter((row) => fuzzyMatch(search, Object.keys(row.values).flatMap((id) => presentChartValue(row, id, result).aliases))), [rows, result, search]);
 
   const updateTable = (patch: Partial<typeof tableLayout>) => {
     setTableLayout(chartType, { ...tableLayout, ...patch });
@@ -171,6 +177,8 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
         onClick={() => chooseTab(tab)}>{t(`chart.explorer.tabs.${tab}`)}</button>)}
     </div>
     <div className="chart-data-explorer__toolbar">
+      <input type="search" className="chart-data-explorer__search" aria-label={t('chart.explorer.search')} placeholder={t('chart.explorer.search')} value={search} onChange={(event) => setSearch(event.target.value)} />
+      <button type="button" aria-pressed={showFilters} onClick={() => setShowFilters((value) => !value)}>{t('chart.explorer.filters')}</button>
       <button type="button" onClick={() => void copy()} aria-label={t('chart.explorer.copy')}><ClipboardCopy size={15} />{t('chart.explorer.copy')}</button>
       <button type="button" onClick={csv} aria-label={t('chart.explorer.csv')}><FileDown size={15} />{t('chart.explorer.csv')}</button>
       <button type="button" aria-expanded={columnMenuOpen} aria-label={t('chart.explorer.columnMenu')}
@@ -181,6 +189,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
       <output aria-live="polite">{exportStatus || (selected.length ? t('chart.explorer.selectedCount', { count: selected.length }) : '')}</output>
     </div>
     {columnMenuOpen && <div className="chart-data-explorer__column-menu" role="group" aria-label={t('chart.explorer.columnMenu')}>
+      <label><input type="checkbox" checked={raw} onChange={(event) => setRaw(event.target.checked)} />{t('chart.explorer.rawValues')}</label>
       {orderedColumns.filter((id) => id !== 'selected').map((id, index) => {
         const visible = tableLayout.tabs[activeTab].columnVisibility[id] !== false;
         const pinning = tableLayout.tabs[activeTab].columnPinning;
@@ -209,7 +218,7 @@ export const ChartDataExplorer = forwardRef<ChartDataExplorerHandle, {
       className="chart-data-explorer__panel">
       {activeTab === 'comparison' && !comparisonAvailable
         ? <p role="status">{t('chart.explorer.comparisonUnavailable')}</p>
-        : <ChartDataGrid ref={gridRef} route={route} tab={activeTab} rows={rows} columns={columns}
+        : <ChartDataGrid ref={gridRef} route={route} tab={activeTab} rows={matchingRows} columns={columns} showFilters={showFilters}
           layout={tableLayout.tabs[activeTab]} selectedRowIds={new Set(selected)} focusedIdentity={focusedIdentity}
           onLayoutChange={updateTabLayout} onSelectionChange={(ids) => setBulkSelection(route, [...ids])}
           onFocusIdentity={(identity) => setFocus(route, identity)} sortLabel={t('chart.explorer.sort')}

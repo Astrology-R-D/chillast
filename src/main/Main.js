@@ -16,6 +16,7 @@ const ChartStrategyFactory = require('../core/astrology/ChartStrategyFactory');
 const AiService = require('../core/ai/AiService');
 const CatalogService = require('../core/ai/CatalogService');
 const AiSessionStore = require('./AiSessionStore');
+const AiConfigurationStore = require('./AiConfigurationStore');
 const LocationResolver = require('../core/astrology/LocationResolver');
 const { installExternalUrlHandler, resolveSmokeReportPath } = require('./MainPolicy');
 const CloseGuard = require('./CloseGuard');
@@ -157,6 +158,13 @@ class Main {
         aiSettings.apiKey = cred.apiKey || '';
       } catch (_) {}
     }
+    this.aiConfigurationStore = new AiConfigurationStore(baseDir, { safeStorage: require('electron').safeStorage }).init();
+    try {
+      this.aiConfigurationStore.migrateLegacy(aiSettings);
+      const active = this.aiConfigurationStore.getActive();
+      if (active) Object.assign(aiSettings, active.settings, { apiKey: active.apiKey });
+    } catch (e) { console.error('[AI configurations]', e.message); }
+
     // Stream knowledge-base init progress (model download + index build) to the
     // renderer so the first-run wait shows a non-blocking overlay, not a freeze.
     this.aiService.setInitProgressHandler((p) => {
@@ -180,6 +188,7 @@ class Main {
       locale: this.locale,
       aiService: this.aiService,
       aiSessionStore: this.aiSessionStore,
+      aiConfigurationStore: this.aiConfigurationStore,
       locationResolver: new LocationResolver(),
       closeDecision: this._handleCloseDecision.bind(this),
     }).register();

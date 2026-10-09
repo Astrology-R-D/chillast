@@ -1,5 +1,6 @@
-import { Clock3, RotateCcw, Trash2, X } from 'lucide-react';
-import { useId } from 'react';
+import { Clock3, RotateCcw, Search, Trash2, X } from 'lucide-react';
+import { useId, useState } from 'react';
+import { fuzzyMatch } from '@chillast/search';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import * as Tooltip from '@radix-ui/react-tooltip';
@@ -34,6 +35,7 @@ function ErrorText({ id, message }: { id: string; message?: string }) {
 export function ChartFilterBand(props: ChartFilterBandProps) {
   const { t } = useI18n();
   const errorPrefix = useId();
+  const [profileSearch, setProfileSearch] = useState('');
   const { route, draft, profiles, reference, validation, equivalentInFlight, onPatch } = props;
   const recents = useChartWorkspace((state) => state.workspace.recents);
   const clearRecent = useChartWorkspace((state) => state.clearRecent);
@@ -76,7 +78,10 @@ export function ChartFilterBand(props: ChartFilterBandProps) {
         onChange={(event) => onPatch({ [key]: event.target.value || null })}>
         <option value="">{t('chart.workbench.selectProfile')}</option>
         {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.nameZh || profile.nameEn}</option>)}
-      </select>{recentMenu(label, secondary ? 'secondaryProfileIds' : 'primaryProfileIds', recentIds.map((id) => ({
+      </select><Popover.Root><Popover.Trigger asChild><button type="button" className="icon-button" disabled={disabled} aria-label={`${t('form.locationSearch')} ${label}`}><Search size={15} /></button></Popover.Trigger><Popover.Portal><Popover.Content className="chart-popover chart-profile-search">
+        <input type="search" autoFocus aria-label={label} placeholder={t('chart.workbench.selectProfile')} value={profileSearch} onChange={(event) => setProfileSearch(event.target.value)} />
+        {profiles.filter((profile) => fuzzyMatch(profileSearch, [profile.nameZh, profile.nameEn])).map((profile) => <Popover.Close asChild key={profile.id}><button type="button" onClick={() => onPatch({ [key]: profile.id })}>{profile.nameZh || profile.nameEn}</button></Popover.Close>)}
+      </Popover.Content></Popover.Portal></Popover.Root>{recentMenu(label, secondary ? 'secondaryProfileIds' : 'primaryProfileIds', recentIds.map((id) => ({
         value: id, label: profiles.find((profile) => profile.id === id)?.nameZh ?? id,
       })), (id) => onPatch({ [key]: id }))}
       <Tooltip.Root><Tooltip.Trigger asChild><button type="button" className="icon-button" aria-label={`${t('chart.workbench.clear')} ${label}`}

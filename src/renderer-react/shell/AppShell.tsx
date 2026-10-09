@@ -48,6 +48,8 @@ export function createChartWorkbenchLoader(importer: () => Promise<ChartWorkbenc
 }
 
 const chartWorkbenchLoader = createChartWorkbenchLoader(importChartWorkbench);
+const ChineseAstrologyPage = lazy(() => import('../features/chinese/ChineseAstrologyPage').then((module) => ({ default: module.ChineseAstrologyPage })));
+const SolarTermCalendarPage = lazy(() => import('../features/chinese/SolarTermCalendarPage').then((module) => ({ default: module.SolarTermCalendarPage })));
 
 export async function preloadChartWorkbench(): Promise<void> {
   await chartWorkbenchLoader.load();
@@ -154,6 +156,11 @@ function AppShellInner() {
         {activeRoute === 'profiles' ? <ProfilePage onNavigate={navigate} />
           : activeRoute === 'personal' || activeRoute === 'relationship'
             ? <ChartWorkbenchRoute route={activeRoute} />
+            : activeRoute === 'chinese' || activeRoute === 'solarTerms' ? <ChartRouteErrorBoundary key={activeRoute} errorLabel={t('chart.workbench.routeLoadError')} retryLabel={t('chart.workbench.retry')} onRetry={() => setActiveRoute('profiles')}>
+                <Suspense fallback={<section className="chinese-page" role="status">{t('shell.loading')}</section>}>
+                  {activeRoute === 'chinese' ? <ChineseAstrologyPage onNavigate={navigate} /> : <SolarTermCalendarPage />}
+                </Suspense>
+              </ChartRouteErrorBoundary>
             : activeRoute === 'settings' ? <SettingsPage onNavigate={navigate} />
             : <section className="workspace__placeholder" aria-labelledby="workspace-title">
                 <PageIcon aria-hidden="true" size={34} strokeWidth={1.5} />

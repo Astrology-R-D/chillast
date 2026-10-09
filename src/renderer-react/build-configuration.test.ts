@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, relative, resolve } from 'node:path';
 import { expect, test } from 'vitest';
-import { build as viteBuild } from 'vite';
+import { build as viteBuild, createServer } from 'vite';
 
 const repositoryRoot = process.cwd();
 const packageJson = JSON.parse(
@@ -63,6 +64,12 @@ test('keeps TypeScript build information under the ignored dist directory', () =
 test('bundles the shared CommonJS Unicode fold implementation for the browser', async () => {
   const output = await viteBuild({
     configFile: false,
+    resolve: {
+      alias: {
+        '@chillast/search': resolve(repositoryRoot, 'src/core/util/FuzzySearch.js'),
+        '@chillast/unicode-case-fold': resolve(repositoryRoot, 'src/core/util/UnicodeCaseFold.js'),
+      },
+    },
     logLevel: 'silent',
     build: {
       write: false,
@@ -112,6 +119,33 @@ test('bundles the shared CommonJS Unicode fold implementation for the browser', 
     Date.parse('2026-08-02T12:00:00.000Z'),
   ).map(({ id }) => id)).toEqual(['folded']);
 });
+
+test('prebundles shared CommonJS imports in the development renderer', async () => {
+  const cacheDir = mkdtempSync(resolve(tmpdir(), 'chillast-vite-dev-'));
+  const server = await createServer({
+    configFile: resolve(repositoryRoot, 'vite.config.mts'),
+    cacheDir,
+    logLevel: 'silent',
+    server: { port: 0, hmr: false, watch: null },
+    optimizeDeps: { noDiscovery: true, holdUntilCrawlEnd: false },
+  });
+  try {
+    await server.listen();
+    for (const entry of [
+      '/features/profiles/directory.ts',
+      '/features/profiles/profileForm.ts',
+      '/features/charts/validateChartResultForRequest.ts',
+      '/features/charts/explorer/chartPresentation.tsx',
+    ]) {
+      const transformed = await server.transformRequest(entry);
+      expect(transformed?.code, entry).toMatch(/\/deps\/@chillast_/);
+      expect(transformed?.code, entry).not.toMatch(/\/src\/(core\/util\/UnicodeCaseFold|shared\/ChartResultForRequest)\.js/);
+    }
+  } finally {
+    await server.close();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+}, 30_000);
 
 test('packages only legacy-referenced upright fonts within the payload budgets', () => {
   const fontEntries = packageJson.build.files.filter((entry) => entry.startsWith('fonts/'));

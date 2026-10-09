@@ -96,6 +96,9 @@ test('sandboxed preload and shared main validators accept the same context corpu
     focusedIdentity: null, draftIsStale: false, draftSummary: null,
   };
   const corpus = [
+    { kind: 'chinese-chart', route: 'chinese', chartType: 'bazi', resultId: null, activeProfile: null, lastBaziData: null },
+    { kind: 'chinese-chart', route: 'chinese', chartType: 'bazi', resultId: 'bazi-1', activeProfile: null, lastBaziData: require('./fixtures/chinese-ui-results.json').bazi },
+    { kind: 'chinese-chart', route: 'chinese', chartType: 'bazi', resultId: 'bazi-1', activeProfile: null, lastBaziData: null },
     null,
     valid,
     { ...valid, selectedRows: [{ id: 'natal:sun', values: { longitude: 10, retrograde: false } }] },

@@ -54,13 +54,12 @@ const AngleMath = {
 
   /** Split a within-sign decimal degree into {degrees, minutes, seconds}. */
   toDms(decimalDegrees) {
-    const total = Math.abs(decimalDegrees);
-    const degrees = Math.floor(total);
-    const minutesFloat = (total - degrees) * 60;
-    const minutes = Math.floor(minutesFloat);
-    const seconds = Math.round((minutesFloat - minutes) * 60);
-    if (seconds === 60) return { degrees, minutes: minutes + 1, seconds: 0 };
-    return { degrees, minutes, seconds };
+    const totalSeconds = Math.round(Math.abs(decimalDegrees) * 3600);
+    return {
+      degrees: Math.floor(totalSeconds / 3600),
+      minutes: Math.floor(totalSeconds / 60) % 60,
+      seconds: totalSeconds % 60,
+    };
   },
 };
 

@@ -7,6 +7,13 @@
     "strict": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@chillast/degree-format": ["./src/shared/DegreeFormat"],
+      "@chillast/token-budget": ["./src/core/ai/TokenBudget.d.ts"],
+      "@chillast/search": ["./src/core/util/FuzzySearch"],
+      "@chillast/unicode-case-fold": ["./src/core/util/UnicodeCaseFold"],
+      "@chillast/chart-result-for-request": ["./src/shared/ChartResultForRequest"]
+    },
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,

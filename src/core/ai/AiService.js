@@ -11,9 +11,13 @@ const WebSearchToolProvider = require('./tools/WebSearchToolProvider');
 const ProfileToolProvider = require('./tools/ProfileToolProvider');
 const McpToolProvider = require('./tools/McpToolProvider');
 const McpManager = require('./mcp/McpManager');
+const ConversationToolProvider = require('./tools/ConversationToolProvider');
 const { build: buildChatPrompt } = require('./prompts/ChatPrompt');
 const { toText } = require('./prompts/ChartSerializer');
 const esm = require('./esm-bridge');
+const { ContextManager, contextHistory } = require('./ContextManager');
+const { chartToolResult, hash } = require('./ToolResult');
+const { ANALYST_PROMPT, parseReport, reportCatalog, writerPrompt, needsAnalysis } = require('./AnalysisProtocol');
 
 class AiService {
   constructor(astrologyService, chineseAstrologyService, profileRepository, { catalog = null, esm: esmImpl = esm } = {}) {
@@ -175,6 +179,9 @@ class AiService {
       baseUrl: (this._mp._settings && this._mp._settings.baseUrl) || '',
       temperature: this._mp._settings && this._mp._settings.temperature,
       maxTokens: this._mp._settings && this._mp._settings.maxTokens,
+      maxTokensMode: this._mp._settings?.maxTokensMode,
+      contextWindow: this._mp._settings?.contextWindow,
+      maxOutputTokens: this._mp._settings?.maxOutputTokens,
       knowledgeDocCount: this._kb ? this._kb.listDocuments().length : 0,
     };
   }
@@ -214,119 +221,150 @@ class AiService {
    * @yields {{ type: 'token'|'done', data: string|object }}
    */
   async *interpret(chartData, options = {}) {
-    this._ensureConfigured();
-    const sessionId = options.sessionId || String(Date.now());
-    const ac = new AbortController();
-    this._abortControllers.set(sessionId, ac);
-
-    try {
-      const chartText = toText(chartData);
-      const chartType = options.chartType || (chartData.meta && chartData.meta.typeNameZh) || '星盘';
-      const stream = await this._chainFactory.buildInterpretStream(chartText, chartType, ac.signal);
-
-      let finishReason = null;
-      for await (const chunk of stream) {
-        if (ac.signal.aborted) break;
-        const token = typeof chunk === 'string' ? chunk : (chunk.content || '');
-        if (token) yield { type: 'token', data: token };
-        const fr = this._finishReason(chunk);
-        if (fr) finishReason = fr;
-      }
-      if (finishReason === 'length') yield { type: 'truncated', data: { reason: 'length' } };
-    } finally {
-      this._abortControllers.delete(sessionId);
-    }
-    yield { type: 'done', data: { sessionId } };
+    const question = `请分析当前${options.chartType || chartData.meta?.typeNameZh || '星盘'}，用自然语言回应，并保留可展开的判据。`;
+    yield* this.chat([...(options.history || []), { role: 'user', content: question }], { ...options, chartData });
   }
 
-  /**
-   * Interactive chat via a LangGraph ReAct agent. The agent owns the
-   * tool-calling loop and tool execution; tools come from the ToolRegistry, so
-   * the model autonomously chooses among compute / knowledge / (future) MCP
-   * tools. We translate the agent's event stream into token / tool-call events.
-   * @param {Array} userMessages - [{ role: 'user'|'assistant'|'ai', content }]
-   * @param {object} [context]
-   * @yields {{ type: 'token'|'tool-call'|'done', data }}
-   */
+  _contextManager() { return new ContextManager(this._mp, { catalog: this._catalog, esm: this._esm }); }
+  _contextKey(chartData) { return hash(JSON.stringify({ profile: this._context?.activeProfile?.id, chart: chartData?.resultId || this._context?.resultId, type: chartData?.meta?.type || this._context?.chartType })).slice(0, 24); }
+  _chartText(context = {}) {
+    if (this._context?.kind === 'chinese-chart' && this._context.lastBaziData && !context.chartData) return require('./ToolResult').baziToolResult(this._context.lastBaziData).content;
+    return context.currentChartText || ((context.chartData || this._context?.lastChartData) ? toText(context.chartData || this._context.lastChartData) : null);
+  }
+  async _toolSchemas(tools) {
+    if (!tools.length) return [];
+    const { convertToOpenAITool } = await this._esm.load('@langchain/core/utils/function_calling');
+    return tools.map((tool) => convertToOpenAITool(tool));
+  }
+  async _toolsForSession(session, currentCalls = [], chartSettings) {
+    let tools = this._registry ? await this._registry.getTools() : [];
+    const astro = this._registry?.get?.('astro');
+    const settings = chartSettings || this._context?.successfulFilters?.settings || this._context?.lastChartData?.meta?.settings;
+    if (settings && astro?.enabled && typeof astro.listToolsForSettings === 'function') {
+      const originals = new Set(await astro.listTools());
+      const replacements = new Map((await astro.listToolsForSettings(settings)).map((tool) => [tool.name, tool]));
+      tools = tools.map((tool) => originals.has(tool) ? replacements.get(tool.name) || tool : tool);
+    }
+    return session?.messages?.length ? [...tools, ...await new ConversationToolProvider(session, currentCalls).listTools()] : tools;
+  }
+  async contextUsage(session, draft = '') {
+    const tools = await this._toolsForSession(session);
+    const schemas = await this._toolSchemas(tools);
+    const history = [...contextHistory(session), ...(draft ? [{ role: 'user', content: draft }] : [])];
+    const manager = this._contextManager();
+    const workspace = this._workspaceFacts();
+    const system = buildChatPrompt(this._chartText()) + ANALYST_PROMPT + '\n【可用判据目录】\n' + reportCatalog(workspace);
+    const latestReport = [...(session?.messages || [])].reverse().find((m) => m.analysisReport)?.analysisReport;
+    const analyst = manager.usage([{ role: 'system', content: system }, ...history], schemas);
+    const writer = manager.usage([{ role: 'system', content: writerPrompt(latestReport) }, ...history]);
+    return { ...(writer.used > analyst.used ? writer : analyst), compressedMessages: session?.contextSummary?.coveredMessages || 0 };
+  }
+  async compressSession(session) {
+    this._ensureConfigured();
+    if (this._abortControllers.has(session.id)) throw new Error('请等待当前回复完成后再压缩上下文。');
+    const ac = new AbortController(); this._abortControllers.set(session.id, ac);
+    try { return await this._contextManager().compressSession(session, { signal: ac.signal }); }
+    finally { this._abortControllers.delete(session.id); }
+  }
+
+  _workspaceFacts() {
+    const ctx = this._context;
+    if (ctx?.kind === 'chinese-chart' && ctx.lastBaziData) return [{ callId: 'workspace', artifact: require('./ToolResult').baziToolResult(ctx.lastBaziData).artifact }];
+    return ctx?.lastChartData ? [{ callId: 'workspace', artifact: chartToolResult(ctx.lastChartData, '').artifact }] : [];
+  }
+
+  /** Analyst owns tools; writer receives only validated findings and source snapshots. */
   async *chat(userMessages, context = {}) {
     this._ensureConfigured();
     const sessionId = context.sessionId || String(Date.now());
+    if (this._abortControllers.has(sessionId)) throw new Error('该会话正在生成或压缩，请稍后重试。');
     const ac = new AbortController();
     this._abortControllers.set(sessionId, ac);
-
     try {
+      const { HumanMessage, AIMessage, SystemMessage } = await this._esm.load('@langchain/core/messages');
       const model = this._mp.chatModel();
-      const tools = this._registry ? await this._registry.getTools() : [];
-      const systemPrompt = buildChatPrompt(context.currentChartText || null);
-
-      const { createReactAgent } = await this._esm.load('@langchain/langgraph/prebuilt');
-      const { HumanMessage, AIMessage } = await this._esm.load('@langchain/core/messages');
-
-      const agent = createReactAgent({ llm: model, tools, prompt: systemPrompt });
-
-      const lcMessages = [];
-      for (const m of userMessages) {
-        if (!m || !m.content) continue;
-        if (m.role === 'user') lcMessages.push(new HumanMessage(m.content));
-        // Session store persists AI turns as role 'ai'; map to assistant message.
-        else if (m.role === 'assistant' || m.role === 'ai') lcMessages.push(new AIMessage(m.content));
-      }
-
-      const stream = await agent.stream(
-        { messages: lcMessages },
-        { streamMode: ['messages', 'updates'], signal: ac.signal, recursionLimit: 25 },
-      );
-
-      let finishReason = null;
-      try {
+      const completed = [];
+      const tools = await this._toolsForSession(context.sessionSnapshot, completed, context.chartData?.meta?.settings);
+      const schemas = await this._toolSchemas(tools);
+      const manager = this._contextManager();
+      const notify = (event) => context.onContextEvent?.(event);
+      const lcMessages = userMessages.filter((m) => m?.content).map((m) => m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content));
+      const contextKey = this._contextKey(context.chartData);
+      const question = [...userMessages].reverse().find((m) => m.role === 'user')?.content || '';
+      const questionTopic = question.split(/\n(?:\[|【|---)/)[0].replace(/\s+/g, ' ').slice(0, 100);
+      let report = context.priorReport?.contextKey === contextKey ? context.priorReport : null;
+      if (needsAnalysis(userMessages, context.priorReport, contextKey)) {
+        yield { type: 'stage', data: 'analysis' };
+        yield { type: 'activity', data: { phase: 'analysis', topic: questionTopic } };
+        const calls = new Map();
+        const currentChart = context.chartData || this._context?.lastChartData;
+        if (currentChart) completed.push({ callId: 'workspace', tool: 'get_current_chart', artifact: chartToolResult(currentChart, '').artifact });
+        else completed.push(...this._workspaceFacts());
+        const systemPrompt = buildChatPrompt(this._chartText(context)) + ANALYST_PROMPT;
+        const { createReactAgent } = await this._esm.load('@langchain/langgraph/prebuilt');
+        const agent = createReactAgent({ llm: model, tools, prompt: async (state) => {
+          const prompt = new SystemMessage(systemPrompt + '\n【可用判据目录】\n' + reportCatalog(completed));
+          return manager.prepare([prompt, ...state.messages], schemas, { signal: ac.signal, notify });
+        } });
+        const stream = await agent.stream({ messages: lcMessages }, { streamMode: ['updates'], signal: ac.signal, recursionLimit: 25 });
+        let finalText = '';
+        let sequence = 0;
+        let analysisTopic = questionTopic;
         for await (const chunk of stream) {
           if (ac.signal.aborted) break;
-          const [mode, payload] = chunk;
-
-          if (mode === 'messages') {
-            // payload = [messageChunk, metadata]; stream only AI text tokens.
-            const msg = Array.isArray(payload) ? payload[0] : payload;
-            if (msg && this._msgType(msg) === 'ai') {
-              const text = this._extractText(msg.content);
-              if (text) yield { type: 'token', data: text };
-              const fr = this._finishReason(msg);
-              if (fr) finishReason = fr;
-            }
-          } else if (mode === 'updates') {
-            // payload = { nodeName: { messages: [...] } }; surface tool activity.
-            for (const node of Object.keys(payload || {})) {
-              const msgs = (payload[node] && payload[node].messages) || [];
-              for (const m of msgs) {
-                const t = this._msgType(m);
-                if (t === 'ai' && m.tool_calls && m.tool_calls.length) {
-                  for (const tc of m.tool_calls) {
-                    yield { type: 'tool-call', data: {
-                      tool: tc.name, status: 'calling',
-                      argsDigest: this._digestArgs(tc.args),
-                      resultExcerpt: '',
-                      requiresConfirmation: false,
-                    } };
-                  }
-                } else if (t === 'tool') {
-                  yield { type: 'tool-call', data: {
-                    tool: m.name, status: 'done',
-                    argsDigest: '',
-                    resultExcerpt: this._excerpt(m.content),
-                    requiresConfirmation: false,
-                  } };
-                }
+          const payload = Array.isArray(chunk) ? chunk[1] : chunk;
+          for (const node of Object.values(payload || {})) for (const message of node?.messages || []) {
+            const type = this._msgType(message);
+            if (type === 'ai' && message.tool_calls?.length) {
+              for (const tc of message.tool_calls) {
+                const callId = tc.id || `${sessionId}-${++sequence}`;
+                const call = { callId, tool: tc.name, args: typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args || {}, null, 2),
+                  startedAt: Date.now(), status: 'calling', argsDigest: this._digestArgs(tc.args), resultExcerpt: '', requiresConfirmation: false };
+                calls.set(callId, call);
+                if (typeof tc.args?.query === 'string') analysisTopic = tc.args.query.replace(/\s+/g, ' ').slice(0, 100);
+                yield { type: 'tool-call', data: call };
               }
-            }
+            } else if (type === 'tool') {
+              const call = calls.get(message.tool_call_id) || [...calls.values()].find((entry) => entry.tool === message.name);
+              const event = { ...call, tool: message.name || call?.tool || 'unknown',
+                status: message.status === 'error' || /^计算失败|^联网搜索失败|^网页抓取失败/.test(this._extractText(message.content)) ? 'error' : 'done',
+                result: this._extractText(message.content), artifact: message.artifact,
+                durationMs: call ? Date.now() - call.startedAt : undefined, argsDigest: '', resultExcerpt: this._excerpt(message.content), requiresConfirmation: false };
+              completed.push(event); if (call) calls.delete(call.callId);
+              yield { type: 'tool-call', data: event };
+              yield { type: 'activity', data: { phase: 'analysis', topic: analysisTopic } };
+            } else if (type === 'ai') finalText = this._extractText(message.content);
           }
         }
-        if (finishReason === 'length') yield { type: 'truncated', data: { reason: 'length' } };
-      } catch (e) {
-        // A user-initiated stop aborts the stream; treat that as a clean end.
-        if (!ac.signal.aborted) throw e;
+        if (ac.signal.aborted) return;
+        yield { type: 'stage', data: 'validation' };
+        yield { type: 'activity', data: { phase: 'validation' } };
+        try { report = parseReport(finalText, completed, contextKey); }
+        catch (error) {
+          yield { type: 'activity', data: { phase: 'validation', repair: true } };
+          const repairPrompt = `${ANALYST_PROMPT}\n原报告格式或引用校验失败：${error.message}。只使用下列真实目录，修复报告；无法证实的判断删除。\n${reportCatalog(completed)}\n原报告：${finalText}`;
+          const repairMessages = await manager.prepare([new SystemMessage(repairPrompt), new HumanMessage('修复为协议要求的 JSON。')], [], { signal: ac.signal, notify });
+          const repair = await model.invoke(repairMessages, { signal: ac.signal });
+          report = parseReport(this._extractText(repair.content), completed, contextKey);
+        }
       }
-    } finally {
-      this._abortControllers.delete(sessionId);
-    }
+      if (report) yield { type: 'analysis-report', data: report };
+      if (ac.signal.aborted) return;
+      yield { type: 'stage', data: 'answer' };
+      yield { type: 'activity', data: { phase: 'answer', topic: report?.focus?.slice(0, 100) } };
+      const writerMessages = await manager.prepare([new SystemMessage(writerPrompt(report)), ...lcMessages], [], { signal: ac.signal, notify });
+      const answer = await model.stream(writerMessages, { signal: ac.signal });
+      let finishReason = null;
+      for await (const chunk of answer) {
+        if (ac.signal.aborted) break;
+        const text = this._extractText(chunk.content);
+        if (text) yield { type: 'token', data: text };
+        finishReason = this._finishReason(chunk) || finishReason;
+      }
+      if (finishReason === 'length') yield { type: 'truncated', data: { reason: 'length' } };
+    } catch (error) {
+      if (!ac.signal.aborted) throw error;
+    } finally { this._abortControllers.delete(sessionId); }
     yield { type: 'done', data: { sessionId } };
   }
 

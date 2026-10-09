@@ -3,6 +3,7 @@
 const sxwnl = require('./SxwnlLoader');
 
 function getSolarTermCalendar(year) {
+  if (!Number.isInteger(year) || year < 1 || year > 3000) throw new Error('年份必须是 1–3000 的整数');
   const { Lunar } = sxwnl;
   const terms = [];
 
@@ -14,7 +15,7 @@ function getSolarTermCalendar(year) {
       if (ob.jqmc) {
         terms.push({
           name: ob.jqmc,
-          date: `${year}-${String(month).padStart(2, '0')}-${String(d + 1).padStart(2, '0')}`,
+          date: `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(d + 1).padStart(2, '0')}`,
           time: ob.jqsj || '',
           lunarDate: `${ob.Lmc}月${ob.Ldc}`,
         });

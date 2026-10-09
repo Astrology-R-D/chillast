@@ -1,0 +1,8 @@
+.markdown-message .evidence-chip > button { display: inline-block; min-height: 0; height: auto; border-radius: 999px; padding: .1em .55em; margin: 0 .3em; font-family: inherit; font-size: .75em; font-weight: 500; line-height: 1.35; letter-spacing: 0; white-space: nowrap; color: var(--focus); background: color-mix(in srgb, var(--focus) 7%, var(--surface-work)); border: 1px solid var(--border-strong); vertical-align: baseline; }
+.evidence-card { display: block; margin-block: 10px; padding: 14px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--surface-base); color: var(--text-primary); font-size: .9em; line-height: var(--ai-line-height, 1.8); }
+.evidence-card__section { display: block; margin-top: 12px; }
+.evidence-card__section > strong, .evidence-card__section > span, .evidence-card__source > strong, .evidence-card__source > small { display: block; }
+.evidence-card__section > strong { color: var(--text-muted); margin-bottom: 4px; }
+.evidence-card__source { margin-block: 8px; }
+.evidence-card__source q { display: block; white-space: pre-wrap; line-height: var(--ai-line-height, 1.8); padding: 8px; border-inline-start: 2px solid var(--accent); max-height: 300px; overflow: auto; }
+.evidence-chip--invalid { font-size: 11px; color: var(--warning); }

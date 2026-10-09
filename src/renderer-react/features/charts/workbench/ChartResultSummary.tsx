@@ -16,7 +16,8 @@ export function ChartResultSummary({
   const location = submitted.request.options.locationLabel;
 
   return <article className="chart-result-summary">
-    <header><p>{result.meta.typeNameZh}</p><h2>{result.meta.title}</h2><p>{result.meta.subtitle}</p></header>
+    <details>
+    <summary><strong>{result.meta.title}</strong><span>{result.meta.subtitle}</span></summary>
     <dl className="chart-result-summary__facts">
       <div><dt>{t('chart.workbench.subjects')}</dt><dd>{result.subjects.map((subject) => subject.nameZh || subject.nameEn).join(' / ')}</dd></div>
       <div><dt>{t('chart.workbench.settings')}</dt><dd>{result.meta.settings.houseSystem} · {result.meta.settings.zodiac}</dd></div>
@@ -33,5 +34,6 @@ export function ChartResultSummary({
     {remaining.length > 0 && <section><h3>{t('chart.workbench.metadata')}</h3><dl className="chart-result-summary__metadata">
       {remaining.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{safeJson(value)}</dd></div>)}
     </dl></section>}
+    </details>
   </article>;
 }

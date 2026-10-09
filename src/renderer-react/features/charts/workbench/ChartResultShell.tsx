@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, Bot, LoaderCircle, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Ban, Bot, LoaderCircle, Maximize, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useI18n } from '../../../i18n/I18nProvider';
@@ -11,7 +11,7 @@ import { ChartDataExplorer, type ChartDataExplorerHandle } from '../explorer/Cha
 import { ChartResultSummary } from './ChartResultSummary';
 
 const DIVIDER_SIZE = 6;
-const PANE_MINIMUM = 360;
+const PANE_MINIMUM = 180;
 const REQUIRED_SPLIT_EXTENT = PANE_MINIMUM * 2 + DIVIDER_SIZE;
 
 export function resultPaneMinimumPercent(extent: number): number {
@@ -23,7 +23,7 @@ export function useResultOrientation(ref: RefObject<HTMLElement | null>): 'horiz
   useEffect(() => {
     const element = ref.current;
     if (!element) return undefined;
-    const observer = new ResizeObserver(([entry]) => setOrientation(entry.contentRect.width >= 760 ? 'horizontal' : 'vertical'));
+    const observer = new ResizeObserver(([entry]) => setOrientation(entry.contentRect.width >= 1200 ? 'horizontal' : 'vertical'));
     observer.observe(element);
     return () => observer.disconnect();
   }, [ref]);
@@ -51,6 +51,7 @@ function clampRatio(value: [number, number], minimum: number): [number, number] 
 export function ChartResultShell({ route, state, reference, profilesAvailable, validDraft, startupError, onRetry, onCancel, onRevealSelection }: ChartResultShellProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLElement>(null);
+  const [focusedView, setFocusedView] = useState(false);
   const explorerRef = useRef<ChartDataExplorerHandle>(null);
   const orientation = useResultOrientation(ref);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -68,7 +69,7 @@ export function ChartResultShell({ route, state, reference, profilesAvailable, v
   const logicalExtent = orientation === 'vertical'
     ? Math.max(REQUIRED_SPLIT_EXTENT, measuredExtent)
     : measuredExtent;
-  const minimum = logicalExtent > 0 ? resultPaneMinimumPercent(logicalExtent) : 0;
+  const minimum = measuredExtent > 0 ? resultPaneMinimumPercent(logicalExtent) : 0;
   const ratio = clampRatio(stored[orientation], minimum);
   const result = state.lastSuccessfulResult;
   const accepted = state.accepted;
@@ -93,18 +94,18 @@ export function ChartResultShell({ route, state, reference, profilesAvailable, v
   } else if (state.requestStatus === 'cancelled') { status = t('chart.workbench.cancelled'); icon = <Ban size={16} />; }
   else if (!result) status = t('chart.workbench.empty');
 
-  return <section ref={ref} className={`chart-result chart-result--${orientation}`} data-orientation={orientation}
+  return <section ref={ref} className={`chart-result chart-result--${orientation}${focusedView ? ' chart-result--focused' : ''}`} data-orientation={orientation}
+    onKeyDown={(event) => { if (event.key === 'Escape') setFocusedView(false); }}
     data-required-extent={orientation === 'vertical' ? REQUIRED_SPLIT_EXTENT : undefined}>
     <header className="chart-result__header">
       <div aria-live="polite" role="status">{icon}{status}{state.isStale && <span className="chart-result__stale">{t('chart.workbench.stale')}</span>}</div>
-      <div className="chart-result__actions">{state.requestStatus === 'loading' && <button type="button" onClick={onCancel}><X size={15} />{t('chart.workbench.cancel')}</button>}
+      <div className="chart-result__actions">{result && <button type="button" aria-pressed={focusedView} onClick={() => setFocusedView((value) => !value)}><Maximize size={15} />{t(focusedView ? 'chart.workbench.exitFocus' : 'chart.workbench.focusView')}</button>}{state.requestStatus === 'loading' && <button type="button" onClick={onCancel}><X size={15} />{t('chart.workbench.cancel')}</button>}
         {canInterpret && <button type="button" onClick={interpretChart} disabled={streamActive}>
           <Bot size={15} />{t('ai.interpret')}
         </button>}
         {(Boolean(startupError) || (state.requestStatus === 'error' && validDraft)) && <button type="button" onClick={onRetry}><RefreshCw size={15} />{t('chart.workbench.retry')}</button>}</div>
     </header>
     {result && accepted && <PanelGroup key={orientation} direction={orientation} className="chart-result__split"
-      style={orientation === 'vertical' ? { minHeight: `${REQUIRED_SPLIT_EXTENT}px` } : undefined}
       onLayout={(layout) => { if (layout.length === 2) setSplit(route, orientation, [layout[0], layout[1]]); }}>
       <Panel id={`${route}-${orientation}-chart`} order={1} defaultSize={ratio[0]} minSize={minimum}
         className="chart-result__chart-pane" data-min-percent={minimum.toFixed(3)}>

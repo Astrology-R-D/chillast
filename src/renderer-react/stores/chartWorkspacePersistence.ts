@@ -175,8 +175,8 @@ export function defaultWesternWorkspace(): WesternChartWorkspaceV1 {
       zodiacs: [], relocationPlaces: [],
     },
     split: {
-      personal: { horizontal: [50, 50], vertical: [55, 45] },
-      relationship: { horizontal: [50, 50], vertical: [55, 45] },
+      personal: { horizontal: [60, 40], vertical: [65, 35] },
+      relationship: { horizontal: [60, 40], vertical: [65, 35] },
     },
     tableLayouts: Object.fromEntries(
       CHART_TYPES.map((type) => [type, defaultTableLayout()]),

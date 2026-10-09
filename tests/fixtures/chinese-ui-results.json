@@ -1,0 +1,594 @@
+{
+  "profile": {
+    "id": "vac-test",
+    "nameZh": "测试档案",
+    "nameEn": "vac",
+    "gender": "other",
+    "birthData": {
+      "year": 2004,
+      "month": 7,
+      "day": 7,
+      "hour": 11,
+      "minute": 15,
+      "location": {
+        "label": "六盘水",
+        "latitude": 26.6,
+        "longitude": 104.8333
+      }
+    },
+    "notes": "",
+    "tags": [],
+    "createdAt": "2026-10-09T00:00:00.000Z",
+    "updatedAt": "2026-10-09T00:00:00.000Z"
+  },
+  "bazi": {
+    "bazi": {
+      "pillars": {
+        "year": {
+          "full": "甲申",
+          "stem": {
+            "char": "甲",
+            "element": "wood",
+            "yinYang": "yang"
+          },
+          "branch": {
+            "char": "申",
+            "element": "metal",
+            "yinYang": "yang",
+            "animal": "猴"
+          }
+        },
+        "month": {
+          "full": "辛未",
+          "stem": {
+            "char": "辛",
+            "element": "metal",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "未",
+            "element": "earth",
+            "yinYang": "yin",
+            "animal": "羊"
+          }
+        },
+        "day": {
+          "full": "丁亥",
+          "stem": {
+            "char": "丁",
+            "element": "fire",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "亥",
+            "element": "water",
+            "yinYang": "yin",
+            "animal": "猪"
+          }
+        },
+        "hour": {
+          "full": "乙巳",
+          "stem": {
+            "char": "乙",
+            "element": "wood",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "巳",
+            "element": "fire",
+            "yinYang": "yin",
+            "animal": "蛇"
+          }
+        }
+      },
+      "dayMaster": {
+        "char": "丁",
+        "element": "fire",
+        "yinYang": "yin"
+      },
+      "localTrueSolarTime": "10:09:26",
+      "allHourPillars": [
+        {
+          "shichen": "子",
+          "hours": "23-01",
+          "stem": {
+            "char": "庚",
+            "element": "metal",
+            "yinYang": "yang"
+          },
+          "branch": {
+            "char": "子",
+            "element": "water",
+            "yinYang": "yang",
+            "animal": "鼠"
+          },
+          "full": "庚子",
+          "isCurrent": false
+        },
+        {
+          "shichen": "丑",
+          "hours": "01-03",
+          "stem": {
+            "char": "辛",
+            "element": "metal",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "丑",
+            "element": "earth",
+            "yinYang": "yin",
+            "animal": "牛"
+          },
+          "full": "辛丑",
+          "isCurrent": false
+        },
+        {
+          "shichen": "寅",
+          "hours": "03-05",
+          "stem": {
+            "char": "壬",
+            "element": "water",
+            "yinYang": "yang"
+          },
+          "branch": {
+            "char": "寅",
+            "element": "wood",
+            "yinYang": "yang",
+            "animal": "虎"
+          },
+          "full": "壬寅",
+          "isCurrent": false
+        },
+        {
+          "shichen": "卯",
+          "hours": "05-07",
+          "stem": {
+            "char": "癸",
+            "element": "water",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "卯",
+            "element": "wood",
+            "yinYang": "yin",
+            "animal": "兔"
+          },
+          "full": "癸卯",
+          "isCurrent": false
+        },
+        {
+          "shichen": "辰",
+          "hours": "07-09",
+          "stem": {
+            "char": "甲",
+            "element": "wood",
+            "yinYang": "yang"
+          },
+          "branch": {
+            "char": "辰",
+            "element": "earth",
+            "yinYang": "yang",
+            "animal": "龙"
+          },
+          "full": "甲辰",
+          "isCurrent": false
+        },
+        {
+          "shichen": "巳",
+          "hours": "09-11",
+          "stem": {
+            "char": "乙",
+            "element": "wood",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "巳",
+            "element": "fire",
+            "yinYang": "yin",
+            "animal": "蛇"
+          },
+          "full": "乙巳",
+          "isCurrent": true
+        },
+        {
+          "shichen": "午",
+          "hours": "11-13",
+          "stem": {
+            "char": "丙",
+            "element": "fire",
+            "yinYang": "yang"
+          },
+          "branch": {
+            "char": "午",
+            "element": "fire",
+            "yinYang": "yang",
+            "animal": "马"
+          },
+          "full": "丙午",
+          "isCurrent": false
+        },
+        {
+          "shichen": "未",
+          "hours": "13-15",
+          "stem": {
+            "char": "丁",
+            "element": "fire",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "未",
+            "element": "earth",
+            "yinYang": "yin",
+            "animal": "羊"
+          },
+          "full": "丁未",
+          "isCurrent": false
+        },
+        {
+          "shichen": "申",
+          "hours": "15-17",
+          "stem": {
+            "char": "戊",
+            "element": "earth",
+            "yinYang": "yang"
+          },
+          "branch": {
+            "char": "申",
+            "element": "metal",
+            "yinYang": "yang",
+            "animal": "猴"
+          },
+          "full": "戊申",
+          "isCurrent": false
+        },
+        {
+          "shichen": "酉",
+          "hours": "17-19",
+          "stem": {
+            "char": "己",
+            "element": "earth",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "酉",
+            "element": "metal",
+            "yinYang": "yin",
+            "animal": "鸡"
+          },
+          "full": "己酉",
+          "isCurrent": false
+        },
+        {
+          "shichen": "戌",
+          "hours": "19-21",
+          "stem": {
+            "char": "庚",
+            "element": "metal",
+            "yinYang": "yang"
+          },
+          "branch": {
+            "char": "戌",
+            "element": "earth",
+            "yinYang": "yang",
+            "animal": "狗"
+          },
+          "full": "庚戌",
+          "isCurrent": false
+        },
+        {
+          "shichen": "亥",
+          "hours": "21-23",
+          "stem": {
+            "char": "辛",
+            "element": "metal",
+            "yinYang": "yin"
+          },
+          "branch": {
+            "char": "亥",
+            "element": "water",
+            "yinYang": "yin",
+            "animal": "猪"
+          },
+          "full": "辛亥",
+          "isCurrent": false
+        }
+      ]
+    },
+    "lunar": {
+      "lunarYear": "甲申",
+      "lunarMonth": "五",
+      "lunarDay": "二十",
+      "isLeapMonth": false,
+      "zodiacAnimal": "猴",
+      "solarTerm": "小暑",
+      "constellation": "巨蟹座",
+      "huangdiYear": 4702,
+      "eraName": "[当代]中国  公历纪元2004年",
+      "monthSize": 29,
+      "festivals": {
+        "major": "",
+        "important": "抗日战争纪念日 小暑 ",
+        "minor": "",
+        "isHoliday": false
+      },
+      "moonPhase": {
+        "name": "",
+        "time": ""
+      }
+    },
+    "analysis": {
+      "dayMaster": {
+        "char": "丁",
+        "element": "fire",
+        "yinYang": "yin"
+      },
+      "pillars": [
+        {
+          "key": "year",
+          "stemChar": "甲",
+          "stemElement": "wood",
+          "stemTenGod": "正印",
+          "branchChar": "申",
+          "branchElement": "metal",
+          "branchAnimal": "猴",
+          "hidden": [
+            {
+              "char": "庚",
+              "element": "metal",
+              "tenGod": "正财"
+            },
+            {
+              "char": "壬",
+              "element": "water",
+              "tenGod": "正官"
+            },
+            {
+              "char": "戊",
+              "element": "earth",
+              "tenGod": "伤官"
+            }
+          ]
+        },
+        {
+          "key": "month",
+          "stemChar": "辛",
+          "stemElement": "metal",
+          "stemTenGod": "偏财",
+          "branchChar": "未",
+          "branchElement": "earth",
+          "branchAnimal": "羊",
+          "hidden": [
+            {
+              "char": "己",
+              "element": "earth",
+              "tenGod": "食神"
+            },
+            {
+              "char": "丁",
+              "element": "fire",
+              "tenGod": "比肩"
+            },
+            {
+              "char": "乙",
+              "element": "wood",
+              "tenGod": "偏印"
+            }
+          ]
+        },
+        {
+          "key": "day",
+          "stemChar": "丁",
+          "stemElement": "fire",
+          "stemTenGod": "日主",
+          "branchChar": "亥",
+          "branchElement": "water",
+          "branchAnimal": "猪",
+          "hidden": [
+            {
+              "char": "壬",
+              "element": "water",
+              "tenGod": "正官"
+            },
+            {
+              "char": "甲",
+              "element": "wood",
+              "tenGod": "正印"
+            }
+          ]
+        },
+        {
+          "key": "hour",
+          "stemChar": "乙",
+          "stemElement": "wood",
+          "stemTenGod": "偏印",
+          "branchChar": "巳",
+          "branchElement": "fire",
+          "branchAnimal": "蛇",
+          "hidden": [
+            {
+              "char": "丙",
+              "element": "fire",
+              "tenGod": "劫财"
+            },
+            {
+              "char": "戊",
+              "element": "earth",
+              "tenGod": "伤官"
+            },
+            {
+              "char": "庚",
+              "element": "metal",
+              "tenGod": "正财"
+            }
+          ]
+        }
+      ],
+      "elementCounts": {
+        "wood": 4,
+        "fire": 3,
+        "earth": 3,
+        "metal": 3,
+        "water": 2
+      },
+      "strength": {
+        "supportive": 7,
+        "total": 15,
+        "ratio": 0.4666666666666667,
+        "label": "中和",
+        "supportElement": "fire",
+        "resourceElement": "wood"
+      }
+    }
+  },
+  "calendar": {
+    "year": 2026,
+    "terms": [
+      {
+        "name": "小寒",
+        "date": "2026-01-05",
+        "time": "16:23:10",
+        "lunarDate": "十一月十七"
+      },
+      {
+        "name": "大寒",
+        "date": "2026-01-20",
+        "time": "09:44:56",
+        "lunarDate": "十二月初二"
+      },
+      {
+        "name": "立春",
+        "date": "2026-02-04",
+        "time": "04:02:08",
+        "lunarDate": "十二月十七"
+      },
+      {
+        "name": "雨水",
+        "date": "2026-02-18",
+        "time": "23:51:56",
+        "lunarDate": "正月初二"
+      },
+      {
+        "name": "惊蛰",
+        "date": "2026-03-05",
+        "time": "21:59:00",
+        "lunarDate": "正月十七"
+      },
+      {
+        "name": "春分",
+        "date": "2026-03-20",
+        "time": "22:45:59",
+        "lunarDate": "二月初二"
+      },
+      {
+        "name": "清明",
+        "date": "2026-04-05",
+        "time": "02:40:00",
+        "lunarDate": "二月十八"
+      },
+      {
+        "name": "谷雨",
+        "date": "2026-04-20",
+        "time": "09:39:08",
+        "lunarDate": "三月初四"
+      },
+      {
+        "name": "立夏",
+        "date": "2026-05-05",
+        "time": "19:48:44",
+        "lunarDate": "三月十九"
+      },
+      {
+        "name": "小满",
+        "date": "2026-05-21",
+        "time": "08:36:45",
+        "lunarDate": "四月初五"
+      },
+      {
+        "name": "芒种",
+        "date": "2026-06-05",
+        "time": "23:48:21",
+        "lunarDate": "四月二十"
+      },
+      {
+        "name": "夏至",
+        "date": "2026-06-21",
+        "time": "16:24:30",
+        "lunarDate": "五月初七"
+      },
+      {
+        "name": "小暑",
+        "date": "2026-07-07",
+        "time": "09:56:57",
+        "lunarDate": "五月廿三"
+      },
+      {
+        "name": "大暑",
+        "date": "2026-07-23",
+        "time": "03:13:05",
+        "lunarDate": "六月初十"
+      },
+      {
+        "name": "立秋",
+        "date": "2026-08-07",
+        "time": "19:42:43",
+        "lunarDate": "六月廿五"
+      },
+      {
+        "name": "处暑",
+        "date": "2026-08-23",
+        "time": "10:18:49",
+        "lunarDate": "七月十一"
+      },
+      {
+        "name": "白露",
+        "date": "2026-09-07",
+        "time": "22:41:16",
+        "lunarDate": "七月廿六"
+      },
+      {
+        "name": "秋分",
+        "date": "2026-09-23",
+        "time": "08:05:14",
+        "lunarDate": "八月十三"
+      },
+      {
+        "name": "寒露",
+        "date": "2026-10-08",
+        "time": "14:29:17",
+        "lunarDate": "八月廿八"
+      },
+      {
+        "name": "霜降",
+        "date": "2026-10-23",
+        "time": "17:37:57",
+        "lunarDate": "九月十四"
+      },
+      {
+        "name": "立冬",
+        "date": "2026-11-07",
+        "time": "17:52:05",
+        "lunarDate": "九月廿九"
+      },
+      {
+        "name": "小雪",
+        "date": "2026-11-22",
+        "time": "15:23:21",
+        "lunarDate": "十月十四"
+      },
+      {
+        "name": "大雪",
+        "date": "2026-12-07",
+        "time": "10:52:32",
+        "lunarDate": "十月廿九"
+      },
+      {
+        "name": "冬至",
+        "date": "2026-12-22",
+        "time": "04:50:14",
+        "lunarDate": "十一月十四"
+      }
+    ],
+    "lunarYear": "丙午",
+    "zodiac": "马"
+  }
+}

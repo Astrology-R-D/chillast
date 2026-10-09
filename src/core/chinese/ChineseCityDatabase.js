@@ -1,6 +1,7 @@
 'use strict';
 
 const sxwnl = require('./SxwnlLoader');
+const { fuzzyMatch } = require('../util/FuzzySearch');
 
 function searchChineseCities(query) {
   const { JWv, JWdecode } = sxwnl;
@@ -16,7 +17,7 @@ function searchChineseCities(query) {
       if (typeof raw !== 'string' || raw.length < 5) continue;
       const code = raw.substring(0, 4);
       const name = raw.substring(4);
-      if (!name.toLowerCase().includes(q) && !province.toLowerCase().includes(q)) continue;
+      if (!fuzzyMatch(q, [name, province])) continue;
       try {
         const jw = new JWdecode(code);
         results.push({
