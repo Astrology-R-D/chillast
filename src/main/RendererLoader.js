@@ -31,7 +31,7 @@ function selectRendererTarget({ env = process.env, appRoot = DEFAULT_APP_ROOT, i
     };
   }
 
-  if (env.CHILLAST_RENDERER === 'react') {
+  if (env.CHILLAST_RENDERER === 'react' || (isPackaged && env.CHILLAST_RENDERER !== 'legacy')) {
     return {
       kind: 'react-file',
       value: path.join(appRoot, 'dist', 'renderer-react', 'index.html'),

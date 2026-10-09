@@ -18,7 +18,9 @@ function ProfilesView({ data, context }: ToolViewProps) {
   })}</div>;
 }
 function SourcesView({ call, data }: ToolViewProps) {
-  return <div className="tool-sources">{call.artifact?.sources?.length ? call.artifact.sources.map((source) => <SourceCard key={source.id} source={source} />) : <NestedValue value={data} />}</div>;
+  const search = call.artifact?.search;
+  const names: Record<string, string> = { bing: 'Bing', duckduckgo: 'DuckDuckGo', tavily: 'Tavily', searxng: 'SearXNG' };
+  return <div className="tool-sources">{search?.fallback && call.status !== 'error' && <p>首选搜索接口未返回可用结果页，已改用 {names[search.provider] || search.provider}。</p>}{call.artifact?.sources?.length ? call.artifact.sources.map((source) => <SourceCard key={source.id} source={source} />) : <NestedValue value={data} />}</div>;
 }
 function BirthInputView({ data }: ToolViewProps) {
   const input = data as Record<string, unknown>;

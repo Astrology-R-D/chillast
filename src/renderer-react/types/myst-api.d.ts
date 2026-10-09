@@ -15,6 +15,9 @@ import type {
   CloseDecision,
   IpcResult,
   KnowledgeDoc,
+  KnowledgePackInfo,
+  KnowledgePackList,
+  KnowledgePackPreview,
   LocaleDictionary,
   LocationResolution,
   Profile,
@@ -60,6 +63,15 @@ declare global {
       list(): Promise<IpcResult<KnowledgeDoc[]>>;
       import(filePaths: string[]): Promise<IpcResult<{ count: number }>>;
       remove(docId: string): Promise<IpcResult<{ removed: boolean }>>;
+      packs: {
+        list(): Promise<IpcResult<KnowledgePackList>>;
+        choose(): Promise<IpcResult<KnowledgePackPreview | null>>;
+        install(token: string): Promise<IpcResult<KnowledgePackInfo>>;
+        activate(id: string, version: string): Promise<IpcResult<KnowledgePackList>>;
+        disable(id: string): Promise<IpcResult<KnowledgePackList>>;
+        remove(id: string, version: string): Promise<IpcResult<KnowledgePackList>>;
+        setBuiltinEnabled(enabled: boolean): Promise<IpcResult<KnowledgePackList>>;
+      };
     };
     tools: {
       describe(): Promise<IpcResult<AiToolProviderDescriptor[]>>;

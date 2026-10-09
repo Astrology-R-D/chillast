@@ -17,7 +17,7 @@ const { toText } = require('./prompts/ChartSerializer');
 const esm = require('./esm-bridge');
 const { ContextManager, contextHistory } = require('./ContextManager');
 const { chartToolResult, hash } = require('./ToolResult');
-const { ANALYST_PROMPT, parseReport, reportCatalog, writerPrompt, needsAnalysis } = require('./AnalysisProtocol');
+const { ANALYST_PROMPT, parseReport, reportCatalog, writerPrompt, needsAnalysis, hasReportContent } = require('./AnalysisProtocol');
 
 class AiService {
   constructor(astrologyService, chineseAstrologyService, profileRepository, { catalog = null, esm: esmImpl = esm } = {}) {
@@ -120,6 +120,16 @@ class AiService {
       }
     }
 
+    // Package selection is independent of chat configurations and the legacy index.
+    this._packs = null;
+    if (settings.knowledgePackPath) {
+      try {
+        this._packs = await new (require('./KnowledgePackManager'))({ root: settings.knowledgePackPath, modelProvider: this._mp,
+          legacy: this._kb, onProgress: (p) => this._emitInit(p) }).initialize();
+        if (settings.enableRag !== false) this._kb = this._packs;
+      } catch (error) { console.error('[AiService] knowledge packages unavailable:', error.message); }
+    }
+
     // Build the pluggable tool registry. Adding a capability later = register a
     // new provider here (or an MCP provider) — the agent loop never changes.
     try {
@@ -202,6 +212,8 @@ class AiService {
   }
 
   getKnowledgeBase() { return this._kb; }
+  getKnowledgePacks() { return this._packs || null; }
+  async refreshKnowledgeTools() { await this._registry?.get?.('kb')?.dispose(); }
 
   getCatalogProviders() { return this._catalog ? this._catalog.getProviders() : []; }
   getCatalogModels(providerKey) { return this._catalog ? this._catalog.getModels(providerKey) : []; }
@@ -226,7 +238,7 @@ class AiService {
   }
 
   _contextManager() { return new ContextManager(this._mp, { catalog: this._catalog, esm: this._esm }); }
-  _contextKey(chartData) { return hash(JSON.stringify({ profile: this._context?.activeProfile?.id, chart: chartData?.resultId || this._context?.resultId, type: chartData?.meta?.type || this._context?.chartType })).slice(0, 24); }
+  _contextKey(chartData, knowledgeFingerprint = this._packs?.fingerprint()) { return hash(JSON.stringify({ profile: this._context?.activeProfile?.id, chart: chartData?.resultId || this._context?.resultId, type: chartData?.meta?.type || this._context?.chartType, knowledgeFingerprint })).slice(0, 24); }
   _chartText(context = {}) {
     if (this._context?.kind === 'chinese-chart' && this._context.lastBaziData && !context.chartData) return require('./ToolResult').baziToolResult(this._context.lastBaziData).content;
     return context.currentChartText || ((context.chartData || this._context?.lastChartData) ? toText(context.chartData || this._context.lastChartData) : null);
@@ -236,8 +248,13 @@ class AiService {
     const { convertToOpenAITool } = await this._esm.load('@langchain/core/utils/function_calling');
     return tools.map((tool) => convertToOpenAITool(tool));
   }
-  async _toolsForSession(session, currentCalls = [], chartSettings) {
+  async _toolsForSession(session, currentCalls = [], chartSettings, knowledgeSnapshot) {
     let tools = this._registry ? await this._registry.getTools() : [];
+    const knowledge = this._registry?.get?.('kb');
+    if (knowledgeSnapshot && knowledge?.enabled) {
+      const originals = new Set(await knowledge.listTools());
+      tools = [...tools.filter((tool) => !originals.has(tool)), ...await new KnowledgeToolProvider(knowledgeSnapshot).listTools()];
+    }
     const astro = this._registry?.get?.('astro');
     const settings = chartSettings || this._context?.successfulFilters?.settings || this._context?.lastChartData?.meta?.settings;
     if (settings && astro?.enabled && typeof astro.listToolsForSettings === 'function') {
@@ -284,16 +301,18 @@ class AiService {
       const { HumanMessage, AIMessage, SystemMessage } = await this._esm.load('@langchain/core/messages');
       const model = this._mp.chatModel();
       const completed = [];
-      const tools = await this._toolsForSession(context.sessionSnapshot, completed, context.chartData?.meta?.settings);
+      const knowledgeSnapshot = this._packs?.createSnapshot();
+      const tools = await this._toolsForSession(context.sessionSnapshot, completed, context.chartData?.meta?.settings, knowledgeSnapshot);
       const schemas = await this._toolSchemas(tools);
       const manager = this._contextManager();
       const notify = (event) => context.onContextEvent?.(event);
       const lcMessages = userMessages.filter((m) => m?.content).map((m) => m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content));
-      const contextKey = this._contextKey(context.chartData);
+      const contextKey = this._contextKey(context.chartData, knowledgeSnapshot?.fingerprint);
       const question = [...userMessages].reverse().find((m) => m.role === 'user')?.content || '';
       const questionTopic = question.split(/\n(?:\[|【|---)/)[0].replace(/\s+/g, ' ').slice(0, 100);
-      let report = context.priorReport?.contextKey === contextKey ? context.priorReport : null;
-      if (needsAnalysis(userMessages, context.priorReport, contextKey)) {
+      let report = context.priorReport?.contextKey === contextKey && hasReportContent(context.priorReport) ? context.priorReport : null;
+      const hasWorkspaceContext = Boolean(context.chartData || this._context?.lastChartData || this._context?.lastBaziData || this._context?.activeProfile);
+      if (needsAnalysis(userMessages, context.priorReport, contextKey, { hasWorkspaceContext })) {
         yield { type: 'stage', data: 'analysis' };
         yield { type: 'activity', data: { phase: 'analysis', topic: questionTopic } };
         const calls = new Map();
@@ -343,12 +362,15 @@ class AiService {
         catch (error) {
           yield { type: 'activity', data: { phase: 'validation', repair: true } };
           const repairPrompt = `${ANALYST_PROMPT}\n原报告格式或引用校验失败：${error.message}。只使用下列真实目录，修复报告；无法证实的判断删除。\n${reportCatalog(completed)}\n原报告：${finalText}`;
-          const repairMessages = await manager.prepare([new SystemMessage(repairPrompt), new HumanMessage('修复为协议要求的 JSON。')], [], { signal: ac.signal, notify });
+          const repairMessages = await manager.prepare([new SystemMessage(repairPrompt), new HumanMessage(`用户当前问题：${question}\n修复为协议要求的 JSON。`)], [], { signal: ac.signal, notify });
           const repair = await model.invoke(repairMessages, { signal: ac.signal });
           report = parseReport(this._extractText(repair.content), completed, contextKey);
         }
       }
-      if (report) yield { type: 'analysis-report', data: report };
+      if (report) {
+        if (knowledgeSnapshot) report = { ...report, knowledgeFingerprint: knowledgeSnapshot.fingerprint };
+        yield { type: 'analysis-report', data: report };
+      }
       if (ac.signal.aborted) return;
       yield { type: 'stage', data: 'answer' };
       yield { type: 'activity', data: { phase: 'answer', topic: report?.focus?.slice(0, 100) } };

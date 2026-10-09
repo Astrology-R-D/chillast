@@ -1,6 +1,6 @@
 # AI conversation and tool views
 
-The React AI workspace uses an analyst with tools followed by a conversational writer. Both use the configured ModelProvider. Ordinary conversation and follow-ups in the same chart context can use the writer directly. The chart interpretation action uses the same pipeline as chat.
+The React AI workspace uses an analyst with tools followed by a conversational writer. Both use the configured ModelProvider. Unambiguous greetings and acknowledgements can use the writer directly. Substantive questions with a selected profile, computed Western/Chinese chart or previous analysis reach the analyst even without astrology keywords. Follow-ups in the same chart context also reanalyse the new question instead of blindly reusing old findings. The chart interpretation action uses the same pipeline as chat.
 
 ## Tool contract
 
@@ -23,9 +23,15 @@ Input and output registrations are independent. Components receive `{ call, data
 
 Knowledge and web tools provide SourceSnapshots containing a stable content-derived ID, document identity, version hash, exact text, and available location metadata. Missing bibliographic information is never synthesized. Snapshot copies are saved with tool calls and reports so later knowledge-base edits cannot change historical quotations.
 
-The analyst emits JSON findings with `factRefs` and `sourceIds`. `AnalysisProtocol.parseReport` resolves them against actual tool artifacts and rejects nonexistent references or unsupported professional claims. Invalid reports get one repair attempt; continued invalid output fails visibly.
+The analyst emits JSON findings with `factRefs` and `sourceIds`. `AnalysisProtocol.parseReport` resolves them against actual tool artifacts and rejects nonexistent references or unsupported professional claims. A report must contain verified claims or nonblank clarification questions; wholly empty reports are invalid. Invalid reports get one repair attempt with the original question; continued invalid output fails visibly. Old empty reports cannot bypass analysis. Ordinary conversation receives no synthetic empty report, and the writer expresses missing information as concrete questions rather than exposing internal fields.
 
 The writer receives verified findings and source excerpts rather than the analyst's raw tool message history. It emits inline links such as `[判据 1](evidence:E1)`. Rendering resolves each link against that message's persisted AnalysisReport, showing exact facts, full source snapshots, limitations and questions. Unknown IDs are visibly unverified. Evidence IDs are scoped to a message; SourceSnapshot IDs are stable across retrievals.
+
+## Knowledge inventory
+
+When a persisted HNSW index loads, the document list is deduplicated from its actual docstore metadata rather than rebuilt by scanning the current checkout. Books from earlier corpora and user imports remain listed and searchable even if their source files are no longer in the active directories. Files added to disk but not yet indexed are not advertised as available. Documents without a source file in the current managed directories carry `cachedOnly` and display “仅存于索引”. This inventory correction does not rebuild or replace the existing index.
+
+`node --test tests/KnowledgeInventory.test.js` covers missing Bazi source files, multi-chunk deduplication, unindexed files and imported documents across restarts using real HNSW persistence.
 
 ## Context and compression
 
@@ -39,7 +45,7 @@ Token counts are conservative UTF-8-based estimates, not a model-specific tokeni
 
 ## Verification
 
-- `node --test tests/AiConversationPipeline.test.js tests/AiContextIpc.test.js tests/AiSessionStore.test.js tests/TokenBudget.test.js`
+- `node --test tests/AiAnalysisRouting.test.js tests/AiConversationPipeline.test.js tests/AiContextIpc.test.js tests/AiSessionStore.test.js tests/TokenBudget.test.js`
 - `npm run test:renderer` and `npm run typecheck`
 - `npm run smoke:workbench` validates Electron tool previews, evidence, manual compression, long-message scrolling and live window resizing with isolated test data.
 
@@ -62,3 +68,9 @@ AI computation tools receive a request-local snapshot of the accepted chart sett
 `src/shared/DegreeFormat.js` formats raw decimal angles as degrees/minutes for the data grid, model chart serialization and newly generated evidence facts. Decimal degrees remain unchanged in chart DTOs and exports. The serializer includes the DTO's top-level houses/angles, calculation settings and UTC instant. Historical evidence snapshots remain as originally recorded.
 
 The screenshot regression is pinned at local 2004-07-07 11:15, coordinates 26.6/104.8333: UTC 03:15, Moon longitude 348.9872°, Pisces 18°59′14″, house 6 under Placidus/tropical. `18.99°` was the same within-sign value rounded to two decimal places. `AstroCalculationConsistency.test.js` compares all five Western AI tools with direct Swiss service requests under both Placidus/tropical and whole-sign/Lahiri settings.
+
+## Web search responses
+
+`WebSearchClient` distinguishes genuine empty results from HTTP failures, homepage redirects, verification pages and unrecognized responses. The configured Bing provider tries its China endpoint first, then DuckDuckGo and global Bing on service failures. Explicit DuckDuckGo, Tavily and SearXNG settings stay on the configured provider. A confirmed empty result does not trigger fallback.
+
+Tool artifacts retain the actual search provider and failed attempts. The model and expanded source view identify fallback searches, while failure content starts with `联网搜索失败` so the tool card is marked as failed. Source snapshots keep resolved HTTP(S) URLs and original snippets. Timeouts cover both response headers and the body. `node --test tests/WebSearchClient.test.js` covers these distinctions with deterministic responses; live smoke verification uses the normal `web_search` tool without an AI API call.

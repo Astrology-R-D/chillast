@@ -47,7 +47,7 @@ test('AI service pairs parallel calls and keeps the entire output, including too
         { getType: () => 'tool', tool_call_id: 'b', content: '计算失败', status: 'error' },
         { getType: () => 'tool', tool_call_id: 'a', content: full },
       ] } }];
-      yield ['updates', { agent: { messages: [{ getType: () => 'ai', content: '{"focus":"测试","claims":[],"questions":[]}' }] } }];
+      yield ['updates', { agent: { messages: [{ getType: () => 'ai', content: '{"focus":"测试","claims":[],"questions":["最近发生了什么具体事情？"]}' }] } }];
     } }) }
     : { HumanMessage: class {}, AIMessage: class {}, SystemMessage: class {} } };
   const service = new AiService({}, {}, null, { esm });

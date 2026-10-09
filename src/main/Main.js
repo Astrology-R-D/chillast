@@ -138,6 +138,7 @@ class Main {
       knowledgeBuiltinPath: builtinKnowledgePath,
       knowledgeUserPath: userKnowledgePath,
       knowledgeIndexDir: vectorIndexDir,
+      knowledgePackPath: path.join(app.getPath('userData'), 'knowledge', 'packages'),
     };
 
     const credPath = path.join(baseDir, 'ai-credentials.json');
@@ -191,6 +192,10 @@ class Main {
       aiConfigurationStore: this.aiConfigurationStore,
       locationResolver: new LocationResolver(),
       closeDecision: this._handleCloseDecision.bind(this),
+      chooseKnowledgePack: async () => {
+        const chosen = await dialog.showOpenDialog({ title: '选择知识包', properties: ['openFile'], filters: [{ name: 'CHILLAST 知识包', extensions: ['kbpack'] }] });
+        return chosen.canceled ? null : chosen.filePaths[0];
+      },
     }).register();
   }
 
@@ -378,7 +383,7 @@ class Main {
       const svg = document.querySelector('.chart-svg-host svg');
       const row = Array.from(document.querySelectorAll('.chart-data-grid [data-row-id]'))
         .find((candidate) => candidate.getAttribute('data-row-id')?.endsWith(':sun'));
-      const longitude = Number(row?.querySelector('[data-column-id="longitude"]')?.textContent);
+      const longitude = Number.parseFloat(row?.querySelector('[data-column-id="longitude"]')?.textContent ?? '');
       const markup = svg?.outerHTML ?? '';
       return { ready: Boolean(svg && row && Number.isFinite(longitude) && markup.length > 1000), value: {
         lahiriSun: longitude,

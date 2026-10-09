@@ -184,6 +184,15 @@ contextBridge.exposeInMainWorld('mystApi', {
       list: () => invoke('ai:knowledge:list'),
       import: (filePaths) => invoke('ai:knowledge:import', filePaths),
       remove: (docId) => invoke('ai:knowledge:remove', docId),
+      packs: {
+        list: () => invoke('ai:knowledge:packs:list'),
+        choose: () => invoke('ai:knowledge:packs:choose'),
+        install: (token) => invoke('ai:knowledge:packs:install', token),
+        activate: (id, version) => invoke('ai:knowledge:packs:activate', id, version),
+        disable: (id) => invoke('ai:knowledge:packs:disable', id),
+        remove: (id, version) => invoke('ai:knowledge:packs:remove', id, version),
+        setBuiltinEnabled: (enabled) => invoke('ai:knowledge:packs:builtin', enabled),
+      },
     },
     tools: {
       describe: () => invoke('ai:tools:describe'),

@@ -553,6 +553,8 @@
     "saveFailed": "保存失败：{{message}}",
     "knowledge": "知识库",
     "builtinDocs": "内置文档 ({{count}})",
+    "cachedKnowledge": "仅存于索引",
+    "cachedKnowledgeHint": "可正常检索；当前知识库目录中没有对应原文件",
     "userDocs": "用户文档 ({{count}})",
     "importDocs": "导入文档",
     "removeDoc": "删除",

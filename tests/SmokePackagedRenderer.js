@@ -31,7 +31,7 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
 
   const env = { ...process.env, CHILLAST_SMOKE_REPORT: reportPath };
   delete env.CHILLAST_RENDERER_URL;
-  if (renderer === 'react') env.CHILLAST_RENDERER = 'react';
+  if (renderer === 'legacy') env.CHILLAST_RENDERER = 'legacy';
   else delete env.CHILLAST_RENDERER;
 
   let child;

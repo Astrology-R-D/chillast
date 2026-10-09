@@ -19,7 +19,7 @@ class IpcRouter {
    * @param {ProfileRepository} deps.profileRepository
    * @param {AstrologyService} deps.astrologyService
    */
-  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService, aiSessionStore, aiConfigurationStore, locationResolver, closeDecision }) {
+  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService, aiSessionStore, aiConfigurationStore, locationResolver, closeDecision, chooseKnowledgePack }) {
     this.ipcMain = ipcMain;
     this.profiles = profileRepository;
     this.astrology = astrologyService;
@@ -30,10 +30,13 @@ class IpcRouter {
     this.aiSessionStore = aiSessionStore || null;
     this.aiConfigurationStore = aiConfigurationStore || null;
     this._configurationBusy = false;
+    this._knowledgeBusy = false;
     this.locationResolver = locationResolver || null;
     this.closeDecision = typeof closeDecision === 'function' ? closeDecision : null;
     this.webContents = null;
     this._sessionTasks = new Set();
+    this.chooseKnowledgePack = chooseKnowledgePack;
+    this._packSelections = new Map();
   }
 
   setWebContents(wc) { this.webContents = wc; }
@@ -209,6 +212,31 @@ class IpcRouter {
       });
       this._handle('ai:stop', (_e, sessionId) => { this.ai.stop(sessionId); return { ok: true }; });
       this._handle('ai:knowledge:list', () => this.ai.getKnowledgeBase()?.listDocuments() || []);
+      const packages = () => { const manager = this.ai.getKnowledgePacks?.(); if (!manager) throw new Error('知识包管理尚未初始化，请重启软件'); return manager; };
+      const changePackages = (operation) => this._withKnowledgeLock(async () => {
+        const result = await operation(packages()); await this.ai.refreshKnowledgeTools?.();
+        this.webContents?.send('ai:statusChanged', this.ai.status()); return result;
+      });
+      this._handle('ai:knowledge:packs:list', () => packages().listPacks());
+      this._handle('ai:knowledge:packs:choose', async () => {
+        if (!this.chooseKnowledgePack) throw new Error('文件选择器不可用');
+        const filePath = await this.chooseKnowledgePack(); if (!filePath) return null;
+        const manifest = await packages().inspectPack(filePath), token = require('node:crypto').randomUUID();
+        this._packSelections.clear(); this._packSelections.set(token, { filePath, fingerprint: manifest.fingerprint });
+        return { token, manifest };
+      });
+      this._handle('ai:knowledge:packs:install', async (_e, token) => {
+        const selected = this._packSelections.get(token); if (!selected) throw new Error('请重新选择知识包');
+        this._packSelections.delete(token);
+        return changePackages(async (manager) => {
+          if ((await manager.inspectPack(selected.filePath)).fingerprint !== selected.fingerprint) throw new Error('所选知识包已改变，请重新预览');
+          return manager.install(selected.filePath, selected.fingerprint);
+        });
+      });
+      this._handle('ai:knowledge:packs:activate', (_e, id, version) => changePackages((m) => m.activate(id, version)));
+      this._handle('ai:knowledge:packs:disable', (_e, id) => changePackages((m) => m.disable(id)));
+      this._handle('ai:knowledge:packs:remove', (_e, id, version) => changePackages((m) => m.remove(id, version)));
+      this._handle('ai:knowledge:packs:builtin', (_e, enabled) => changePackages((m) => m.setBuiltinEnabled(enabled)));
       this._handle('ai:sessions:list', () => this.aiSessionStore ? this.aiSessionStore.list() : []);
       this._handle('ai:sessions:get', (_e, id) => this.aiSessionStore ? this.aiSessionStore.get(id) : null);
       this._handle('ai:sessions:create', () => this.aiSessionStore ? this.aiSessionStore.create() : null);
@@ -273,18 +301,20 @@ class IpcRouter {
         this.ai.setContext(assertAiContext(context));
         return { ok: true };
       });
-      this._handle('ai:knowledge:import', async (_e, filePaths) => {
+      this._handle('ai:knowledge:import', (_e, filePaths) => this._withKnowledgeLock(async () => {
         const kb = this.ai.getKnowledgeBase();
         if (!kb) throw new Error('知识库未初始化');
         const count = await kb.importDocuments(filePaths);
+        await this.ai.refreshKnowledgeTools?.();
         return { count };
-      });
-      this._handle('ai:knowledge:remove', (_e, docId) => {
+      }));
+      this._handle('ai:knowledge:remove', (_e, docId) => this._withKnowledgeLock(async () => {
         const kb = this.ai.getKnowledgeBase();
         if (!kb) throw new Error('知识库未初始化');
-        const removed = kb.removeDocument(docId);
+        const removed = await kb.removeDocument(docId);
+        await this.ai.refreshKnowledgeTools?.();
         return { removed };
-      });
+      }));
     }
 
     this._handle('cities:search', (_e, query) => this._searchCities(query));
@@ -378,10 +408,19 @@ class IpcRouter {
   }
 
   async _withAiConfigurationLock(action) {
+    if (this._knowledgeBusy || this.ai?.getKnowledgePacks?.()?.busy) throw new Error('知识库正在准备，请完成后再切换 AI 配置');
     if (this._configurationBusy || this._sessionTasks.size || this.ai?._abortControllers?.size) throw new Error('请等待当前 AI 回复或配置操作完成');
     this._configurationBusy = true;
     try { return await action(); }
     finally { this._configurationBusy = false; }
+  }
+
+  async _withKnowledgeLock(action) {
+    if (this._configurationBusy) throw new Error('AI 配置正在切换，请完成后再修改知识库');
+    if (this._knowledgeBusy) throw new Error('知识库正在准备，请等待当前操作完成');
+    this._knowledgeBusy = true;
+    try { return await action(); }
+    finally { this._knowledgeBusy = false; }
   }
 
   async _applyAiConfiguration(entry) {

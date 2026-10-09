@@ -26,6 +26,8 @@ class KnowledgeBase {
     if (!embeddings) return;
 
     this._indexDir = indexDir || null;
+    this._userPath = userDataPath || null;
+    this._docs = [];
     const { RecursiveCharacterTextSplitter } = await esm.load('langchain/text_splitter');
     const { HNSWLib } = await esm.load('@langchain/community/vectorstores/hnswlib');
 
@@ -131,17 +133,25 @@ class KnowledgeBase {
   }
 
   _rebuildDocList(builtinPath, userDataPath) {
-    const docs = [];
-    const scan = (dir, source) => {
-      if (!dir || !fs.existsSync(dir)) return;
-      for (const f of fs.readdirSync(dir)) {
-        if (!f.endsWith('.md') && !f.endsWith('.txt')) continue;
-        docs.push({ id: path.join(dir, f), name: f, source, importedAt: new Date().toISOString() });
-      }
-    };
-    scan(builtinPath, 'builtin');
-    if (userDataPath) scan(userDataPath, 'user');
-    return docs;
+    // A persisted index may contain books imported by an earlier checkout whose
+    // source files are no longer in the current directories. Its actual chunks
+    // remain searchable. Inventory must follow the loaded index, not the disk
+    // directory (which can also contain new files not yet indexed).
+    const docs = new Map();
+    for (const document of this._store.docstore._docs.values()) {
+      const { source = 'unknown', fileName, importedAt } = document.metadata || {};
+      if (typeof fileName !== 'string' || !fileName) continue;
+      const key = `${source}:${fileName}`;
+      if (docs.has(key)) continue;
+      const dir = source === 'builtin' ? builtinPath : source === 'user' ? userDataPath : null;
+      const filePath = dir ? path.join(dir, path.basename(fileName)) : null;
+      const cachedOnly = !filePath || !fs.existsSync(filePath);
+      docs.set(key, {
+        id: cachedOnly ? `index:${source}:${encodeURIComponent(fileName)}` : filePath,
+        name: fileName, source, cachedOnly, importedAt: importedAt || new Date().toISOString(),
+      });
+    }
+    return [...docs.values()];
   }
 
   async retrieve(query, k) {

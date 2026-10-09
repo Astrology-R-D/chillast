@@ -40,7 +40,8 @@
     "build:index": "node tools/build-index.mjs",
     "stage:index": "node tools/stage-index.mjs",
     "predist": "npm run build:renderer && electron-rebuild -f --only swisseph-v2",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "smoke:knowledge": "npm run build:renderer && electron tests/SmokeKnowledgePacks.js"
   },
   "build": {
     "appId": "com.chillast.astrology",
@@ -116,6 +117,7 @@
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.9",
+    "adm-zip": "^0.6.1",
     "circular-natal-horoscope-js": "^1.1.0",
     "github-markdown-css": "5.9.0",
     "hnswlib-node": "^3.0.0",

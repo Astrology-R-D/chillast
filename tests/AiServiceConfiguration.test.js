@@ -69,6 +69,9 @@ test('failed reconfigure preserves previous effective status, model settings, an
     baseUrl: '',
     temperature: 0.4,
     maxTokens: undefined,
+    maxTokensMode: undefined,
+    contextWindow: undefined,
+    maxOutputTokens: undefined,
     knowledgeDocCount: 0,
   });
   assert.equal(service._lastSettings.provider, 'controlled');

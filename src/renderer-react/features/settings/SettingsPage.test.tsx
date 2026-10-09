@@ -40,7 +40,7 @@ function installApi(overrides: Record<string, unknown> = {}) {
     },
     tools: { describe: vi.fn().mockResolvedValue({ ok: true, data: tools }), setProviderEnabled: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }) },
     mcp: { list: vi.fn().mockResolvedValue({ ok: true, data: mcp }), save: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }) },
-    knowledge: { list: vi.fn().mockResolvedValue({ ok: true, data: knowledge }), import: vi.fn().mockResolvedValue({ ok: true, data: { count: 1 } }), remove: vi.fn().mockResolvedValue({ ok: true, data: true }) },
+    knowledge: { list: vi.fn().mockResolvedValue({ ok: true, data: knowledge }), import: vi.fn().mockResolvedValue({ ok: true, data: { count: 1 } }), remove: vi.fn().mockResolvedValue({ ok: true, data: true }), packs: { list: vi.fn().mockResolvedValue({ ok: true, data: { builtinEnabled: true, busy: false, legacyDocuments: 2, packs: [] } }) } },
     sessions: { list: vi.fn().mockResolvedValue({ ok: true, data: sessions }), rename: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }), generateTitle: vi.fn().mockResolvedValue({ ok: true, data: { title: '新标题' } }), delete: vi.fn().mockResolvedValue({ ok: true, data: true }) },
     onStatusChanged: vi.fn(() => () => {}),
     ...overrides,

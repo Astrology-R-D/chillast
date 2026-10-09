@@ -1,5 +1,6 @@
 import type {
   AiCatalogModel,
+  AiInitProgress,
   AiConfigurationList,
   AiConfigurationSaveInput,
   AiSavedConfiguration,
@@ -17,6 +18,9 @@ import type {
   CloseDecision,
   IpcResult,
   KnowledgeDoc,
+  KnowledgePackInfo,
+  KnowledgePackList,
+  KnowledgePackPreview,
   LocaleDictionary,
   LocationResolution,
   Profile,
@@ -372,6 +376,8 @@ export const apiClient = {
   ),
   getAiStatus: async (): Promise<AiStatus> =>
     parseAiStatus(await invoke<unknown>((api) => api.ai.status())),
+  onKnowledgeProgress: (callback: (progress: AiInitProgress) => void): (() => void) =>
+    window.mystApi.ai.onInitProgress?.(callback) || (() => {}),
   getAiCatalogProviders: async (): Promise<AiCatalogProvider[]> =>
     parseAiCatalogProviders(await invoke<unknown>((api) => api.ai.catalog.providers())),
   getAiCatalogModels: async (providerKey: string): Promise<AiCatalogModel[]> =>
@@ -400,6 +406,13 @@ export const apiClient = {
     if (!Array.isArray(value)) throw new Error('知识库数据无效');
     return value as KnowledgeDoc[];
   },
+  listKnowledgePacks: (): Promise<KnowledgePackList> => invoke((api) => api.ai.knowledge.packs.list()),
+  chooseKnowledgePack: (): Promise<KnowledgePackPreview | null> => invoke((api) => api.ai.knowledge.packs.choose()),
+  installKnowledgePack: (token: string): Promise<KnowledgePackInfo> => invoke((api) => api.ai.knowledge.packs.install(token)),
+  activateKnowledgePack: (id: string, version: string): Promise<KnowledgePackList> => invoke((api) => api.ai.knowledge.packs.activate(id, version)),
+  disableKnowledgePack: (id: string): Promise<KnowledgePackList> => invoke((api) => api.ai.knowledge.packs.disable(id)),
+  removeKnowledgePack: (id: string, version: string): Promise<KnowledgePackList> => invoke((api) => api.ai.knowledge.packs.remove(id, version)),
+  setBuiltinKnowledgeEnabled: (enabled: boolean): Promise<KnowledgePackList> => invoke((api) => api.ai.knowledge.packs.setBuiltinEnabled(enabled)),
   importKnowledgeDocs: (filePaths: string[]): Promise<{ count: number }> =>
     invoke<{ count: number }>((api) => api.ai.knowledge.import(filePaths)),
   removeKnowledgeDoc: async (docId: string): Promise<boolean> => {

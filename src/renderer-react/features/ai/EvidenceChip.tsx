@@ -15,8 +15,10 @@ export function EvidenceChip({ id, report }: { id: string; report?: AnalysisRepo
       <strong>{claim.statement}</strong>
       {claim.facts.length > 0 && <span className="evidence-card__section"><strong>{t('ai.evidenceFacts')}</strong>{claim.facts.map((fact) => <span key={`${fact.callId}/${fact.key}`}>{fact.text}</span>)}</span>}
       {sources.length > 0 && <span className="evidence-card__section"><strong>{t('ai.evidenceSources')}</strong>{sources.map((s) => <span className="evidence-card__source" key={s.id}>
-        <strong>{s.title}{s.location?.lines && ` · 第 ${s.location.lines.from}–${s.location.lines.to} 行`}</strong>
+        <strong>{s.title}{s.location?.lines && ` · ${s.pack ? '整理文本' : ''}第 ${s.location.lines.from}–${s.location.lines.to} 行`}</strong>
+        {s.pack && <small>{s.pack.name} · v{s.pack.version} · {s.corpus}</small>}
         <q>{s.content}</q><small>{s.id} · 版本 {s.version.slice(0, 10)}</small>
+        {s.provenance?.sourceName && <small>原始文件：{s.provenance.sourceName} · 原 PDF 页码映射未经核对</small>}
         {s.url && /^https?:\/\//i.test(s.url) && <a href={s.url} target="_blank" rel="noopener noreferrer">{t('ai.openSource')}</a>}
       </span>)}</span>}
       {claim.limitations && <span className="evidence-card__section"><strong>{t('ai.evidenceLimits')}</strong>{claim.limitations}</span>}

@@ -5,7 +5,7 @@ function fixture(chunks, toolUpdates = []) {
   const service = new AiService({}, {}, null, { esm: { load: async (pkg) => {
     if (pkg === '@langchain/langgraph/prebuilt') return { createReactAgent: () => ({ async *stream() {
       for (const update of toolUpdates) yield ['updates', update];
-      yield ['updates', { agent: { messages: [{ getType: () => 'ai', content: '{"focus":"测试","claims":[],"questions":[]}' }] } }];
+      yield ['updates', { agent: { messages: [{ getType: () => 'ai', content: '{"focus":"测试","claims":[],"questions":["最近发生了什么具体事情？"]}' }] } }];
     } }) };
     return { HumanMessage: class { constructor(content) { this.content = content; } }, AIMessage: class { constructor(content) { this.content = content; } }, SystemMessage: class { constructor(content) { this.content = content; } } };
   } } });

@@ -51,7 +51,7 @@ function installApi(overrides: Partial<Omit<MystApi, 'chinese'>> & { chinese?: P
       configure: () => ok({ ok: true }), testWithSettings: () => ok({ ok: true }),
       configurations: { list: () => ok({ activeId: null, configurations: [] }), save: async () => { throw new Error('unused'); }, activate: async () => { throw new Error('unused'); }, remove: () => ok({ activeId: null, configurations: [] }), test: () => ok({ ok: true }) },
       catalog: { providers: () => ok([]), models: () => ok([]) },
-      knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok({ removed: true }) },
+      knowledge: { list: () => ok([]), import: () => ok({ count: 0 }), remove: () => ok({ removed: true }), packs: { list: () => ok({ builtinEnabled: true, busy: false, legacyDocuments: 0, packs: [] }), choose: () => ok(null), install: async () => { throw new Error('unused'); }, activate: async () => { throw new Error('unused'); }, disable: async () => { throw new Error('unused'); }, remove: async () => { throw new Error('unused'); }, setBuiltinEnabled: async () => { throw new Error('unused'); } } },
       tools: { describe: () => ok([]), setProviderEnabled: () => ok({ ok: true }) },
       mcp: { list: () => ok({ servers: {}, toolCount: 0, connected: false }), save: () => ok({ ok: true }) },
       sessions: { list: () => ok([]), rename: () => ok({ ok: true }), generateTitle: () => ok({ title: '' }), delete: () => ok(false), fork: () => ok({ id: 'session-fork', title: null, messages: [] }), setPinned: () => ok({ id: 'session-pin', title: null, messages: [] }), create: () => ok({ id: 'session-create', title: null, messages: [] }), replaceFrom: () => ok({ id: 'session-replace', title: null, messages: [] }) },

@@ -206,7 +206,19 @@ export interface KnowledgeDoc {
   name: string;
   source: string;
   importedAt: string;
+  cachedOnly?: boolean;
+  packId?: string;
+  packVersion?: string;
+  corpus?: string;
+  domain?: string;
 }
+
+export interface KnowledgePackInfo {
+  id: string; version: string; name: string; description: string; corpora: string[]; documentCount: number;
+  fingerprint: string; createdAt: string; installedAt: string; active: boolean; ready: boolean; error: string | null;
+}
+export interface KnowledgePackList { builtinEnabled: boolean; busy: boolean; legacyDocuments: number; packs: KnowledgePackInfo[] }
+export interface KnowledgePackPreview { token: string; manifest: Pick<KnowledgePackInfo, 'id' | 'version' | 'name' | 'description' | 'corpora' | 'documentCount' | 'fingerprint' | 'createdAt'> }
 
 export interface AiSessionSummary {
   id: string;
@@ -254,13 +266,20 @@ export interface AiActivity {
 export interface SourceSnapshot {
   id: string; documentId: string; version: string; title: string; content: string;
   fileName?: string; source: string; url?: string;
-  location?: { lines?: { from: number; to: number } } | null;
+  location?: { lines?: { from: number; to: number }; basis?: 'prepared-text'; originalPageMapping?: 'unverified' } | null;
+  pack?: { id: string; name: string; version: string; fingerprint: string };
+  corpus?: string;
+  provenance?: { sourceName?: string; sourceHash?: string | null; completedAt?: string | null };
+  book?: { title?: string } | null;
 }
 export interface ToolArtifact {
   version: number; providerId?: string; tool?: string; kind: string; data: unknown;
   sources?: SourceSnapshot[]; facts?: Record<string, string>;
+  search?: { provider: string; requestedProvider: string; fallback: boolean;
+    attempts: Array<{ provider: string; endpoint: string; code: string; message: string }> };
 }
 export interface AnalysisReport {
+  knowledgeFingerprint?: string;
   version: number; contextKey: string; focus: string; questions: string[]; sources: SourceSnapshot[];
   claims: Array<{ id: string; statement: string; facts: Array<{ callId: string; key: string; text: string }>;
     sourceIds: string[]; limitations: string; question: string }>;

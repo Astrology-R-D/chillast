@@ -13,6 +13,7 @@ import {
 import { AiConfigSection } from './AiConfigSection';
 import { ToolsAndMcpSection } from './ToolsAndMcpSection';
 import { KnowledgeSection } from './KnowledgeSection';
+import { KnowledgePacksSection } from './KnowledgePacksSection';
 import { SessionsSection } from './SessionsSection';
 import { AiReadingSection } from './AiReadingSection';
 import './settings.css';
@@ -61,6 +62,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
         onToolsChanged={() => refresh([aiQueryKeys.tools])}
         onMcpChanged={() => refresh([aiQueryKeys.mcp])}
       />
+      <KnowledgePacksSection onChanged={() => refresh([aiQueryKeys.knowledge, aiQueryKeys.status, aiQueryKeys.tools])} />
       <KnowledgeSection docs={knowledge.data} onChanged={() => refresh([aiQueryKeys.knowledge, aiQueryKeys.status])} />
       <SessionsSection sessions={sessions.data} onChanged={() => refresh([aiQueryKeys.sessions])} />
     </div>

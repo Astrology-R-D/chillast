@@ -100,6 +100,7 @@ function installApi({
         models: vi.fn().mockResolvedValue({ ok: true, data: [] }),
       },
       knowledge: {
+        packs: { list: vi.fn().mockResolvedValue({ ok: true, data: { builtinEnabled: true, busy: false, legacyDocuments: 0, packs: [] } }), choose: vi.fn(), install: vi.fn(), activate: vi.fn(), disable: vi.fn(), remove: vi.fn(), setBuiltinEnabled: vi.fn() },
         list: vi.fn().mockResolvedValue({ ok: true, data: [] }),
         import: vi.fn().mockResolvedValue({ ok: true, data: { count: 0 } }),
         remove: vi.fn().mockResolvedValue({ ok: true, data: false }),

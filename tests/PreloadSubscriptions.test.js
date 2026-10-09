@@ -65,6 +65,19 @@ test('preload forwards only narrow chart methods', async () => {
   assert.equal(api.ipcRenderer, undefined);
 });
 
+test('preload forwards knowledge package selections and versions through narrow methods', async () => {
+  const { api, invocations } = loadPreloadApi();
+  const packs = api.ai.knowledge.packs;
+  await packs.list(); await packs.choose(); await packs.install('selection-token');
+  await packs.activate('bazi-library', '2.0.0'); await packs.disable('bazi-library');
+  await packs.remove('bazi-library', '1.0.0'); await packs.setBuiltinEnabled(false);
+  assert.deepEqual(invocations, [
+    ['ai:knowledge:packs:list'], ['ai:knowledge:packs:choose'], ['ai:knowledge:packs:install', 'selection-token'],
+    ['ai:knowledge:packs:activate', 'bazi-library', '2.0.0'], ['ai:knowledge:packs:disable', 'bazi-library'],
+    ['ai:knowledge:packs:remove', 'bazi-library', '1.0.0'], ['ai:knowledge:packs:builtin', false],
+  ]);
+});
+
 test('preload validates AI chart context before crossing IPC', async () => {
   const { api, invocations } = loadPreloadApi();
   const valid = {

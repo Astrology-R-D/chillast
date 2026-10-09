@@ -15,6 +15,7 @@ export function KnowledgeSection({ docs, onChanged }: KnowledgeSectionProps) {
   const [error, setError] = useState('');
   const builtin = (docs ?? []).filter((d) => d.source === 'builtin');
   const user = (docs ?? []).filter((d) => d.source === 'user');
+  const packaged = (docs ?? []).filter((d) => d.source === 'pack');
 
   async function onImport(files: FileList | null) {
     if (!files || !files.length) return;
@@ -47,15 +48,16 @@ export function KnowledgeSection({ docs, onChanged }: KnowledgeSectionProps) {
       <div className="settings-list">
         {builtin.map((doc) => (
           <div key={doc.id} className="settings-list-item">
-            <span><span className="settings-item-name">{doc.name}</span><span className="settings-item-meta">builtin</span></span>
+            <span><span className="settings-item-name">{doc.name}</span><span className="settings-item-meta">builtin</span>{doc.cachedOnly ? <span className="settings-item-meta" title={t('settings.cachedKnowledgeHint')}>{t('settings.cachedKnowledge')}</span> : null}</span>
           </div>
         ))}
       </div>
       <p className="settings-hint">{t('settings.userDocs', { count: user.length })}</p>
+      {packaged.length > 0 && <details className="settings-list"><summary>已启用知识包文档（{packaged.length}）</summary>{packaged.map((doc) => <div key={doc.id} className="settings-list-item"><span><span className="settings-item-name">{doc.name}</span><span className="settings-item-meta">{doc.corpus} · {doc.domain} · v{doc.packVersion}</span></span></div>)}</details>}
       <div className="settings-list">
         {user.map((doc) => (
           <div key={doc.id} className="settings-list-item">
-            <span><span className="settings-item-name">{doc.name}</span><span className="settings-item-meta">user</span></span>
+            <span><span className="settings-item-name">{doc.name}</span><span className="settings-item-meta">user</span>{doc.cachedOnly ? <span className="settings-item-meta" title={t('settings.cachedKnowledgeHint')}>{t('settings.cachedKnowledge')}</span> : null}</span>
             <button type="button" onClick={() => { void onRemove(doc); }}>{t('settings.removeDoc')}</button>
           </div>
         ))}

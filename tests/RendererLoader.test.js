@@ -93,6 +93,19 @@ test('default environment selects the legacy renderer file', () => {
   });
 });
 
+test('packaged applications default to the built React renderer without an environment flag', () => {
+  assert.deepEqual(selectRendererTarget({ env: {}, appRoot, isPackaged: true }), {
+    kind: 'react-file',
+    value: path.join(appRoot, 'dist', 'renderer-react', 'index.html'),
+  });
+});
+
+test('packaged applications support an explicit legacy renderer override', () => {
+  assert.equal(selectRendererTarget({
+    env: { CHILLAST_RENDERER: 'legacy' }, appRoot, isPackaged: true,
+  }).kind, 'legacy');
+});
+
 test('react flag selects the built React renderer file', () => {
   assert.deepEqual(selectRendererTarget({
     env: { CHILLAST_RENDERER: 'react' },

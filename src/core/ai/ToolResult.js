@@ -14,12 +14,13 @@ function sourceSnapshot(doc) {
   const documentId = doc.documentId || `${doc.source || 'unknown'}:${doc.fileName || doc.url || ''}`;
   const version = hash(content);
   return {
-    id: `S${hash(`${documentId}\n${content}`).slice(0, 20)}`,
+    id: `S${hash(`${documentId}\n${content}${doc.pack ? `\n${doc.pack.id}@${doc.pack.version}` : ''}`).slice(0, 20)}`,
     documentId, version, content,
     title: doc.title || doc.fileName || doc.url || '未标明来源',
     fileName: doc.fileName || '', source: doc.source || 'unknown',
     location: doc.location || null,
     ...(doc.url && /^https?:\/\//i.test(doc.url) ? { url: doc.url } : {}),
+    ...(doc.pack ? { pack: { ...doc.pack }, corpus: doc.corpus, provenance: doc.provenance, book: doc.book } : {}),
   };
 }
 

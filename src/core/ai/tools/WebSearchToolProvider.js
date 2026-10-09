@@ -3,6 +3,7 @@
 const ToolProvider = require('./ToolProvider');
 const esm = require('../esm-bridge');
 const { toolResult, sourceSnapshot } = require('../ToolResult');
+const { searchWeb, fetchWebpage, PROVIDER_NAMES } = require('../WebSearchClient');
 
 /**
  * WebSearchToolProvider — gives the agent live internet access via two tools:
@@ -14,8 +15,8 @@ const { toolResult, sourceSnapshot } = require('../ToolResult');
  *               | 'searxng' | 'none',
  *     apiKey, endpoint, maxResults }
  * bing/duckduckgo need no key; tavily needs apiKey; searxng needs a self-hosted
- * endpoint. Default is Bing (cn.bing.com) because DuckDuckGo is blocked in mainland
- * China. Runs in the main process where global fetch is available.
+ * endpoint. Bing tries cn.bing.com, then DuckDuckGo and global Bing when the
+ * service returns a homepage, verification page, or unavailable response.
  */
 class WebSearchToolProvider extends ToolProvider {
   constructor(config) {
@@ -54,12 +55,15 @@ class WebSearchToolProvider extends ToolProvider {
       func: async (input) => {
         const n = input.limit || defaultLimit;
         try {
-          const results = await runSearch(provider, { apiKey, endpoint: cfg.endpoint }, input.query, n);
-          if (!results.length) return '未找到相关网页结果。';
+          const search = await searchWeb(provider, { apiKey, endpoint: cfg.endpoint }, input.query, n);
+          const { results, ...metadata } = search;
+          if (!results.length) return toolResult('未找到相关网页结果。', 'web', '未找到相关网页结果。', { search: metadata, sources: [] });
           const sources = results.map((r) => sourceSnapshot({ ...r, content: r.snippet, source: 'web' }));
-          return toolResult(sources.map((s) => `[${s.id}] ${s.title}\n${s.url}\n${s.content}`).join('\n\n'), 'web', results, { sources });
+          const notice = metadata.fallback ? `首选搜索接口未返回可用结果页，已改用 ${PROVIDER_NAMES[metadata.provider]}。\n\n` : '';
+          return toolResult(notice + sources.map((s) => `[${s.id}] ${s.title}\n${s.url}\n${s.content}`).join('\n\n'), 'web', results, { sources, search: metadata });
         } catch (e) {
-          return `联网搜索失败：${e.message}`;
+          const message = `联网搜索失败：${e.message}`;
+          return toolResult(message, 'web', message, { search: { requestedProvider: provider, provider, fallback: false, attempts: e.attempts || [] }, sources: [] });
         }
       },
     });
@@ -71,7 +75,7 @@ class WebSearchToolProvider extends ToolProvider {
       schema: z.object({ url: z.string().describe('完整网址，例如 https://example.com/article') }),
       func: async (input) => {
         try {
-          const content = await fetchText(input.url);
+          const content = await fetchWebpage(input.url);
           const source = sourceSnapshot({ url: input.url, content, source: 'web' });
           return toolResult(`[${source.id}] ${input.url}\n${content}`, 'webpage', { url: input.url }, { sources: [source] });
         } catch (e) {
@@ -83,132 +87,5 @@ class WebSearchToolProvider extends ToolProvider {
     return [webSearch, readWebpage];
   }
 }
-
-// ── search backends ────────────────────────────────────────────────────────
-
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-
-async function fetchWithTimeout(url, opts = {}, ms = 12000) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, {
-      ...opts,
-      signal: ctrl.signal,
-      // Accept-Language is required: cookieless requests without it get a degraded
-      // / off-topic results page from Bing.
-      headers: { 'User-Agent': UA, 'Accept-Language': 'zh-CN,zh;q=0.9', ...(opts.headers || {}) },
-    });
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-function runSearch(provider, cfg, query, n) {
-  if (provider === 'tavily') return tavilySearch(cfg, query, n);
-  if (provider === 'searxng') return searxngSearch(cfg, query, n);
-  if (provider === 'duckduckgo') return duckduckgoSearch(query, n);
-  return bingSearch(query, n); // default
-}
-
-async function bingSearch(query, n) {
-  const res = await fetchWithTimeout(`https://cn.bing.com/search?q=${encodeURIComponent(query)}&setlang=zh-CN`);
-  if (!res.ok) throw new Error(`Bing HTTP ${res.status}`);
-  return parseBing(await res.text(), n);
-}
-
-function parseBing(html, n) {
-  const results = [];
-  const blockRe = /<li class="b_algo"[\s\S]*?(?=<li class="b_algo"|<\/ol>|$)/g;
-  let block;
-  while ((block = blockRe.exec(html)) && results.length < n) {
-    const seg = block[0];
-    const a = seg.match(/<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
-    if (!a) continue;
-    const snip = seg.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-    results.push({ title: stripTags(a[2]), url: a[1], snippet: snip ? stripTags(snip[1]) : '' });
-  }
-  return results;
-}
-
-async function tavilySearch(cfg, query, n) {
-  const res = await fetchWithTimeout('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: cfg.apiKey, query, max_results: n, search_depth: 'basic' }),
-  });
-  if (!res.ok) throw new Error(`Tavily HTTP ${res.status}`);
-  const data = await res.json();
-  return (data.results || []).slice(0, n).map((r) => ({ title: r.title || '', url: r.url || '', snippet: (r.content || '').slice(0, 300) }));
-}
-
-async function searxngSearch(cfg, query, n) {
-  const base = String(cfg.endpoint || '').replace(/\/$/, '');
-  const res = await fetchWithTimeout(`${base}/search?q=${encodeURIComponent(query)}&format=json`);
-  if (!res.ok) throw new Error(`SearXNG HTTP ${res.status}`);
-  const data = await res.json();
-  return (data.results || []).slice(0, n).map((r) => ({ title: r.title || '', url: r.url || '', snippet: (r.content || '').slice(0, 300) }));
-}
-
-async function duckduckgoSearch(query, n) {
-  const res = await fetchWithTimeout(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-  if (!res.ok) throw new Error(`DuckDuckGo HTTP ${res.status}`);
-  return parseDuckDuckGo(await res.text(), n);
-}
-
-function parseDuckDuckGo(html, n) {
-  const snippets = [];
-  const snipRe = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-  let sm;
-  while ((sm = snipRe.exec(html))) snippets.push(stripTags(sm[1]));
-  const results = [];
-  const re = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-  let m;
-  let i = 0;
-  while ((m = re.exec(html)) && results.length < n) {
-    results.push({ title: stripTags(m[2]), url: decodeDdgUrl(m[1]), snippet: snippets[i] || '' });
-    i += 1;
-  }
-  return results;
-}
-
-function decodeDdgUrl(href) {
-  const m = href.match(/[?&]uddg=([^&]+)/);
-  if (m) { try { return decodeURIComponent(m[1]); } catch (_) { /* fall through */ } }
-  return href.startsWith('//') ? `https:${href}` : href;
-}
-
-async function fetchText(url) {
-  const res = await fetchWithTimeout(url, {}, 15000);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const ct = res.headers.get('content-type') || '';
-  let body = await res.text();
-  if (/application\/json/.test(ct)) return body.slice(0, 8000);
-  body = body
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ');
-  const text = stripTags(body).slice(0, 8000);
-  return text || '(页面无可提取文本)';
-}
-
-function stripTags(s) {
-  return decodeEntities(String(s).replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
-}
-
-function decodeEntities(s) {
-  return s
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => cp(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => cp(parseInt(d, 10)))
-    .replace(/&nbsp;|&ensp;|&emsp;|&thinsp;/g, ' ')
-    .replace(/&middot;/g, '·')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'");
-}
-
-function cp(n) { try { return String.fromCodePoint(n); } catch (_) { return ''; } }
 
 module.exports = WebSearchToolProvider;

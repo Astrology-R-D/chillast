@@ -524,12 +524,13 @@ test('lunar date returns valid info', () => {
   assert.ok(result.lunar.zodiacAnimal, 'has zodiac animal');
   assert.ok(result.lunar.huangdiYear > 4000, 'huangdi year is reasonable');
 });
-test('known BaZi: 1990-01-15 14:30 Beijing = 己巳 丁丑 庚辰 丁亥', () => {
+test('known BaZi: 1990-01-15 14:30 Beijing = 己巳 丁丑 庚辰 癸未', () => {
   const result = chineseSvc.computeBaZi({ birthData: subjectA.birthData });
   assert.strictEqual(result.bazi.pillars.year.full, '己巳');
   assert.strictEqual(result.bazi.pillars.month.full, '丁丑');
   assert.strictEqual(result.bazi.pillars.day.full, '庚辰');
-  assert.strictEqual(result.bazi.pillars.hour.full, '丁亥');
+  // The local civil time is converted to UTC before true-solar-time calculation.
+  assert.strictEqual(result.bazi.pillars.hour.full, '癸未');
   assert.strictEqual(result.bazi.dayMaster.char, '庚');
   assert.strictEqual(result.bazi.dayMaster.element, 'metal');
 });
