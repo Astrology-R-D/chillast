@@ -1,6 +1,6 @@
 {
   "name": "chillast",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "CHILLAST — a professional desktop astrology studio for natal, transit, synastry and composite charts.",
   "author": "CHILLAST",
   "license": "MIT",
@@ -41,7 +41,8 @@
     "stage:index": "node tools/stage-index.mjs",
     "predist": "npm run build:renderer && electron-rebuild -f --only swisseph-v2",
     "dist": "electron-builder",
-    "smoke:knowledge": "npm run build:renderer && electron tests/SmokeKnowledgePacks.js"
+    "smoke:knowledge": "npm run build:renderer && electron tests/SmokeKnowledgePacks.js",
+    "smoke:diagnostics": "npm run build:renderer && electron tests/SmokeAiDiagnostics.js"
   },
   "build": {
     "appId": "com.chillast.astrology",

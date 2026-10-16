@@ -7,7 +7,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const root = path.join(__dirname, '..');
-const executable = path.join(root, 'release', 'win-unpacked', 'CHILLAST.exe');
+const packageDir = path.resolve(process.env.CHILLAST_PACKAGE_DIR || path.join(root, 'release', 'win-unpacked'));
+const executable = path.join(packageDir, 'CHILLAST.exe');
 const lahiriSun = 256.51569618387066;
 const fixtureTolerance = 0.01;
 
@@ -67,6 +68,23 @@ async function runPackagedSmoke({ renderer, expectedKind, expectedMarker }) {
     assert.equal(result.code, 0, `${renderer} exit ${result.code}\nreport: ${reportText}\nstdout: ${stdout}\nstderr: ${stderr}`);
     assert.notEqual(reportText, '(missing)', `${renderer} smoke report missing\n${stdout}\n${stderr}`);
     const report = JSON.parse(reportText);
+    const bundledDir = path.join(packageDir, 'resources', 'assets', 'knowledge', 'packs');
+    if (fs.existsSync(bundledDir)) {
+      const { validatePack } = require('../src/shared/KnowledgePack.cjs');
+      const registry = JSON.parse(fs.readFileSync(path.join(profile, 'knowledge', 'packages', 'registry.json'), 'utf8'));
+      for (const name of fs.readdirSync(bundledDir).filter(name => name.endsWith('.kbpack'))) {
+        const pack = validatePack(fs.readFileSync(path.join(bundledDir, name)));
+        assert.ok(registry.installed.some(entry => entry.fingerprint === pack.fingerprint));
+        assert.equal(registry.active[pack.manifest.id], pack.manifest.version);
+      }
+      report.bundledPacks = registry.installed.length;
+    }
+    const logEntries = fs.readFileSync(path.join(profile, 'logs', 'chillast.log'), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line));
+    const startup = logEntries.find((entry) => entry.event === 'app-start');
+    assert.ok(startup, `${renderer} packaged startup log missing`);
+    assert.equal(startup.packaged, true);
+    assert.equal(startup.version, require('../package.json').version);
     assert.equal(report.targetKind, expectedKind);
     assert.equal(report.hasApi, true);
     assert.equal(report.marker, expectedMarker);

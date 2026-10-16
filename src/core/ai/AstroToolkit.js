@@ -2,6 +2,19 @@
 
 const esm = require('./esm-bridge');
 const { chartToolResult, baziToolResult, decorateTools } = require('./ToolResult');
+const { birthIdentity } = require('./AnalysisTask');
+
+function targetInstant(input) {
+  if (input.targetDate) {
+    const match = input.targetDate.match(/^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/);
+    if (!match || !Number.isFinite(Date.parse(input.targetDate)) || new Date(`${match[1]}T12:00Z`).toISOString().slice(0, 10) !== match[1]) throw new Error('targetDate 必须是有效且带时区的 ISO 时间');
+    return new Date(input.targetDate).toISOString();
+  }
+  if (![input.targetYear, input.targetMonth, input.targetDay].every(Number.isInteger)) throw new Error('需要目标年月日或带时区的 targetDate');
+  const date = new Date(Date.UTC(input.targetYear, input.targetMonth - 1, input.targetDay, 12));
+  if (date.getUTCFullYear() !== input.targetYear || date.getUTCMonth() + 1 !== input.targetMonth || date.getUTCDate() !== input.targetDay) throw new Error('目标日期无效');
+  return date.toISOString();
+}
 
 /**
  * Build a Profile-compatible plain object from flat birth-data input.
@@ -78,6 +91,14 @@ async function buildComputeTools(astrologyService, chineseAstrologyService, defa
     }).optional().describe('未指定时沿用当前已计算星盘的宫位制和黄道；没有当前星盘时为普拉西度、回归黄道。'),
   };
   const settingsFor = (input) => ({ houseSystem: 'placidus', zodiac: 'tropical', ...inheritedSettings, ...input.settings });
+  const timedSchema = {
+    targetYear: z.number().int().nullable().optional().describe('目标年份；使用 targetDate 时可省略'),
+    targetMonth: z.number().int().min(1).max(12).nullable().optional().describe('目标月份'),
+    targetDay: z.number().int().min(1).max(31).nullable().optional().describe('目标日期'),
+    targetDate: z.string().nullable().optional().describe('精确目标时刻，必须为带时区的 ISO 时间；此刻/实时问题使用本轮时间。优先于年月日。'),
+  };
+  const calculationFor = (input, profiles, targetDate = null) => ({ subjectKeys: profiles.map(p => birthIdentity(p.birthData)), settings: settingsFor(input), targetDate,
+    targetDay: targetDate ? (input.targetDate || targetDate).slice(0, 10) : null });
 
   const birthSchema = {
     year: z.number().int().describe('出生年份，如 1990'),
@@ -98,7 +119,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService, defa
       try {
         const profile = _makeProfile('查询对象', input);
         const chart = astrologyService.computeChart({ type: 'natal', primary: profile, settings: settingsFor(input) });
-        return chartToolResult(chart, _serializeChart(chart));
+        return chartToolResult(chart, _serializeChart(chart), calculationFor(input, [profile]));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -112,23 +133,19 @@ async function buildComputeTools(astrologyService, chineseAstrologyService, defa
     schema: z.object({
       ...birthSchema,
       ...chartSettingsSchema,
-      targetYear: z.number().int().describe('目标年份'),
-      targetMonth: z.number().int().min(1).max(12).describe('目标月份'),
-      targetDay: z.number().int().min(1).max(31).describe('目标日期'),
+      ...timedSchema,
     }),
     func: async (input) => {
       try {
         const profile = _makeProfile('查询对象', input);
-        const targetDate = new Date(
-          Date.UTC(input.targetYear, input.targetMonth - 1, input.targetDay, 12),
-        ).toISOString();
+        const targetDate = targetInstant(input);
         const chart = astrologyService.computeChart({
           type: 'transit',
           primary: profile,
           settings: settingsFor(input),
           options: { targetDate },
         });
-        return chartToolResult(chart, _serializeChart(chart));
+        return chartToolResult(chart, _serializeChart(chart), calculationFor(input, [profile], targetDate));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -171,7 +188,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService, defa
         const chart = astrologyService.computeChart({
           type: 'synastry', primary: profileA, secondary: profileB, settings: settingsFor(input),
         });
-        return chartToolResult(chart, _serializeChart(chart));
+        return chartToolResult(chart, _serializeChart(chart), calculationFor(input, [profileA, profileB]));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -195,7 +212,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService, defa
             },
           },
         });
-        return baziToolResult(result);
+        return baziToolResult(result, calculationFor(input, [_makeProfile('查询对象', input)]));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -213,7 +230,7 @@ async function buildComputeTools(astrologyService, chineseAstrologyService, defa
         const chart = astrologyService.computeChart({
           type: 'solarReturn', primary: profile, settings: settingsFor(input), options: { year: input.targetYear },
         });
-        return chartToolResult(chart, _serializeChart(chart));
+        return chartToolResult(chart, _serializeChart(chart), { ...calculationFor(input, [profile]), targetYear: input.targetYear });
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -227,20 +244,16 @@ async function buildComputeTools(astrologyService, chineseAstrologyService, defa
     schema: z.object({
       ...birthSchema,
       ...chartSettingsSchema,
-      targetYear: z.number().int().describe('目标年份'),
-      targetMonth: z.number().int().min(1).max(12).describe('目标月份'),
-      targetDay: z.number().int().min(1).max(31).describe('目标日期'),
+      ...timedSchema,
     }),
     func: async (input) => {
       try {
         const profile = _makeProfile('查询对象', input);
-        const targetDate = new Date(
-          Date.UTC(input.targetYear, input.targetMonth - 1, input.targetDay, 12),
-        ).toISOString();
+        const targetDate = targetInstant(input);
         const chart = astrologyService.computeChart({
           type: 'progressed', primary: profile, settings: settingsFor(input), options: { targetDate },
         });
-        return chartToolResult(chart, _serializeChart(chart));
+        return chartToolResult(chart, _serializeChart(chart), calculationFor(input, [profile], targetDate));
       } catch (e) {
         return `计算失败: ${e.message}`;
       }
@@ -317,7 +330,7 @@ async function buildContextTools(aiService) {
       '获取当前真实的系统日期与时间（含星期、时区与 ISO 格式）。涉及“今天/现在/此刻/当前行运/最近天象/年龄”等与当前时间相关的问题时调用。无需输入参数。',
     schema: z.object({}),
     func: async () => {
-      const now = new Date();
+      const now = aiService?.getNow?.() || new Date();
       const pad = (n) => String(n).padStart(2, '0');
       const week = '日一二三四五六'[now.getDay()];
       const offsetH = -now.getTimezoneOffset() / 60;

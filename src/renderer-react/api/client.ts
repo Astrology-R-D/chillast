@@ -16,6 +16,7 @@ import type {
   ChineseCityRaw,
   CitySearchResult,
   CloseDecision,
+  DiagnosticInfo,
   IpcResult,
   KnowledgeDoc,
   KnowledgePackInfo,
@@ -351,6 +352,9 @@ async function searchCities(query: string): Promise<CitySearchResult[]> {
 }
 
 export const apiClient = {
+  getDiagnosticsInfo: (): Promise<DiagnosticInfo> => invoke((api) => api.app.diagnostics.info()),
+  openDiagnosticsFolder: (): Promise<{ opened: boolean }> => invoke((api) => api.app.diagnostics.open()),
+  exportDiagnostics: (): Promise<{ path: string } | null> => invoke((api) => api.app.diagnostics.export()),
   getConfig: (): Promise<AppConfig> => invoke((api) => api.getConfig()),
   getLocale: (): Promise<LocaleDictionary> => invoke((api) => api.getLocale()),
   getChartCatalog: (): Promise<ChartCatalogDefinition[]> => chartBoundary(
@@ -425,6 +429,8 @@ export const apiClient = {
     if (!Array.isArray(value)) throw new Error('工具数据无效');
     return value as AiToolProviderDescriptor[];
   },
+  setAiToolCallLimits: (limits: Record<string, number>): Promise<unknown> =>
+    invoke<unknown>((api) => api.ai.tools.setCallLimits(limits)),
   setAiToolProviderEnabled: (id: string, enabled: boolean): Promise<unknown> =>
     invoke<unknown>((api) => api.ai.tools.setProviderEnabled(id, enabled)),
   listAiMcp: (): Promise<AiMcpInfo> => invoke<AiMcpInfo>((api) => api.ai.mcp.list()),

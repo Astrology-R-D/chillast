@@ -20,6 +20,7 @@ export function ContextUsageBar({ draft, onBusyChange }: { draft: string; onBusy
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => { setUsage(null); setNotice(''); setBusy(false); }, [sessionId]);
+  useEffect(() => { if (active) setNotice(''); }, [active]);
   useEffect(() => {
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);

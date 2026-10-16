@@ -17,6 +17,7 @@ import { KnowledgePacksSection } from './KnowledgePacksSection';
 import { SessionsSection } from './SessionsSection';
 import { AiReadingSection } from './AiReadingSection';
 import './settings.css';
+import { DiagnosticsSection } from './DiagnosticsSection';
 
 interface SettingsPageProps {
   onNavigate(route: RouteKey, beforeNavigate?: () => void): void;
@@ -51,6 +52,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
         <p className="settings-hint">{t('shell.knowledgeCount', { count: status.data ? status.data.knowledgeDocCount : 0 })}</p>
       </section>
       <AiReadingSection />
+      <DiagnosticsSection />
       <AiConfigSection
         status={status.data}
         providers={providers.data}
@@ -60,7 +62,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
         tools={tools.data}
         mcp={mcp.data}
         onToolsChanged={() => refresh([aiQueryKeys.tools])}
-        onMcpChanged={() => refresh([aiQueryKeys.mcp])}
+        onMcpChanged={() => refresh([aiQueryKeys.mcp, aiQueryKeys.tools])}
       />
       <KnowledgePacksSection onChanged={() => refresh([aiQueryKeys.knowledge, aiQueryKeys.status, aiQueryKeys.tools])} />
       <KnowledgeSection docs={knowledge.data} onChanged={() => refresh([aiQueryKeys.knowledge, aiQueryKeys.status])} />

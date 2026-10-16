@@ -6,3 +6,5 @@
 .evidence-card__source { margin-block: 8px; }
 .evidence-card__source q { display: block; white-space: pre-wrap; line-height: var(--ai-line-height, 1.8); padding: 8px; border-inline-start: 2px solid var(--accent); max-height: 300px; overflow: auto; }
 .evidence-chip--invalid { font-size: 11px; color: var(--warning); }
+.evidence-card > small { display: block; color: var(--text-muted); }
+.evidence-card__kind { margin-bottom: 6px; font-weight: 600; }

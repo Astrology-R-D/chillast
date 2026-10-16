@@ -11,9 +11,67 @@ const KnowledgeBase = require('../src/core/ai/KnowledgeBase');
 const { sourceSnapshot } = require('../src/core/ai/ToolResult');
 const makePack = (version, text = '日主与十神的可核对原文。') => protocol.createPack({ id: 'bazi-library', name: '八字知识库', version,
   documents: [{ id: 'Dbook-shishen', title: '八字书 · 十神', corpus: 'bazi', domain: 'shishen', text }] });
+test('bundled packs register offline, become searchable with embeddings, and preserve user disable/removal', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-bundled-'));
+  try {
+    const bundledPath = path.join(root, 'shipped'); fs.mkdirSync(bundledPath);
+    fs.writeFileSync(path.join(bundledPath, 'library.kbpack'), makePack('1.0.0'));
+    const options = { root: path.join(root, 'installed'), bundledPath, modelProvider: { embeddings: () => null } };
+    let manager = await new Manager(options).initialize();
+    assert.equal(manager.listPacks().packs[0].active, true);
+    assert.equal(manager.listPacks().packs[0].ready, false);
+    manager = await new Manager({ ...options, modelProvider: provider() }).initialize();
+    assert.ok((await manager.retrieve('十神', 2)).length);
+    await manager.disable('bazi-library');
+    manager = await new Manager(options).initialize();
+    assert.equal(manager.listPacks().packs[0].active, false);
+    await manager.remove('bazi-library', '1.0.0');
+    manager = await new Manager(options).initialize();
+    assert.equal(manager.listPacks().packs.length, 0);
+    fs.writeFileSync(path.join(bundledPath, 'new.kbpack'), makePack('2.0.0'));
+    manager = await new Manager(options).initialize();
+    assert.equal(manager.listPacks().packs[0].active, false);
+    assert.equal(manager.listPacks().packs[0].version, '2.0.0');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
 function provider() {
   return { _settings: { embeddings: { provider: 'mock', model: 'model-a' } }, embeddings: () => ({ embedQuery: async () => [1, 0, 0, 0], embedDocuments: async (texts) => texts.map(() => [1, 0, 0, 0]) }) };
 }
+
+test('package metadata is available during slow legacy initialization and startup does not test the chat API', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-pack-startup-'));
+  const service = new (require('../src/core/ai/AiService'))({}, {});
+  const original = KnowledgeBase.prototype.initialize;
+  let release, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const blocked = new Promise(resolve => { release = resolve; });
+  KnowledgeBase.prototype.initialize = async () => { entered(); await blocked; };
+  const mp = provider();
+  mp.configure = async () => {}; mp.isConfigured = () => true; mp.close = async () => {};
+  let connectionTests = 0;
+  mp.testConnection = async () => { connectionTests++; throw new Error('offline'); };
+  service._mp = mp;
+  let configuring;
+  try {
+    const bundledPath = path.join(root, 'bundled'); fs.mkdirSync(bundledPath);
+    fs.writeFileSync(path.join(bundledPath, 'book.kbpack'), makePack('1.0.0'));
+    configuring = service.configure({ knowledgeBuiltinPath: path.join(root, 'legacy'), knowledgePackPath: path.join(root, 'packages'), knowledgeBundledPackPath: bundledPath });
+    await started;
+    const manager = service.getKnowledgePacks();
+    assert.equal(manager.listPacks().packs[0].active, true);
+    assert.equal(manager.listPacks().busy, true);
+    await assert.rejects(() => manager.disable('bazi-library'), /正在准备/);
+    release(); await configuring;
+    assert.equal(connectionTests, 0);
+    assert.equal(manager.listPacks().busy, false);
+    assert.equal(manager.listPacks().packs[0].ready, true);
+    assert.ok((await manager.retrieve('十神', 2)).length);
+  } finally {
+    release(); await configuring;
+    KnowledgeBase.prototype.initialize = original;
+    await service.close(); fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 test('pack protocol validates checksums, metadata and safe ZIP paths', () => {
   const buffer = makePack('1.0.0'), pack = protocol.validatePack(buffer);
   assert.equal(pack.catalog.documents[0].corpus, 'bazi');
@@ -56,12 +114,18 @@ test('installation, update and rollback pin in-flight sources and never replace 
     const firstContextKey = service._contextKey();
     const first = (await pinned.retrieve('十神', 4, { corpus: 'bazi' })).find((d) => d.pack);
     const originalSource = sourceSnapshot(first);
+    assert.ok(first.blockId);
+    const read = await boundTools.find(tool => tool.name === 'read_knowledge').invoke({ type: 'tool_call', id: 'read-pinned', name: 'read_knowledge', args: { blockId: first.blockId, radius: 0 } });
+    assert.equal(read.artifact.sources[0].content, first.content);
+    assert.equal(read.artifact.sources[0].id, originalSource.id);
     assert.equal(originalSource.pack.version, '1.0.0');
     assert.equal(originalSource.location.basis, 'prepared-text');
     await manager.install(v2); await manager.activate('bazi-library', '2.0.0');
     assert.notEqual(service._contextKey(), firstContextKey, 'knowledge changes invalidate same-chart report reuse');
     const bound = await boundTools.find((tool) => tool.name === 'search_knowledge').invoke({ type: 'tool_call', id: 'pinned-call', name: 'search_knowledge', args: { query: '十神', corpus: 'bazi' } });
     assert.equal(bound.artifact.sources.find((s) => s.pack).pack.version, '1.0.0', 'AI tool binding uses the turn snapshot, not the current selection');
+    assert.equal(pinned.read(first.blockId, 0)[0].pack.version, '1.0.0');
+    assert.deepEqual(manager.read(first.blockId, 0), [], 'new snapshots cannot resolve IDs from inactive package versions');
     assert.notEqual(manager.fingerprint(), fp1);
     assert.equal((await pinned.retrieve('十神', 4, { corpus: 'bazi' })).find((d) => d.pack).pack.version, '1.0.0');
     const latest = (await manager.retrieve('十神', 4, { corpus: 'bazi' })).find((d) => d.pack);

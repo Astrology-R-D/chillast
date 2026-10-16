@@ -35,6 +35,19 @@ test('filters notifications by session and blocks manual compression during gene
   expect(screen.getByText('已自动压缩')).toBeInTheDocument();
 });
 
+test('a new reply clears the previous context notice while new compression events remain visible', () => {
+  resetAiStreamStoreForTests(); aiStreamStore.setState({ activeSessionId: 's1' });
+  let handler: (event: ContextEvent) => void = () => {};
+  vi.stubGlobal('mystApi', { ai: { onContextChanged: (fn: typeof handler) => { handler = fn; return () => {}; }, onStatusChanged: () => () => {} } });
+  render(<QueryClientProvider client={new QueryClient()}><I18nProvider dictionary={locale}><ContextUsageBar draft="" /></I18nProvider></QueryClientProvider>);
+  act(() => handler({ sessionId: 's1', compression: 'error', message: '上一轮错误' }));
+  expect(screen.getByText('上一轮错误')).toBeInTheDocument();
+  act(() => aiStreamStore.setState({ active: true }));
+  expect(screen.queryByText('上一轮错误')).not.toBeInTheDocument();
+  act(() => handler({ sessionId: 's1', compression: 'running', message: '本轮正在压缩' }));
+  expect(screen.getByText('本轮正在压缩')).toBeInTheDocument();
+});
+
 test('a compression finishing after switching sessions does not replace the new session usage', async () => {
   resetAiStreamStoreForTests(); aiStreamStore.setState({ activeSessionId: 's1' });
   let release: (value: unknown) => void = () => {};

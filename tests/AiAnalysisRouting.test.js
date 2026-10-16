@@ -9,14 +9,14 @@ const KnowledgeToolProvider = require('../src/core/ai/tools/KnowledgeToolProvide
 const { sourceSnapshot } = require('../src/core/ai/ToolResult');
 const { needsAnalysis, parseReport, writerPrompt } = require('../src/core/ai/AnalysisProtocol');
 
-const question = '这个人最近在想什么';
+const question = '这个人处理事情是什么样的';
 const chart = {
   resultId: 'chart-vac', meta: { type: 'natal' },
-  subjects: [{ nameZh: 'vac', birthLabel: '2004-07-07 11:15', gender: 'male', location: { label: '六盘水' } }],
+  subjects: [{ nameZh: 'vac', birthLabel: '2004-07-07 11:15', gender: 'male', location: { label: '六盘水', latitude: 26.6, longitude: 104.8 } }],
   rings: [{ id: 'natal', label: '本命', points: [{ key: 'moon', glyph: '☽', nameZh: '月亮', signNameZh: '双鱼座', degreeInSign: 18.9872, house: 6 }] }],
   houses: [], aspects: [],
 };
-const workspace = { kind: 'western-chart', activeProfile: { id: 'vac', displayName: 'vac' }, resultId: chart.resultId, chartType: 'natal', lastChartData: chart };
+const workspace = { kind: 'western-chart', activeProfile: { id: 'vac', displayName: 'vac', birthData: { year: 2004, month: 7, day: 7, hour: 11, minute: 15, location: { latitude: 26.6, longitude: 104.8 } } }, resultId: chart.resultId, chartType: 'natal', lastChartData: chart };
 
 test('natural questions and new follow-ups use the analyst when a subject or chart is available', () => {
   const messages = [{ role: 'user', content: question }];
@@ -49,20 +49,21 @@ test('computed workspace charts reach real LangGraph tools and verified writer e
     let raw = ''; for await (const chunk of request) raw += chunk;
     const body = JSON.parse(raw); requests.push(body);
     const prompt = body.messages[0].content;
+    const repairing = body.messages.some(m => m.role === 'user' && m.content.includes('程序校验失败：'));
     let message;
     if (prompt.includes('分析 Subagent')) {
-      if (emptyFirst && !prompt.includes('原报告格式或引用校验失败')) {
+      if (emptyFirst && !repairing) {
         emptyFirst = false;
         message = { role: 'assistant', content: JSON.stringify({ focus: question, claims: [], questions: [] }) };
-      } else if (prompt.includes('原报告格式或引用校验失败')) {
+      } else if (repairing) {
         message = { role: 'assistant', content: JSON.stringify({ focus: question, claims: [], questions: ['最近发生了什么具体事情？'] }) };
       } else if (!body.messages.some((m) => m.role === 'tool')) {
         message = { role: 'assistant', content: null, tool_calls: [{ id: 'kb-call', type: 'function', function: { name: 'search_knowledge', arguments: '{"query":"月亮 情绪"}' } }] };
       } else {
         const factRef = prompt.includes('workspace/natal:moon') ? 'workspace/natal:moon' : prompt.includes('workspace/bazi:0') ? 'workspace/bazi:0' : null;
-        message = { role: 'assistant', content: JSON.stringify({ focus: question, claims: [{ statement: '结合实际互动核实情绪体验，不能据此确定对方的具体想法', factRefs: factRef ? [factRef] : [], sourceIds: [source.id], limitations: '本命盘不能确定最近的想法', question: '最近发生了什么具体事情？' }], questions: [] }) };
+        message = { role: 'assistant', content: JSON.stringify({ focus: question, claims: [{ statement: '结合实际互动核实情绪体验，不能据此确定对方的具体想法', support: '计算事实与该段解释的条件相符。', checks: [{ condition: '解释要求核对当前计算的星体落座', status: 'verified', factRefs: factRef ? [factRef] : [], sourceIds: [source.id] }], factRefs: factRef ? [factRef] : [], sourceIds: [source.id], limitations: '本命盘不能确定最近的想法', question: '最近发生了什么具体事情？' }], questions: [] }) };
       }
-    } else message = { role: 'assistant', content: '最近你们发生了什么具体事情？[判据 1](evidence:E1)' };
+    } else message = { role: 'assistant', content: prompt.includes('逐行输出 JSON') ? JSON.stringify({ text: '这是对问题的具体回答。', evidenceIds: ['E1'] }) : '最近你们发生了什么具体事情？' };
     if (body.stream) {
       response.writeHead(200, { 'content-type': 'text/event-stream' });
       response.end(`data: ${JSON.stringify({ id: `local-${requests.length}`, choices: [{ index: 0, delta: message, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
@@ -132,7 +133,7 @@ test('computed workspace charts reach real LangGraph tools and verified writer e
       const repaired = events.find((e) => e.type === 'analysis-report').data;
       assert.deepEqual(repaired.questions, ['最近发生了什么具体事情？']);
       assert.ok(events.some((e) => e.type === 'activity' && e.data.repair));
-      const repair = requests.findLast((r) => r.messages[0].content.includes('原报告格式或引用校验失败'));
+      const repair = requests.findLast((r) => r.messages.some(m => m.role === 'user' && m.content.includes('程序校验失败：')));
       assert.ok(repair.messages.some((m) => m.role === 'user' && m.content.includes(question)));
       assert.ok(!requests.at(-1).messages[0].content.includes('"claims":[],"questions":[]'));
     });

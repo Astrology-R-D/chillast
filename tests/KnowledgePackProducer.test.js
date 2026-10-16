@@ -11,6 +11,7 @@ test('the preparer and CHILLAST share the same protocol and its output imports w
   if (!fs.existsSync(producer)) { t.skip('sibling preparer checkout is unavailable'); return; }
   assert.deepEqual(fs.readFileSync(path.resolve(__dirname, '../../knowledge_library/src/vendor/KnowledgePack.cjs')), fs.readFileSync(path.resolve(__dirname, '../src/shared/KnowledgePack.cjs')));
   assert.deepEqual(fs.readFileSync(path.resolve(__dirname, '../../knowledge_library/src/vendor/KnowledgeUnit.cjs')), fs.readFileSync(path.resolve(__dirname, '../src/shared/KnowledgeUnit.cjs')));
+  assert.deepEqual(fs.readFileSync(path.resolve(__dirname, '../../knowledge_library/src/vendor/KnowledgeStructure.cjs')), fs.readFileSync(path.resolve(__dirname, '../src/shared/KnowledgeStructure.cjs')));
   const { buildKnowledgePack } = await import(pathToFileURL(producer));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chillast-producer-contract-'));
   try {

@@ -5,33 +5,75 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const esm = require('./esm-bridge');
 const { validatePack, MAX_BYTES, sha256 } = require('../../shared/KnowledgePack.cjs');
+const { structureMarkdown } = require('../../shared/KnowledgeStructure.cjs');
+const { createReader } = require('./KnowledgeRetrieval');
 const SPLITTER = { chunkSize: 1000, chunkOverlap: 200, separators: ['\n## ', '\n### ', '\n\n', '\n', '。', ''] };
 const legacyCorpus = (metadata) => metadata.corpus || (/八字|四柱|bazi/i.test(metadata.fileName || '') ? 'bazi' : 'astrology');
 const recordKey = (id, version) => `${id}@${version}`;
 
 /** Immutable package versions + independently cached indexes, overlaying the legacy KB. */
 class KnowledgePackManager {
-  constructor({ root, modelProvider, legacy = null, onProgress = () => {} }) {
+  constructor({ root, modelProvider, legacy = null, bundledPath = null, onProgress = () => {} }) {
+    this.bundledPath = bundledPath;
     this.root = path.resolve(root); this.provider = modelProvider; this.legacy = legacy; this.progress = onProgress;
     this.stateFile = path.join(this.root, 'registry.json');
     this.state = { version: 1, builtinEnabled: true, active: {}, installed: [], hiddenUserDocs: [] };
     this.runtime = new Map(); this.errors = new Map(); this.busy = false;
   }
-  async initialize() {
+  async initialize({ prepareIndexes = true } = {}) {
     fs.mkdirSync(this.root, { recursive: true });
     if (fs.existsSync(this.stateFile)) {
       const saved = JSON.parse(fs.readFileSync(this.stateFile, 'utf8'));
       if (saved.version !== 1 || !Array.isArray(saved.installed) || !saved.active || typeof saved.builtinEnabled !== 'boolean') throw new Error('知识包注册表格式无效');
       this.state = { ...this.state, ...saved };
     }
+    this._registerBundledPacks();
     this.legacyFingerprint = this.legacy?._indexDir && fs.existsSync(path.join(this.legacy._indexDir, 'docstore.json'))
       ? sha256(fs.readFileSync(path.join(this.legacy._indexDir, 'docstore.json'))) : 'empty';
-    if (this.provider.embeddings()) for (const entry of this._activeEntries()) {
-      try { await this._prepare(entry); } catch (error) { this.errors.set(recordKey(entry.id, entry.version), error.message); }
-    }
+    if (prepareIndexes) await this.prepareIndexes();
     return this;
   }
+  async prepareIndexes() {
+    return this._change(async () => {
+      this.legacyFingerprint = this.legacy?._indexDir && fs.existsSync(path.join(this.legacy._indexDir, 'docstore.json'))
+        ? sha256(fs.readFileSync(path.join(this.legacy._indexDir, 'docstore.json'))) : 'empty';
+      for (const entry of this._activeEntries()) {
+        try { await this._prepare(entry); }
+        catch (error) { this.errors.set(recordKey(entry.id, entry.version), error.message); }
+      }
+    });
+  }
   _activeEntries() { return this.state.installed.filter((e) => !e.removed && this.state.active[e.id] === e.version); }
+  // Register immutable shipped payloads even before an embedding model is ready.
+  // Existing selections (including explicit removal/disable) always win.
+  _registerBundledPacks() {
+    if (!this.bundledPath || !fs.existsSync(this.bundledPath)) return;
+    for (const file of fs.readdirSync(this.bundledPath).filter(name => name.endsWith('.kbpack')).sort()) {
+      const source = path.join(this.bundledPath, file);
+      if (fs.statSync(source).size > MAX_BYTES) throw new Error('随附知识包过大');
+      const buffer = fs.readFileSync(source), pack = validatePack(buffer);
+      const { id, version, name, description, corpora, documentCount, createdAt } = pack.manifest;
+      const old = this.state.installed.find(e => e.id === id && e.version === version);
+      if (old) {
+        if (old.fingerprint !== pack.fingerprint) throw new Error('随附知识包与已安装同版本内容不一致');
+        continue;
+      }
+      const destination = this._folder(id, version);
+      if (!fs.existsSync(destination)) {
+        const parent = path.dirname(destination); fs.mkdirSync(parent, { recursive: true });
+        const staging = fs.mkdtempSync(path.join(parent, '.bundled-'));
+        fs.writeFileSync(path.join(staging, 'package.kbpack'), buffer);
+        fs.renameSync(staging, destination);
+      } else if (sha256(fs.readFileSync(path.join(destination, 'package.kbpack'))) !== sha256(buffer)) {
+        throw new Error('随附知识包目标目录内容不一致');
+      }
+      const entry = { id, version, name, description, corpora, documentCount, createdAt, fingerprint: pack.fingerprint,
+        installedAt: new Date().toISOString(), removed: false, bundled: true };
+      const active = { ...this.state.active };
+      if (!this.state.installed.some(e => e.id === id)) active[id] = version;
+      this._commit({ ...this.state, installed: [...this.state.installed, entry], active });
+    }
+  }
   _folder(id, version) { return path.join(this.root, 'packs', sha256(id).slice(0, 24), sha256(version).slice(0, 24)); }
   _commit(next) {
     const temp = `${this.stateFile}.${randomUUID()}.tmp`;
@@ -45,7 +87,7 @@ class KnowledgePackManager {
     const cfg = this.provider._settings?.embeddings || {};
     const embeddings = this.provider.embeddings();
     return sha256(JSON.stringify({ provider: cfg.provider || embeddings?.constructor?.name, model: cfg.model || embeddings?._config?.model || embeddings?.model,
-      baseUrl: cfg.baseUrl || null, dimensions: cfg.dimensions || embeddings?.dimensions || null, splitter: SPLITTER, space: 'cosine', metadataVersion: 2, preparedChunkReader: 1 }));
+      baseUrl: cfg.baseUrl || null, dimensions: cfg.dimensions || embeddings?.dimensions || null, splitter: SPLITTER, space: 'cosine', metadataVersion: 2, preparedChunkReader: 2 }));
   }
   async _prepare(entry, suppliedPack) {
     const embeddings = this.provider.embeddings();
@@ -63,21 +105,21 @@ class KnowledgePackManager {
       if (meta.key !== key || meta.fingerprint !== pack.fingerprint) throw new Error('索引版本不匹配');
       store = await HNSWLib.load(cache, embeddings);
     } catch (_) {
-      const { RecursiveCharacterTextSplitter } = await esm.load('langchain/text_splitter');
-      const splitter = new RecursiveCharacterTextSplitter(SPLITTER);
       const chunks = [];
       for (const doc of pack.catalog.documents) {
         const text = pack.files.get(doc.path).toString('utf8');
         const metadata = { source: 'pack', fileName: doc.title, domain: doc.domain, corpus: doc.corpus,
           documentId: `pack:${entry.id}:${doc.id}`, title: doc.title, book: doc.book, provenance: JSON.parse(pack.files.get(doc.provenancePath).toString('utf8')),
           pack: { id: entry.id, name: entry.name, version: entry.version, fingerprint: entry.fingerprint }, lineBasis: 'prepared-text', originalPageMapping: 'unverified' };
-        if (doc.chunking) {
-          for (const range of doc.chunking.chunks) {
-            const pageContent = text.slice(range.start, range.end);
-            if (pageContent.trim()) chunks.push({ pageContent, metadata: { ...metadata,
-              loc: { lines: { from: range.lineStart, to: range.lineEnd } }, preparedChunk: { start: range.start, end: range.end } } });
-          }
-        } else chunks.push(...await splitter.createDocuments([text], [metadata]));
+        const structure = doc.structure || structureMarkdown(text);
+        const sections = new Map(structure.sections.map(section => [section.id, section]));
+        for (const range of structure.chunks) {
+          const section = sections.get(range.sectionId);
+          const pageContent = text.slice(range.start, range.end);
+          if (pageContent.trim()) chunks.push({ pageContent, metadata: { ...metadata,
+            chapterPath: section.chapterPath, sectionId: section.id, contentType: section.type, tags: section.tags,
+            loc: { lines: { from: range.lineStart, to: range.lineEnd } }, preparedChunk: { start: range.start, end: range.end } } });
+        }
       }
       if (!chunks.length) throw new Error('知识包没有可检索文本');
       this.progress({ phase: 'preparing', total: chunks.length });
@@ -161,17 +203,16 @@ class KnowledgePackManager {
     const legacyDocuments = new Set(legacyStore?.docstore._docs.values() || []);
     const builtin = this.state.builtinEnabled, hidden = new Set(this.state.hiddenUserDocs);
     const fingerprint = this.fingerprint();
-    return { fingerprint, isReady: () => Boolean(legacyStore || selected.length), retrieve: async (query, k = 6, { corpus } = {}) => {
-      const filter = (doc) => (doc.metadata.source === 'pack' || legacyDocuments.has(doc)) && (!corpus || (doc.metadata.source === 'pack' ? doc.metadata.corpus : legacyCorpus(doc.metadata)) === corpus)
-        && (doc.metadata.source !== 'builtin' || builtin) && !(doc.metadata.source === 'user' && hidden.has(doc.metadata.fileName));
-      const stores = [...(legacyStore ? [legacyStore] : []), ...selected.map((r) => r.store)];
-      const groups = await Promise.all(stores.map(async (store) => {
-        const count = [...store.docstore._docs.values()].filter(filter).length;
-        return count ? store.similaritySearchWithScore(query, Math.min(k, count), filter) : [];
-      }));
-      return groups.flat().sort((a, b) => a[1] - b[1]).slice(0, k).map(([doc]) => this._result(doc));
-    } };
+    const filter = (doc) => (doc.metadata.source === 'pack' || legacyDocuments.has(doc))
+      && (doc.metadata.source !== 'builtin' || builtin) && !(doc.metadata.source === 'user' && hidden.has(doc.metadata.fileName));
+    const stores = [...(legacyStore ? [legacyStore] : []), ...selected.map(r => r.store)];
+    let reader;
+    const getReader = () => reader ||= createReader(stores, filter, doc => this._result(doc));
+    return { fingerprint, isReady: () => Boolean(legacyStore || selected.length),
+      retrieve: (query, k, options) => getReader().search(query, k, options),
+      read: (id, radius) => getReader().read(id, radius) };
   }
+
   _result(doc) {
     const m = doc.metadata || {};
     return { content: doc.pageContent, source: m.source || 'unknown', fileName: m.fileName || '', title: m.title || m.fileName,
@@ -180,6 +221,7 @@ class KnowledgePackManager {
       ...(m.pack ? { pack: m.pack, provenance: m.provenance, book: m.book } : {}) };
   }
   retrieve(query, k, options) { return this.createSnapshot().retrieve(query, k, options); }
+  read(id, radius) { return this.createSnapshot().read(id, radius); }
   isReady() { return this.createSnapshot().isReady(); }
   setRagTopK(k) { this.legacy?.setRagTopK(k); }
   listDocuments() {

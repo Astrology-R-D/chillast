@@ -1,5 +1,14 @@
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+export interface DiagnosticInfo {
+  enabled: boolean;
+  directory: string;
+  files: string[];
+  maxFileBytes: number;
+  maxFiles: number;
+  lastError: string | null;
+}
+
 import type { ChartIdentity, ChartRequest, ChartRoute, ChartSettings, ChartType, NormalizedChartResult, Zodiac } from '../features/charts/contracts';
 
 export type Gender = 'male' | 'female' | 'other';
@@ -186,7 +195,8 @@ export interface AiToolProviderDescriptor {
   category: string;
   enabled: boolean;
   ready: boolean;
-  tools: Array<{ name: string; description: string }>;
+  configurableEnabled?: boolean;
+  tools: Array<{ name: string; description: string; callLimit?: number }>;
 }
 
 export interface AiMcpInfo {
@@ -264,6 +274,8 @@ export interface AiActivity {
 }
 
 export interface SourceSnapshot {
+  blockId?: string; chapterPath?: string[]; contentType?: string; tags?: string[];
+  previousBlockId?: string | null; nextBlockId?: string | null;
   id: string; documentId: string; version: string; title: string; content: string;
   fileName?: string; source: string; url?: string;
   location?: { lines?: { from: number; to: number }; basis?: 'prepared-text'; originalPageMapping?: 'unverified' } | null;
@@ -279,10 +291,19 @@ export interface ToolArtifact {
     attempts: Array<{ provider: string; endpoint: string; code: string; message: string }> };
 }
 export interface AnalysisReport {
+  dialogueVersion?: number;
   knowledgeFingerprint?: string;
+  task?: { version: number; startedAt: string; zone: string; time: { mode: string; dates: string[]; basis: string }; technical?: boolean };
+  readiness?: { status: 'ready' | 'partial' | 'insufficient'; checkedAt: string; issues: Array<{ claimId: string; code: string; message: string }> };
   version: number; contextKey: string; focus: string; questions: string[]; sources: SourceSnapshot[];
-  claims: Array<{ id: string; statement: string; facts: Array<{ callId: string; key: string; text: string }>;
-    sourceIds: string[]; limitations: string; question: string }>;
+  claims: Array<{ id: string; kind?: 'fact' | 'interpretation' | 'hypothesis' | 'reflection' | 'suggestion'; basis?: 'tool' | 'symbolic' | 'conversation' | 'mixed';
+    statement: string; facts: Array<{ callId: string; key: string; text: string }>;
+    sourceIds: string[]; limitations: string; question: string; support?: string;
+    meaning?: string; userRefs?: Array<{ id: string; quote: string }>;
+    alternatives?: Array<{ explanation: string; distinction: string }>;
+    whatWouldChange?: string[];
+    responseOptions?: Array<{ action: string; when: string; tradeoff: string; wording: string }>;
+    checks?: Array<{ category?: 'data' | 'applicability' | 'reality'; condition: string; status: string; factRefs: string[]; sourceIds: string[]; userRefs?: Array<{ id: string; quote: string }> }> }>;
 }
 export interface ContextUsage {
   used: number; limit: number; percent: number | null; reserve: number; safety: number;

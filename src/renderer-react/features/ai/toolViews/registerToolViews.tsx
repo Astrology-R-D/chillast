@@ -38,5 +38,6 @@ toolUserViews.register('astro', 'compute_bazi', 1, { InputUserView: BirthInputVi
 toolUserViews.register('context', 'get_current_chart', 1, { OutputUserView: ChartView });
 for (const name of ['list_profiles', 'find_profile_by_name']) toolUserViews.register('profiles', name, 1, { OutputUserView: ProfilesView });
 toolUserViews.register('kb', 'search_knowledge', 1, { OutputUserView: SourcesView });
+toolUserViews.register('kb', 'read_knowledge', 1, { OutputUserView: SourcesView });
 for (const name of ['web_search', 'read_webpage']) toolUserViews.register('web', name, 1, { OutputUserView: SourcesView });
 toolUserViews.register('conversation', 'read_tool_result', 1, { OutputUserView: (props) => props.call.artifact?.kind === 'chart' ? <ChartView {...props} /> : <SourcesView {...props} /> });

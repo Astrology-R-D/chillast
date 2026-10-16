@@ -3,6 +3,7 @@
 const esm = require('./esm-bridge');
 const { PROVIDER_WHITELIST, resolveProviderEntry } = require('./ProviderCatalogWhitelist');
 const { modelTokenLimits, resolveTokenBudget } = require('./TokenBudget');
+const { diagnostics } = require('../diagnostics/DiagnosticLog');
 
 /**
  * Engine registry — maps an engine kind (see ProviderCatalogWhitelist) to its
@@ -38,6 +39,7 @@ class ModelProvider {
   }
 
   async configure(settings) {
+    diagnostics.registerSecrets(settings);
     if (settings.maxTokensMode !== undefined && !['custom', 'context'].includes(settings.maxTokensMode)) throw new Error('输出额度模式无效');
     for (const key of ['contextWindow', 'maxOutputTokens']) {
       if (settings[key] !== undefined && (!Number.isSafeInteger(settings[key]) || settings[key] < 0)) throw new Error('模型上下文参数必须为非负整数');
@@ -102,6 +104,7 @@ class ModelProvider {
     const previousEmbeddings = this._embeddings;
 
     this._settings = nextSettings;
+    this._resolvedBaseUrl = baseUrl;
     this._model = nextModel;
     this._modelFactory = (maxTokens) => new ChatCls({ ...chatOpts, maxTokens: Math.min(maxTokens, chatOpts.maxTokens || Infinity), ...(engine === ENGINE_MAP.ollama ? { numPredict: maxTokens } : {}) });
     this._embeddings = nextEmbeddings;
@@ -169,14 +172,36 @@ class ModelProvider {
   embeddings() { return this._embeddings; }
   isConfigured() { return this._model !== null; }
 
-  async testConnection() {
+  async testConnection({ timeoutMs = 60000 } = {}) {
     if (!this._model) throw new Error('模型未初始化');
-    const response = await this._model.invoke(
-      [{ role: 'user', content: 'Hi' }],
-      { signal: AbortSignal.timeout(15000) },
-    );
-    if (!response) throw new Error('API 返回空响应');
-    return { ok: true };
+    const signal = AbortSignal.timeout(timeoutMs);
+    const started = Date.now();
+    const details = { provider: this._settings?.provider, model: this._settings?.model, endpoint: this._resolvedBaseUrl, timeoutMs };
+    diagnostics.info('ai-connection-test-start', details);
+    try {
+      // A connectivity probe should not inherit an unlimited generation budget.
+      const response = await this.chatModel(1024).invoke(
+        [{ role: 'user', content: 'This is an API connectivity test. Reply only OK.' }], { signal },
+      );
+      if (!response) throw new Error('API 返回空响应');
+      diagnostics.info('ai-connection-test-success', { ...details, durationMs: Date.now() - started });
+      return { ok: true };
+    } catch (error) {
+      const status = error.status || error.response?.status;
+      const code = error.code || error.cause?.code;
+      const timedOut = signal.aborted || /timeout|timed out/i.test(`${error.name} ${error.message}`);
+      diagnostics.error('ai-connection-test-failed', { ...details, durationMs: Date.now() - started, status, code, timedOut, error });
+      let message;
+      if (timedOut) message = `AI 连接测试超时（${Math.ceil(timeoutMs / 1000)} 秒），未收到完整响应。请检查 API 地址、网络/代理及模型响应速度；可在设置中导出诊断日志。`;
+      else if (status === 401 || status === 403) message = `AI API 认证或权限失败（HTTP ${status}），请检查 API Key 和模型访问权限。`;
+      else if (status === 404) message = 'AI API 返回 HTTP 404，请检查 API 地址、接口协议和模型名称。';
+      else if (status === 429) message = 'AI API 返回 HTTP 429，可能达到请求限额或账户额度，请查看服务商状态。';
+      else if (status >= 500) message = `AI 服务商暂时不可用（HTTP ${status}），请稍后重试。`;
+      else if (/abort/i.test(`${error.name} ${error.message}`)) message = 'AI 连接测试被中止，请重试；若持续出现，可在设置中导出诊断日志。';
+      else if (/ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|connection error/i.test(`${code || ''} ${error.message}`)) message = '无法连接 AI API，请检查 API 地址、网络/代理或证书；可在设置中导出诊断日志。';
+      else message = error.message || 'AI 连接测试失败，可在设置中导出诊断日志。';
+      throw new Error(message, { cause: error });
+    }
   }
 
   /**
@@ -186,8 +211,11 @@ class ModelProvider {
    */
   static async testWithSettings(settings, catalog = null, load = esm.load) {
     const temp = new ModelProvider(catalog ? { catalog, load } : { load });
-    await temp.configure(settings);
-    return await temp.testConnection();
+    try {
+      // Testing chat connectivity must not create an embeddings worker or require RAG.
+      await temp.configure({ ...settings, embeddings: { provider: 'none' } });
+      return await temp.testConnection();
+    } finally { await temp.close(); }
   }
 }
 

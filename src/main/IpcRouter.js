@@ -4,6 +4,7 @@ const { CITIES } = require('../core/data/Cities');
 const { searchScore } = require('../core/util/FuzzySearch');
 const { contextHistory } = require('../core/ai/ContextManager');
 const { assertAiContext } = require('../shared/WesternChartAiContext');
+const { diagnostics } = require('../core/diagnostics/DiagnosticLog');
 
 /**
  * IpcRouter — Mediator between the renderer (via IPC) and the application
@@ -19,7 +20,7 @@ class IpcRouter {
    * @param {ProfileRepository} deps.profileRepository
    * @param {AstrologyService} deps.astrologyService
    */
-  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService, aiSessionStore, aiConfigurationStore, locationResolver, closeDecision, chooseKnowledgePack }) {
+  constructor({ ipcMain, profileRepository, astrologyService, chineseAstrologyService, config, locale, aiService, aiSessionStore, aiConfigurationStore, locationResolver, closeDecision, chooseKnowledgePack, diagnosticActions }) {
     this.ipcMain = ipcMain;
     this.profiles = profileRepository;
     this.astrology = astrologyService;
@@ -37,6 +38,7 @@ class IpcRouter {
     this._sessionTasks = new Set();
     this.chooseKnowledgePack = chooseKnowledgePack;
     this._packSelections = new Map();
+    this.diagnosticActions = diagnosticActions;
   }
 
   setWebContents(wc) { this.webContents = wc; }
@@ -45,6 +47,11 @@ class IpcRouter {
   register() {
     this._handle('config:get', () => this.config);
     this._handle('locale:get', () => this.locale);
+    if (this.diagnosticActions) {
+      this._handle('app:diagnostics:info', () => this.diagnosticActions.info());
+      this._handle('app:diagnostics:open', () => this.diagnosticActions.open());
+      this._handle('app:diagnostics:export', () => this.diagnosticActions.export());
+    }
     this._handle('reference:get', () => this.astrology.referenceData());
     this._handle('chartTypes:get', () => this.astrology.chartTypes());
 
@@ -157,7 +164,15 @@ class IpcRouter {
       }));
       this._handle('ai:tools:describe', async () => {
         const reg = this.ai.getToolRegistry();
-        return reg ? reg.describe() : [];
+        return this.ai.describeTools ? this.ai.describeTools() : (reg ? reg.describe() : []);
+      });
+      this._handle('ai:tools:setCallLimits', (_e, limits) => {
+        if (!limits || typeof limits !== 'object' || Array.isArray(limits) || Object.values(limits).some(n => !Number.isSafeInteger(n) || n < 0)) throw new Error('工具次数必须为非负整数，0 表示无限制');
+        const s = this._readAiSettings();
+        s.toolCallLimits = { ...(s.toolCallLimits || {}), ...limits };
+        this._writeAiSettings(s);
+        this.ai.setToolCallLimits(limits);
+        return { ok: true };
       });
       this._handle('ai:tools:setProviderEnabled', (_e, id, enabled) => {
         const reg = this.ai.getToolRegistry();
@@ -212,7 +227,7 @@ class IpcRouter {
       });
       this._handle('ai:stop', (_e, sessionId) => { this.ai.stop(sessionId); return { ok: true }; });
       this._handle('ai:knowledge:list', () => this.ai.getKnowledgeBase()?.listDocuments() || []);
-      const packages = () => { const manager = this.ai.getKnowledgePacks?.(); if (!manager) throw new Error('知识包管理尚未初始化，请重启软件'); return manager; };
+      const packages = () => { const manager = this.ai.getKnowledgePacks?.(); if (!manager) throw new Error('知识库仍在初始化，请稍候；若持续未完成，请查看诊断日志'); return manager; };
       const changePackages = (operation) => this._withKnowledgeLock(async () => {
         const result = await operation(packages()); await this.ai.refreshKnowledgeTools?.();
         this.webContents?.send('ai:statusChanged', this.ai.status()); return result;
@@ -327,6 +342,11 @@ class IpcRouter {
     if (this._configurationBusy) throw new Error('AI 配置正在切换，请稍后发送消息');
     const sessionId = context.sessionId || String(Date.now());
     let aiText = ''; let analysisReport = null; const toolCalls = []; let saved = false; let ownsTask = false;
+    let compressionActive = false;
+    const contextEvent = (event) => {
+      if (event.compression) compressionActive = event.compression === 'running';
+      this._contextEvent(sessionId, event);
+    };
     const saveTurn = (failure) => {
       if (saved || (!aiText && !toolCalls.length && !analysisReport) || !this.aiSessionStore) return;
       saved = true;
@@ -341,22 +361,22 @@ class IpcRouter {
       let session = this.aiSessionStore?.get(sessionId);
       if (session && this.ai.contextUsage) {
         const usage = await this.ai.contextUsage(session);
-        this._contextEvent(sessionId, { usage });
+        contextEvent({ usage });
         if (usage.needsCompression) {
-          this._contextEvent(sessionId, { usage, compression: 'running', message: '上下文接近容量，正在自动压缩。' });
+          contextEvent({ usage, compression: 'running', message: '上下文接近容量，正在自动压缩。' });
           const summary = await this.ai.compressSession(session);
           if (summary) {
             if (!this.aiSessionStore.setContextSummary(sessionId, summary)) throw new Error('会话在压缩期间已变化，请重试。');
             session = this.aiSessionStore.get(sessionId);
-            this._contextEvent(sessionId, { usage: await this.ai.contextUsage(session), compression: 'done', message: '已自动压缩上下文，完整记录与引用仍保留。' });
+            contextEvent({ usage: await this.ai.contextUsage(session), compression: 'done', message: '已自动压缩上下文，完整记录与引用仍保留。' });
           } else {
-            this._contextEvent(sessionId, { usage, compression: 'done', message: '没有可压缩的旧对话，接下来会检查本次请求的工具结果和必要资料。' });
+            contextEvent({ usage, compression: 'done', message: '没有可压缩的旧对话，接下来会检查本次请求的工具结果和必要资料。' });
           }
         }
       }
       const priorReport = [...(session?.messages || [])].reverse().find((m) => m.analysisReport)?.analysisReport;
       const history = session ? contextHistory(session) : messages;
-      for await (const ev of this.ai.chat(history, { ...context, sessionId, priorReport, sessionSnapshot: session, onContextEvent: (event) => this._contextEvent(sessionId, event) })) {
+      for await (const ev of this.ai.chat(history, { ...context, sessionId, priorReport, sessionSnapshot: session, onContextEvent: contextEvent })) {
         this.webContents?.send('ai:token', { sessionId, requestId: context.requestId, type: ev.type, data: ev.data });
         if (ev.type === 'token') aiText += ev.data;
         if (ev.type === 'analysis-report') analysisReport = ev.data;
@@ -373,9 +393,10 @@ class IpcRouter {
       this._maybeAutoTitle(sessionId);
       return { ok: true };
     } catch (err) {
+      diagnostics.error('ai-chat-ipc-failed', { error: err });
       saveTurn(err.message);
       this.webContents?.send('ai:error', { message: err.message, sessionId, requestId: context.requestId });
-      this._contextEvent(sessionId, { compression: 'error', message: err.message });
+      if (compressionActive) contextEvent({ compression: 'error', message: err.message });
       return { ok: false, error: err.message };
     } finally { if (ownsTask) this._sessionTasks.delete(sessionId); }
   }
@@ -469,6 +490,7 @@ class IpcRouter {
         const data = await fn(event, ...args);
         return { ok: true, data };
       } catch (err) {
+        diagnostics.error('ipc-failed', { channel, error: err });
         return { ok: false, error: err && err.message ? err.message : String(err) };
       }
     });

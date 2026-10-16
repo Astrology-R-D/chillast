@@ -8,6 +8,13 @@ import './toolViews/registerToolViews';
 import { MarkdownMessage } from './MarkdownMessage';
 
 const call: AiToolCall = { callId: 'c1', tool: 'unknown', status: 'done', argsDigest: '', resultExcerpt: '', args: '{"query":"姓名","nested":{"items":[1,2]}}', result: '正常结果', requiresConfirmation: false };
+test('tool input shows the complete birth datetime and distinguishes the day from a full date', () => {
+  render(<ToolView call={{ ...call, args: JSON.stringify({ day: 7, hour: 11, month: 7, minute: 15, year: 2004, targetDate: '2027-06-01T12:00:00+08:00', targetDay: 1 }) }} side="input" />);
+  expect(screen.getByText('出生日期与时间：2004-07-07 11:15')).toBeInTheDocument();
+  expect(screen.getByText('出生日（几号）')).toBeInTheDocument();
+  expect(screen.getByText('目标日（几号）')).toBeInTheDocument();
+  expect(screen.getByText('目标时刻（优先使用）')).toBeInTheDocument();
+});
 test('registry resolves input and output independently and unknown versions fall back to nested fields', () => {
   const registry = new ToolUserViewRegistry().register('sample', 'unknown', 1, { InputUserView: () => <span>输入</span> });
   expect(registry.find({ ...call, artifact: { version: 1, providerId: 'sample', kind: 'generic', data: {} } })?.OutputUserView).toBeUndefined();
@@ -55,4 +62,33 @@ test('historical package evidence displays the saved package version, prepared l
   expect(screen.getByText(/整理文本第 3–7 行/)).toBeInTheDocument();
   expect(screen.getByText(/原始文件：八字原书.pdf/)).toBeInTheDocument();
   expect(screen.getByText('生成时保存的原文')).toBeInTheDocument();
+});
+
+test('verified task dates and applicability remain inside the evidence card', () => {
+  const report: AnalysisReport = { version: 1, contextKey: 'ctx', focus: '最近如何', questions: [], sources: [],
+    task: { version: 1, startedAt: '2026-10-14T03:00Z', zone: 'Asia/Shanghai', time: { mode: 'day', dates: ['2026-10-14'], basis: '本轮日期' } },
+    claims: [{ id: 'E1', statement: '具体判断', facts: [], sourceIds: [], limitations: '', question: '', support: '相位依据放在卡片中', checks: [{ condition: '已经核对该解释的适用条件', status: 'verified', factRefs: [], sourceIds: [] }] }] };
+  render(<I18nProvider dictionary={locale}><MarkdownMessage content="自然语言正文。[判据](evidence:E1)" report={report} /></I18nProvider>);
+  expect(screen.queryByText('相位依据放在卡片中')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '判据 1' }));
+  expect(screen.getByText(/2026-10-14 · Asia\/Shanghai/)).toBeInTheDocument();
+  expect(screen.getByText('相位依据放在卡片中')).toBeInTheDocument();
+  expect(screen.getByText(/✓ 已经核对该解释的适用条件/)).toBeInTheDocument();
+});
+
+test('hypothesis cards distinguish user descriptions, alternatives and revision signals from verified facts', () => {
+  const report: AnalysisReport = { version: 1, dialogueVersion: 2, contextKey: 'ctx', focus: '关系困扰', questions: [], sources: [], claims: [{
+    id: 'E1', kind: 'hypothesis', basis: 'conversation', statement: '她可能在降低冲突压力。', support: '争吵后联系减少。', meaning: '区分暂时冷静与退出关系。',
+    facts: [], sourceIds: [], limitations: '', question: '', userRefs: [{ id: 'U1', quote: '争吵之后她三天没回消息' }],
+    alternatives: [{ explanation: '也可能想退出关系。', distinction: '是否愿意约定沟通时间。' }], whatWouldChange: ['她明确表达不同意时调整判断。'],
+    checks: [{ category: 'reality', status: 'unresolved', condition: '她是否愿意继续沟通', factRefs: [], sourceIds: [] }],
+  }] };
+  render(<I18nProvider dictionary={locale}><MarkdownMessage content="回应。[解释假设](evidence:E1)" report={report} /></I18nProvider>);
+  expect(screen.queryByText('争吵之后她三天没回消息')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '解释假设 1' }));
+  expect(screen.getByText('解释假设 · 尚待现实检验')).toBeInTheDocument();
+  expect(screen.getByText('争吵之后她三天没回消息')).toBeInTheDocument();
+  expect(screen.getByText('何时调整判断')).toBeInTheDocument();
+  expect(screen.getByText(/尚待现实检验 她是否愿意继续沟通/)).toBeInTheDocument();
+  expect(screen.queryByText(/✓ 她是否愿意继续沟通/)).not.toBeInTheDocument();
 });

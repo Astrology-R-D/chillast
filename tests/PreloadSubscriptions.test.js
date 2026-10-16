@@ -32,6 +32,14 @@ function loadPreloadApi() {
   return { api: exposedApi, ipcRenderer, invocations };
 }
 
+test('diagnostics bridge exposes only info, native folder opening and native export without renderer paths', async () => {
+  const { api, invocations } = loadPreloadApi();
+  await api.app.diagnostics.info();
+  await api.app.diagnostics.open();
+  await api.app.diagnostics.export('untrusted-output-path');
+  assert.deepEqual(invocations, [['app:diagnostics:info'], ['app:diagnostics:open'], ['app:diagnostics:export']]);
+});
+
 test('preload forwards profile, city, location, and close bridge arguments', async () => {
   const { api, invocations } = loadPreloadApi();
   const input = { year: 2000, month: 1, day: 1, hour: 0, minute: 0, latitude: 0, longitude: 0 };

@@ -63,7 +63,7 @@ class ContextManager {
     if (covered <= start) return null;
     const records = session.messages.slice(start, covered).map((m, index) => ({
       messageIndex: start + index, role: m.role, content: m.content,
-      evidence: m.analysisReport?.claims?.map(({ id, statement, sourceIds }) => ({ id, statement, sourceIds })),
+      evidence: m.analysisReport?.claims?.map(({ id, kind, basis, statement, sourceIds, whatWouldChange }) => ({ id, kind, basis, statement, sourceIds, whatWouldChange })),
     }));
     const text = await this.summarize(JSON.stringify(records), existing?.text || '', signal);
     return { text, coveredMessages: covered, prefixHash: prefixHash(session.messages, covered), createdAt: new Date().toISOString() };

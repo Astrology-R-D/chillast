@@ -8,8 +8,9 @@ const asar = require('@electron/asar');
 const { OPTIONAL_RESOURCE_SOURCES, verifyExtraResources } = require('./PackageResources');
 
 const root = path.join(__dirname, '..');
-const archive = path.join(root, 'release', 'win-unpacked', 'resources', 'app.asar');
-const resourcesDir = path.join(root, 'release', 'win-unpacked', 'resources');
+const packageDir = path.resolve(process.env.CHILLAST_PACKAGE_DIR || path.join(root, 'release', 'win-unpacked'));
+const archive = path.join(packageDir, 'resources', 'app.asar');
+const resourcesDir = path.join(packageDir, 'resources');
 
 function hash(value) {
   return crypto.createHash('sha256').update(value).digest('hex');

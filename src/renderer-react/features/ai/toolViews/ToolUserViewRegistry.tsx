@@ -23,7 +23,7 @@ export function parseToolData(text: string | undefined): unknown {
   try { return JSON.parse(text); } catch { return text; }
 }
 
-const LABELS: Record<string, string> = { year: '出生年份', month: '出生月份', day: '出生日期', hour: '小时', minute: '分钟', latitude: '纬度', longitude: '经度', name: '姓名', query: '查询词', targetYear: '目标年份', targetMonth: '目标月份', targetDay: '目标日期', url: '网址' };
+const LABELS: Record<string, string> = { year: '出生年份', month: '出生月份', day: '出生日（几号）', hour: '小时', minute: '分钟', latitude: '纬度', longitude: '经度', name: '姓名', query: '查询词', targetYear: '目标年份', targetMonth: '目标月份', targetDay: '目标日（几号）', targetDate: '目标时刻（优先使用）', url: '网址' };
 export function NestedValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
   const [visible, setVisible] = useState(50);
   if (value === null || value === undefined) return <span>—</span>;
@@ -34,7 +34,14 @@ export function NestedValue({ value, depth = 0 }: { value: unknown; depth?: numb
     ? <details><summary>{Array.isArray(entry) ? `${entry.length} 项` : `${Object.keys(entry).length} 个字段`}</summary><NestedValue value={entry} depth={depth + 1} /></details>
     : <NestedValue value={entry} depth={depth + 1} />}</td></tr>)}{entries.length > visible && <tr><td colSpan={2}><button type="button" onClick={() => setVisible((n) => n + 50)}>显示更多（剩余 {entries.length - visible} 项）</button></td></tr>}</tbody></table>;
 }
-export function InputUserView({ data }: ToolViewProps) { return <NestedValue value={data} />; }
+export function InputUserView({ data }: ToolViewProps) {
+  const input = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  const birth = ['year', 'month', 'day'].every(key => Number.isInteger(input[key]))
+    ? `${input.year}-${String(input.month).padStart(2, '0')}-${String(input.day).padStart(2, '0')}` : null;
+  const time = ['hour', 'minute'].every(key => Number.isInteger(input[key]))
+    ? ` ${String(input.hour).padStart(2, '0')}:${String(input.minute).padStart(2, '0')}` : '';
+  return <>{birth && <p>出生日期与时间：{birth}{time}</p>}<NestedValue value={data} /></>;
+}
 export function OutputUserView({ data }: ToolViewProps) {
   return typeof data === 'string' ? <MarkdownMessage content={data} /> : <NestedValue value={data} />;
 }

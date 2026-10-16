@@ -128,6 +128,11 @@ contextBridge.exposeInMainWorld('mystApi', {
   app: {
     onCloseRequested: (callback) => subscribe('app:closeRequested', callback),
     decideClose: (decision) => invoke('app:closeDecision', decision),
+    diagnostics: {
+      info: () => invoke('app:diagnostics:info'),
+      open: () => invoke('app:diagnostics:open'),
+      export: () => invoke('app:diagnostics:export'),
+    },
   },
 
   /** Chart computation. */
@@ -196,6 +201,7 @@ contextBridge.exposeInMainWorld('mystApi', {
     },
     tools: {
       describe: () => invoke('ai:tools:describe'),
+      setCallLimits: (limits) => invoke('ai:tools:setCallLimits', limits),
       setProviderEnabled: (id, enabled) => invoke('ai:tools:setProviderEnabled', id, enabled),
     },
     mcp: {

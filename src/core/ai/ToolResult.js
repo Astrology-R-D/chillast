@@ -16,6 +16,8 @@ function sourceSnapshot(doc) {
   return {
     id: `S${hash(`${documentId}\n${content}${doc.pack ? `\n${doc.pack.id}@${doc.pack.version}` : ''}`).slice(0, 20)}`,
     documentId, version, content,
+    ...(doc.blockId ? { blockId: doc.blockId, chapterPath: doc.chapterPath, contentType: doc.contentType, tags: doc.tags,
+      previousBlockId: doc.previousBlockId, nextBlockId: doc.nextBlockId } : {}),
     title: doc.title || doc.fileName || doc.url || '未标明来源',
     fileName: doc.fileName || '', source: doc.source || 'unknown',
     location: doc.location || null,
@@ -34,11 +36,20 @@ function chartFacts(chart) {
   return facts;
 }
 
-function chartToolResult(chart, content) {
-  return toolResult(content, 'chart', chart, { facts: chartFacts(chart) });
+function chartToolResult(chart, content, calculation = {}) {
+  const { birthIdentity } = require('./AnalysisTask');
+  const subjectKeys = (chart.subjects || []).map(subject => {
+    const date = subject.birthLabel?.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+    return birthIdentity(subject.birthData || (date ? { year: +date[1], month: +date[2], day: +date[3], hour: +date[4], minute: +date[5], location: subject.location } : null));
+  });
+  const targetDate = chart.meta?.targetDate || (chart.meta?.type === 'transit' ? chart.meta.instantUtc : null);
+  return toolResult(content, 'chart', chart, { facts: chartFacts(chart), calculation: {
+    type: chart.meta?.type, subjectKeys, settings: chart.meta?.settings || {},
+    targetDate, targetDay: targetDate?.slice(0, 10) || null, ...calculation,
+  } });
 }
 
-function baziToolResult(result) {
+function baziToolResult(result, calculation = {}) {
   const p = result.bazi.pillars;
   const dm = result.bazi.dayMaster;
   const lines = [`八字四柱: ${p.year.full} ${p.month.full} ${p.day.full} ${p.hour.full}`, `日主: ${dm.char} (${dm.element})`];
@@ -52,7 +63,7 @@ function baziToolResult(result) {
   }
   if (result.lunar) lines.push(`农历: ${result.lunar.lunarYear || ''} ${result.lunar.lunarMonth || ''}${result.lunar.lunarDay || ''}`);
   if (result.bazi.localTrueSolarTime) lines.push(`真太阳时: ${result.bazi.localTrueSolarTime}`);
-  return toolResult(lines.join('\n'), 'bazi', result, { facts: Object.fromEntries(lines.map((line, index) => [`bazi:${index}`, line])) });
+  return toolResult(lines.join('\n'), 'bazi', result, { facts: Object.fromEntries(lines.map((line, index) => [`bazi:${index}`, line])), calculation: { type: 'bazi', ...calculation } });
 }
 
 /** Works with ToolMessage artifacts and persisted AiToolCall records. */
@@ -64,6 +75,17 @@ function evidenceCatalog(calls) {
     for (const [key, text] of Object.entries(call.artifact?.facts || {})) facts.set(`${call.callId}/${key}`, { callId: call.callId, key, text });
   }
   return { sources, facts };
+}
+
+/** Graph state is authoritative even before the UI has consumed tool updates. */
+function evidenceCalls(calls, messages = []) {
+  const merged = new Map(calls.map(call => [call.callId, call]));
+  for (const message of messages) {
+    if (!message.tool_call_id || !message.artifact) continue;
+    merged.set(message.tool_call_id, { ...merged.get(message.tool_call_id), callId: message.tool_call_id,
+      tool: message.name, artifact: message.artifact });
+  }
+  return [...merged.values()];
 }
 
 function decorateTools(tools, providerId) {
@@ -81,4 +103,4 @@ function decorateTools(tools, providerId) {
   return tools;
 }
 
-module.exports = { toolResult, sourceSnapshot, chartToolResult, chartFacts, baziToolResult, evidenceCatalog, decorateTools, hash };
+module.exports = { toolResult, sourceSnapshot, chartToolResult, chartFacts, baziToolResult, evidenceCatalog, evidenceCalls, decorateTools, hash };

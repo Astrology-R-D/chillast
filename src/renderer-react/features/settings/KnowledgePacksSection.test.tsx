@@ -7,7 +7,7 @@ import type { AiInitProgress } from '../../api/contracts';
 
 const version = (v: string, active = false) => ({ id: 'bazi-library', version: v, name: '八字知识库', description: '整理后的八字原文', corpora: ['bazi'], documentCount: 2,
   fingerprint: v, createdAt: '', installedAt: '', active, ready: true, error: null });
-function setup() {
+function setup(initialError = false) {
   let progress: ((value: AiInitProgress) => void) | undefined;
   let state = { builtinEnabled: true, busy: false, legacyDocuments: 224, packs: [version('1.0.0', true), version('2.0.0')] };
   const api = {
@@ -19,6 +19,7 @@ function setup() {
     remove: vi.fn(async () => ({ ok: true, data: state })),
     setBuiltinEnabled: vi.fn(async (enabled) => { state = { ...state, builtinEnabled: enabled }; return { ok: true, data: state }; }),
   };
+  if (initialError) api.list.mockRejectedValueOnce(new Error('知识库仍在初始化，请稍候'));
   vi.stubGlobal('mystApi', { ai: { onInitProgress: (callback: (value: AiInitProgress) => void) => { progress = callback; return () => { progress = undefined; }; }, knowledge: { packs: api } } });
   const onChanged = vi.fn();
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><KnowledgePacksSection onChanged={onChanged} /></QueryClientProvider>);
@@ -77,4 +78,14 @@ test('shows live indexing progress and keeps controls disabled until installatio
   await act(async () => finish({ ok: true, data: version('3.0.0') }));
   await waitFor(() => expect(screen.getByRole('button', { name: '导入知识包' })).toBeEnabled());
   expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+});
+
+
+test('initialization error refreshes when startup becomes ready without restarting', async () => {
+  const { api, emitProgress } = setup(true);
+  expect(await screen.findByText('知识库仍在初始化，请稍候')).toBeInTheDocument();
+  act(() => emitProgress({ phase: 'ready', docs: 2 }));
+  expect(await screen.findByText(/已启用 v1.0.0/)).toBeInTheDocument();
+  expect(screen.queryByText('知识库仍在初始化，请稍候')).not.toBeInTheDocument();
+  expect(api.list.mock.calls.length).toBeGreaterThan(1);
 });

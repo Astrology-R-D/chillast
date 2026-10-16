@@ -18,7 +18,7 @@ function fixture(compress) {
   router._maybeAutoTitle = () => {};
   const wc = { mainFrame: {}, send: (name, data) => events.push({ name, data }) };
   router.setWebContents(wc); router.register();
-  return { session, events, get history() { return receivedHistory; }, invoke: (name, ...args) => handlers.get(name)({ sender: wc, senderFrame: wc.mainFrame }, ...args) };
+  return { session, events, ai, get history() { return receivedHistory; }, invoke: (name, ...args) => handlers.get(name)({ sender: wc, senderFrame: wc.mainFrame }, ...args) };
 }
 test('full context compresses automatically before sending and keeps raw archives', async () => {
   const f = fixture();
@@ -37,6 +37,19 @@ test('compression failure keeps history and sends a visible failure notice', asy
   assert.equal(f.session.contextSummary, undefined);
   assert.equal(f.session.messages[1].toolCalls[0].result, '完整工具结果');
   assert.ok(f.events.some((e) => e.name === 'ai:contextChanged' && e.data.compression === 'error'));
+});
+
+test('analysis failures end the request without mislabeling it as a context compression failure', async () => {
+  const f = fixture();
+  f.ai.chat = async function* () {
+    yield { type: 'tool-call', data: { callId: 'c', tool: 'search_knowledge', status: 'done', result: '已保存原文' } };
+    throw new Error('分析报告引用了不存在的判据或来源');
+  };
+  const result = await f.invoke('ai:chat', [{ role: 'user', content: '分析问题' }], { sessionId: 's', requestId: 'failed-request' });
+  assert.equal(result.data.ok, false);
+  assert.ok(f.events.some(e => e.name === 'ai:error' && e.data.requestId === 'failed-request'));
+  assert.ok(!f.events.some(e => e.name === 'ai:contextChanged' && e.data.compression === 'error'));
+  assert.equal(f.session.messages.at(-1).toolCalls[0].result, '已保存原文');
 });
 test('a request with no older turns exits the history compression state', async () => {
   const f = fixture(async () => null);

@@ -2,6 +2,7 @@
 
 // Canonical v1 protocol. The preparer's src/vendor copy is byte-identical.
 const AdmZip = require('adm-zip');
+const { structureMarkdown, validateStructure } = require('./KnowledgeStructure.cjs');
 const { validateChunking } = require('./KnowledgeUnit.cjs');
 const { createHash } = require('node:crypto');
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
@@ -67,6 +68,7 @@ function validatePack(buffer) {
     let text;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(files.get(doc.path)); } catch (_) { fail('Markdown 编码无效'); }
     if (doc.chunking) validateChunking(text, doc.chunking);
+    if (doc.structure) validateStructure(text, doc.structure);
   }
   if ([...listed].some((name) => name.startsWith('documents/') && !paths.has(name))) fail('存在未编目的文档');
   return { manifest, catalog, files, fingerprint: sha256(files.get('manifest.json')) };
@@ -74,7 +76,7 @@ function validatePack(buffer) {
 
 function preparationProvenance(report = {}) {
   const config = report.config || {};
-  const publicConfig = Object.fromEntries(['provider', 'model', 'corpus', 'corpusName', 'ocrEngine', 'ocrMode', 'languages', 'denoise', 'split'].filter((k) => k in config).map((k) => [k, config[k]]));
+  const publicConfig = Object.fromEntries(['provider', 'model', 'corpus', 'corpusName', 'ocrEngine', 'ocrMode', 'visionMode', 'translateToSimplifiedChinese', 'languages', 'denoise', 'split'].filter((k) => k in config).map((k) => [k, config[k]]));
   return { sourceName: String(report.source || '').split(/[\\/]/).at(-1), sourceHash: report.sourceHash || null, title: report.title || '',
     rawChars: report.rawChars, cleanedChars: report.cleanedChars, preservation: report.preservation,
     warnings: report.warnings || [], completedAt: report.completedAt || null, preparation: publicConfig,
@@ -91,7 +93,7 @@ function createPack({ id, name, version, description = '', documents, createdAt 
     files.set(docPath, Buffer.from(doc.text, 'utf8'));
     files.set(provenancePath, Buffer.from(JSON.stringify(doc.provenance || { lineBasis: 'prepared-text', originalPageMapping: 'unverified' }), 'utf8'));
     catalog.documents.push({ id: doc.id, title: doc.title, corpus: doc.corpus || 'general', domain: doc.domain || 'general',
-      book: doc.book || null, ...(doc.chunking ? { chunking: doc.chunking } : {}), path: docPath, provenancePath, lineBasis: 'prepared-text', originalPageMapping: 'unverified' });
+      book: doc.book || null, structure: doc.structure || structureMarkdown(doc.text), ...(doc.chunking ? { chunking: doc.chunking } : {}), path: docPath, provenancePath, lineBasis: 'prepared-text', originalPageMapping: 'unverified' });
   }
   files.set('catalog.json', Buffer.from(JSON.stringify(catalog, null, 2), 'utf8'));
   const manifest = { format: FORMAT, schemaVersion: 1, minReaderVersion: 1, id, name, version, description, createdAt,

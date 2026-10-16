@@ -70,6 +70,7 @@ function installApi({
       }),
     },
     app: {
+      diagnostics: { info: vi.fn().mockResolvedValue({ ok: true, data: { enabled: true, directory: 'logs', files: [], maxFileBytes: 2097152, maxFiles: 5, lastError: null } }), open: vi.fn(), export: vi.fn() },
       onCloseRequested: vi.fn(() => () => {}),
       decideClose: vi.fn().mockResolvedValue({ ok: true, data: false }),
     },
@@ -107,6 +108,7 @@ function installApi({
       },
       tools: {
         describe: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        setCallLimits: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
         setProviderEnabled: vi.fn().mockResolvedValue({ ok: true, data: { ok: true } }),
       },
       mcp: {

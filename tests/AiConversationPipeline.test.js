@@ -15,7 +15,7 @@ const esm = require('../src/core/ai/esm-bridge');
 test('real LangGraph tools retain artifacts, analyst citations, and stream only the writer answer', async () => {
   const doc = { content: '这是可核对的原始知识片段。', fileName: '解释资料.md', source: 'builtin' };
   const source = sourceSnapshot(doc);
-  const chart = { meta: { type: 'natal' }, rings: [{ id: 'natal', label: '本命', points: [{ key: 'sun', nameZh: '太阳', signNameZh: '巨蟹座', degreeInSign: 15, house: 10 }] }], houses: [], aspects: [] };
+  const chart = { meta: { type: 'natal' }, subjects: [{ birthLabel: '2004-07-07 11:15', location: { latitude: 26.6, longitude: 104.8 } }], rings: [{ id: 'natal', label: '本命', points: [{ key: 'sun', nameZh: '太阳', signNameZh: '巨蟹座', degreeInSign: 15, house: 10 }] }], houses: [], aspects: [] };
   class ComputeProvider extends ToolProvider {
     constructor() { super('astro', 'compute'); }
     async _build() {
@@ -33,8 +33,8 @@ test('real LangGraph tools retain artifacts, analyst citations, and stream only 
         { id: 'chart-call', type: 'function', function: { name: 'compute_natal_chart', arguments: '{}' } },
         { id: 'kb-call', type: 'function', function: { name: 'search_knowledge', arguments: '{"query":"太阳落宫"}' } },
       ] };
-      else message = { role: 'assistant', content: JSON.stringify({ focus: '工作压力', claims: [{ statement: '先核实压力出现的具体情境', factRefs: ['chart-call/natal:sun'], sourceIds: [source.id], limitations: '解释框架需要实际经历核实', question: '最近一次压力是什么情境？' }], questions: [] }) };
-    } else message = { role: 'assistant', content: '可以先从最近的一次经历说起。[判据 1](evidence:E1)' };
+      else message = { role: 'assistant', content: JSON.stringify({ focus: '工作压力', claims: [{ statement: '先核实压力出现的具体情境', support: '本命事实符合来源的落宫条件。', checks: [{ condition: '该解释适用于太阳落入所计算的宫位', status: 'verified', factRefs: ['chart-call/natal:sun'], sourceIds: [source.id] }], factRefs: ['chart-call/natal:sun'], sourceIds: [source.id], limitations: '解释框架需要实际经历核实', question: '最近一次压力是什么情境？' }], questions: [] }) };
+    } else message = { role: 'assistant', content: JSON.stringify({ text: '可以先从最近的一次经历说起。', evidenceIds: ['E1'] }) };
     if (body.stream) {
       response.writeHead(200, { 'content-type': 'text/event-stream' });
       response.end(`data: ${JSON.stringify({ id: `test-${requests.length}`, choices: [{ index: 0, delta: message, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
@@ -56,7 +56,7 @@ test('real LangGraph tools retain artifacts, analyst citations, and stream only 
     const report = events.find((e) => e.type === 'analysis-report').data;
     assert.equal(report.sources[0].content, doc.content);
     assert.match(report.claims[0].facts[0].text, /巨蟹座/);
-    assert.equal(events.filter((e) => e.type === 'token').map((e) => e.data).join(''), '可以先从最近的一次经历说起。[判据 1](evidence:E1)');
+    assert.equal(events.filter((e) => e.type === 'token').map((e) => e.data).join(''), '可以先从最近的一次经历说起。 [判据 1](evidence:E1)\n\n');
     const activity = events.filter((e) => e.type === 'activity').map((e) => e.data);
     assert.equal(activity[0].phase, 'analysis');
     assert.ok(activity.some((a) => a.phase === 'analysis' && a.topic === '太阳落宫'));

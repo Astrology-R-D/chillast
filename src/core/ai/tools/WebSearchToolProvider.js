@@ -4,6 +4,7 @@ const ToolProvider = require('./ToolProvider');
 const esm = require('../esm-bridge');
 const { toolResult, sourceSnapshot } = require('../ToolResult');
 const { searchWeb, fetchWebpage, PROVIDER_NAMES } = require('../WebSearchClient');
+const { diagnostics } = require('../../diagnostics/DiagnosticLog');
 
 /**
  * WebSearchToolProvider — gives the agent live internet access via two tools:
@@ -41,6 +42,7 @@ class WebSearchToolProvider extends ToolProvider {
     const z = require('zod');
     const cfg = this._cfg;
     const apiKey = this._apiKey();
+    diagnostics.registerSecrets({ apiKey });
     const provider = this._provider();
     const defaultLimit = Number(cfg.maxResults) || 5;
 
@@ -57,11 +59,13 @@ class WebSearchToolProvider extends ToolProvider {
         try {
           const search = await searchWeb(provider, { apiKey, endpoint: cfg.endpoint }, input.query, n);
           const { results, ...metadata } = search;
+          diagnostics.info('web-search-done', { requestedProvider: provider, provider: metadata.provider, fallback: metadata.fallback, count: results.length });
           if (!results.length) return toolResult('未找到相关网页结果。', 'web', '未找到相关网页结果。', { search: metadata, sources: [] });
           const sources = results.map((r) => sourceSnapshot({ ...r, content: r.snippet, source: 'web' }));
           const notice = metadata.fallback ? `首选搜索接口未返回可用结果页，已改用 ${PROVIDER_NAMES[metadata.provider]}。\n\n` : '';
           return toolResult(notice + sources.map((s) => `[${s.id}] ${s.title}\n${s.url}\n${s.content}`).join('\n\n'), 'web', results, { sources, search: metadata });
         } catch (e) {
+          diagnostics.error('web-search-failed', { provider, error: e });
           const message = `联网搜索失败：${e.message}`;
           return toolResult(message, 'web', message, { search: { requestedProvider: provider, provider, fallback: false, attempts: e.attempts || [] }, sources: [] });
         }
@@ -76,9 +80,11 @@ class WebSearchToolProvider extends ToolProvider {
       func: async (input) => {
         try {
           const content = await fetchWebpage(input.url);
+          diagnostics.info('webpage-read-done', { characters: content.length });
           const source = sourceSnapshot({ url: input.url, content, source: 'web' });
           return toolResult(`[${source.id}] ${input.url}\n${content}`, 'webpage', { url: input.url }, { sources: [source] });
         } catch (e) {
+          diagnostics.error('webpage-read-failed', { error: e });
           return `网页抓取失败：${e.message}`;
         }
       },

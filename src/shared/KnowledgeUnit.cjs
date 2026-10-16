@@ -2,6 +2,7 @@
 
 // A .kbunit is UTF-8 Markdown with one portable metadata comment, never an archive.
 const { createHash } = require('node:crypto');
+const { structureMarkdown, validateStructure } = require('./KnowledgeStructure.cjs');
 const FORMAT = 'chillast.knowledge-unit';
 const MAX_UNIT_BYTES = 16 * 1024 * 1024;
 const sha256 = value => createHash('sha256').update(value).digest('hex');
@@ -55,7 +56,7 @@ function publicProvenance(value = {}) {
   if (out.sourceName) out.sourceName = String(out.sourceName).split(/[\\/]/).at(-1);
   if (out.importedFrom) out.importedFrom = String(out.importedFrom).split(/[\\/]/).at(-1);
   const prep = value.preparation || {};
-  out.preparation = Object.fromEntries(['provider', 'model', 'corpus', 'corpusName', 'ocrEngine', 'ocrMode', 'languages', 'denoise', 'split', 'origin'].filter(key => key in prep).map(key => [key, prep[key]]));
+  out.preparation = Object.fromEntries(['provider', 'model', 'corpus', 'corpusName', 'ocrEngine', 'ocrMode', 'visionMode', 'translateToSimplifiedChinese', 'languages', 'denoise', 'split', 'origin'].filter(key => key in prep).map(key => [key, prep[key]]));
   return { ...out, lineBasis: 'prepared-text', originalPageMapping: 'unverified' };
 }
 
@@ -65,6 +66,7 @@ function validateDocument(doc) {
   if (doc.book && (typeof doc.book !== 'object' || !validId(doc.book.id) || typeof doc.book.title !== 'string' || !doc.book.title.trim() || doc.book.title.length > 240)) fail('书籍信息无效');
   if (doc.lineBasis && doc.lineBasis !== 'prepared-text' || doc.originalPageMapping && doc.originalPageMapping !== 'unverified') fail('引用位置声明不受支持');
   validateChunking(doc.text, doc.chunking);
+  if (doc.structure) validateStructure(doc.text, doc.structure);
   return doc;
 }
 
@@ -72,7 +74,7 @@ function encodeUnit(document) {
   const doc = { ...document, corpus: document.corpus || 'general', domain: document.domain || 'general', chunking: document.chunking || chunkMarkdown(document.text) };
   validateDocument(doc);
   const meta = { format: FORMAT, schemaVersion: 1, id: doc.id, title: doc.title, corpus: doc.corpus, domain: doc.domain,
-    book: doc.book || null, provenance: publicProvenance(doc.provenance), textSha256: sha256(doc.text), chunking: doc.chunking,
+    book: doc.book || null, structure: doc.structure || structureMarkdown(doc.text), provenance: publicProvenance(doc.provenance), textSha256: sha256(doc.text), chunking: doc.chunking,
     lineBasis: 'prepared-text', originalPageMapping: 'unverified' };
   // Keep arbitrary titles inside a single valid HTML comment.
   const header = JSON.stringify(meta).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
@@ -91,7 +93,7 @@ function inferDocument(text, fileName = 'knowledge.kbunit', fallback = {}) {
   const bookTitle = heading?.split(/\s+·\s+/)[0] || stem;
   const book = { id: `B${sha256(bookTitle).slice(0, 32)}`, title: bookTitle };
   const id = `D${sha256(`${book.id}:${corpus}:${domain}:${stem}`).slice(0, 32)}`;
-  return { id, title: heading || stem, text, corpus, domain, book, chunking: chunkMarkdown(text), provenance: {
+  return { id, title: heading || stem, text, corpus, domain, book, chunking: chunkMarkdown(text), structure: structureMarkdown(text), provenance: {
     sourceName: name, sourceHash: sha256(text), title: bookTitle, preparation: { origin: 'externally-prepared', corpus },
     warnings: ['外部已准备文本；未由本次导入重新清洗或验证原书页码。'], lineBasis: 'prepared-text', originalPageMapping: 'unverified' } };
 }
@@ -112,7 +114,7 @@ function decodeUnit(value, { fileName, fallback } = {}) {
   const text = raw.slice(close + ' -->\n'.length);
   if (meta.textSha256 !== sha256(text)) fail('正文哈希不匹配；编辑后请使用无元数据注释的 Markdown 重新导入');
   return validateDocument({ id: meta.id, title: meta.title, corpus: meta.corpus, domain: meta.domain, book: meta.book,
-    provenance: publicProvenance(meta.provenance), chunking: meta.chunking, text, lineBasis: meta.lineBasis, originalPageMapping: meta.originalPageMapping });
+    structure: meta.structure, provenance: publicProvenance(meta.provenance), chunking: meta.chunking, text, lineBasis: meta.lineBasis, originalPageMapping: meta.originalPageMapping });
 }
 
 module.exports = { FORMAT, MAX_UNIT_BYTES, sha256, chunkMarkdown, validateChunking, encodeUnit, decodeUnit, inferDocument, lineAt };

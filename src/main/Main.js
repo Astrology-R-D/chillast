@@ -28,6 +28,7 @@ const {
 } = require('./RendererLoader');
 
 const fs = require('fs');
+const { diagnostics, initializeDiagnostics, captureConsole } = require('../core/diagnostics/DiagnosticLog');
 
 /**
  * Main — Electron main-process bootstrap. It composes the application root
@@ -48,6 +49,13 @@ class Main {
 
   /** Compose services that do not depend on Electron being ready. */
   bootstrapServices() {
+    this.logger = initializeDiagnostics(path.join(app.getPath('userData'), 'logs'), {
+      metadata: { appVersion: app.getVersion(), platform: process.platform, arch: process.arch, versions: process.versions, packaged: app.isPackaged },
+    });
+    this.restoreConsole = captureConsole(this.logger);
+    this.onUncaughtException = (error, origin) => diagnostics.error('uncaught-exception', { error, origin });
+    process.on('uncaughtExceptionMonitor', this.onUncaughtException);
+    diagnostics.info('app-start', { packaged: app.isPackaged, version: app.getVersion() });
     this.config = ConfigManager.load();
     const localeName = this.config.locale || 'zh';
     const localePath = path.join(__dirname, '..', '..', 'locale', `${localeName}.json`);
@@ -136,6 +144,7 @@ class Main {
         ...(persistedSettings.search || {}),
       },
       knowledgeBuiltinPath: builtinKnowledgePath,
+      knowledgeBundledPackPath: path.join(path.dirname(builtinKnowledgePath), 'packs'),
       knowledgeUserPath: userKnowledgePath,
       knowledgeIndexDir: vectorIndexDir,
       knowledgePackPath: path.join(app.getPath('userData'), 'knowledge', 'packages'),
@@ -195,6 +204,24 @@ class Main {
       chooseKnowledgePack: async () => {
         const chosen = await dialog.showOpenDialog({ title: '选择知识包', properties: ['openFile'], filters: [{ name: 'CHILLAST 知识包', extensions: ['kbpack'] }] });
         return chosen.canceled ? null : chosen.filePaths[0];
+      },
+      diagnosticActions: {
+        info: () => this.logger.info(),
+        open: async () => {
+          const error = await shell.openPath(this.logger.directory);
+          if (error) throw new Error(error);
+          return { opened: true };
+        },
+        export: async () => {
+          const chosen = await dialog.showSaveDialog({ title: '导出诊断日志', defaultPath: `CHILLAST-diagnostics-${new Date().toISOString().slice(0, 10)}.zip`, filters: [{ name: '诊断日志', extensions: ['zip'] }] });
+          if (chosen.canceled || !chosen.filePath) return null;
+          const status = this.aiService.status();
+          const providers = await this.aiService.getToolRegistry()?.describe() || [];
+          const tools = providers.map(({ id, enabled, ready, tools }) => ({ id, enabled, ready, names: tools.map(({ name }) => name) }));
+          fs.writeFileSync(chosen.filePath, this.logger.exportBundle({ ai: { configured: status.configured, provider: status.provider, model: status.model, knowledgeDocCount: status.knowledgeDocCount }, tools }));
+          diagnostics.info('diagnostics-exported');
+          return { path: chosen.filePath };
+        },
       },
     }).register();
   }
@@ -274,6 +301,15 @@ class Main {
     }
 
     const rendererWindow = this.mainWindow;
+    diagnostics.info('renderer-start', { kind: rendererTarget.kind });
+    rendererWindow.webContents.on('render-process-gone', (_event, details) => diagnostics.error('renderer-process-gone', { reason: details.reason, exitCode: details.exitCode }));
+    rendererWindow.webContents.on('did-fail-load', (_event, code, description) => diagnostics.error('renderer-load-failed', { code, description }));
+    rendererWindow.webContents.on('console-message', (...args) => {
+      const details = args.at(-1);
+      const level = typeof args[1] === 'number' ? args[1] : details?.level;
+      const message = typeof args[2] === 'string' ? args[2] : details?.message;
+      if (level === 'error' || level >= 3) diagnostics.error('renderer-console-error', { message });
+    });
     let smokeReportPath = null;
     try {
       smokeReportPath = resolveSmokeReportPath({
@@ -531,6 +567,9 @@ class Main {
     });
 
     app.on('quit', () => {
+      diagnostics.info('app-quit');
+      this.restoreConsole?.();
+      if (this.onUncaughtException) process.removeListener('uncaughtExceptionMonitor', this.onUncaughtException);
       if (SwissEphCore) SwissEphCore.close();
       if (this.aiService) this.aiService.close();
     });

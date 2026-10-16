@@ -18,6 +18,22 @@ export function ToolsAndMcpSection({ tools, mcp, onToolsChanged, onMcpChanged }:
   const [transport, setTransport] = useState('stdio');
   const [target, setTarget] = useState('');
   const [error, setError] = useState('');
+  const [limits, setLimits] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  async function saveLimits() {
+    setError(''); setSaved(false);
+    if (Object.values(limits).some(v => !/^\d+$/.test(v) || !Number.isSafeInteger(Number(v)))) {
+      setError('调用次数须为非负整数，0 表示无限制'); return;
+    }
+    setSaving(true);
+    try {
+      await apiClient.setAiToolCallLimits(Object.fromEntries(Object.entries(limits).map(([k, v]) => [k, Number(v)])));
+      setLimits({}); setSaved(true); onToolsChanged();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setSaving(false); }
+  }
+
 
   useEffect(() => {
     setDraft((mcp && mcp.servers) ? { ...mcp.servers } : {});
@@ -73,18 +89,32 @@ export function ToolsAndMcpSection({ tools, mcp, onToolsChanged, onMcpChanged }:
       <p className="settings-hint">{t('settings.toolsHint')}</p>
       <div className="settings-list">
         {(tools ?? []).map((provider) => (
-          <label key={provider.id} className="settings-list-item">
-            <span>
-              <input
-                type="checkbox" checked={provider.enabled}
-                onChange={(event) => { void toggleProvider(provider.id, event.target.checked); }}
-              />
-              <span className="settings-item-name">{provider.id}</span>
-              <span className="settings-item-meta">{provider.tools.length}</span>
-            </span>
-          </label>
+          <div key={provider.id}>
+            <label className="settings-list-item">
+              <span>
+                <input type="checkbox" checked={provider.enabled} disabled={provider.configurableEnabled === false}
+                  onChange={event => { void toggleProvider(provider.id, event.target.checked); }} />
+                <span className="settings-item-name">{provider.id}</span>
+                <span className="settings-item-meta">{provider.tools.length}</span>
+              </span>
+            </label>
+            {provider.tools.map(tool => {
+              const value = limits[tool.name] ?? String(tool.callLimit ?? 32);
+              const change = (next: string) => { setSaved(false); setLimits(current => ({ ...current, [tool.name]: next })); };
+              return <div key={tool.name} className="tool-limit-row">
+                <span title={tool.description}>{tool.name}</span>
+                <label>每轮次数 <input type="number" min="0" step="1" value={value} disabled={saving || value === '0'}
+                  aria-label={`${tool.name} 每轮次数`} onChange={event => change(event.target.value)} /></label>
+                <label><input type="checkbox" checked={value === '0'} disabled={saving}
+                  aria-label={`${tool.name} 无限制`} onChange={event => change(event.target.checked ? '0' : '32')} />无限制</label>
+              </div>;
+            })}
+          </div>
         ))}
       </div>
+      <p className="settings-hint">每个工具独立计数，默认每轮 32 次；0 表示无限制。分析与补充查证共用本轮额度，下一条用户消息重新计数。达到上限只关闭该工具；失败的执行也计数。保存后下一轮生效，新增工具自动出现在这里。</p>
+      <button type="button" disabled={saving || !Object.keys(limits).length} onClick={() => { void saveLimits(); }}>{saving ? '保存中…' : '保存工具调用限制'}</button>
+      {saved && <span role="status">已保存，下一轮问答生效</span>}
       <h3>{t('settings.mcpTitle')}</h3>
       <p className="settings-hint">{t('settings.mcpHint', { count: toolCount })}</p>
       <div className="settings-list">

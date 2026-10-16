@@ -13,6 +13,7 @@ import type {
   AiToolProviderDescriptor,
   AppConfig,
   CloseDecision,
+  DiagnosticInfo,
   IpcResult,
   KnowledgeDoc,
   KnowledgePackInfo,
@@ -75,6 +76,7 @@ declare global {
     };
     tools: {
       describe(): Promise<IpcResult<AiToolProviderDescriptor[]>>;
+      setCallLimits(limits: Record<string, number>): Promise<IpcResult<unknown>>;
       setProviderEnabled(id: string, enabled: boolean): Promise<IpcResult<unknown>>;
     };
     mcp: {
@@ -117,6 +119,11 @@ declare global {
     app: {
       onCloseRequested(callback: () => void): () => void;
       decideClose(decision: CloseDecision): Promise<IpcResult<boolean>>;
+      diagnostics: {
+        info(): Promise<IpcResult<DiagnosticInfo>>;
+        open(): Promise<IpcResult<{ opened: boolean }>>;
+        export(): Promise<IpcResult<{ path: string } | null>>;
+      };
     };
     ai: MystAiApi;
   }
